@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AÇIK OCAK VARDİYA RAPORU - Canlı</title>
+  <style>
+    *{box-sizing:border-box;font-family:Arial,sans-serif}
+    body{margin:0;background:#f4f6f8;color:#111827;display:flex;justify-content:center}
+    #app{width:100%;max-width:1700px;padding:0 12px}
+    header{background:linear-gradient(135deg,#2563eb,#1e3a8a,#60a5fa);color:#fff;padding:28px 20px;text-align:center;box-shadow:0 6px 20px rgba(0,0,0,.25);border-radius:0 0 20px 20px;position:relative}
+    h1{margin:0;font-size:44px;letter-spacing:2px;font-weight:900;text-shadow:0 3px 10px rgba(0,0,0,0.3)}
+    .layout{display:grid;grid-template-columns:260px 1fr;gap:18px;align-items:start;margin-top:16px}
+    .sidebar{position:sticky;top:16px}
+    .tabs{display:flex;flex-direction:column;gap:10px;padding:0}
+    .tab{padding:14px 16px;border-radius:14px;border:1px solid #dbe4ee;background:linear-gradient(180deg,#ffffff,#f8fbff);color:#1f2937;cursor:pointer;font-weight:800;text-align:left;box-shadow:0 2px 6px rgba(0,0,0,.05);transition:.2s}
+    .tab:hover{transform:translateY(-1px);box-shadow:0 6px 14px rgba(0,0,0,.08);border-color:#bfdbfe}
+    .tab.active{background:linear-gradient(135deg,#2563eb,#60a5fa);color:#fff;border-color:#2563eb;box-shadow:0 8px 20px rgba(37,99,235,.25)}
+    .content{min-width:0}
+    .page{display:none;padding:0}
+    .page.active{display:block}
+    .grid{display:grid;gap:16px}
+    .g2{grid-template-columns:repeat(auto-fit,minmax(420px,1fr))}
+    .g3{grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
+    .g4{grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+    .g1{grid-template-columns:1fr}
+    .card{background:#fff;border-radius:14px;padding:16px;box-shadow:0 2px 8px rgba(0,0,0,.08);color:#111827}
+    .card h2,.card h3{margin-top:0;color:#1f2937}
+    .muted{color:#1f2937;font-size:13px}
+    .pill{display:inline-block;padding:4px 8px;border-radius:999px;font-size:12px;background:#e9eef9;color:#2563eb}
+    .stat{font-size:28px;font-weight:700;margin-top:8px}
+    .statbox{border-left:5px solid #4da3ff}
+    input,select,textarea,button{width:100%;padding:10px 12px;border:1px solid #cbd5e1;border-radius:10px}
+    button{cursor:pointer;background:#4da3ff;color:#fff;font-weight:700;border:none}
+    button.secondary{background:#fff;color:#2563eb;border:1px solid #4da3ff}
+    button.warning{background:#d97706}
+    button.danger{background:#dc2626}
+    .inline{display:flex;gap:8px}
+    .inline>*{flex:1}
+    .equip-grid{display:grid;gap:10px;grid-template-columns:1fr}
+    .equip-btn{padding:12px;border-radius:12px;border:1px solid #cbd5e1;background:#fff;color:#111827;text-align:left;cursor:pointer}
+    .equip-btn.active{background:#059669;color:#fff;border-color:#059669}
+    .equip-btn.break{background:#dc2626;color:#fff;border-color:#dc2626}
+    .equip-name{font-weight:700;display:block;margin-bottom:4px}
+    .list-card{border:1px solid #e5e7eb;border-radius:12px;padding:12px;background:#fafafa;margin-bottom:10px}
+    .table-wrap{overflow-x:auto}
+    table{width:100%;min-width:620px;border-collapse:collapse;font-size:13px}
+    th,td{border-bottom:1px solid #e5e7eb;padding:8px 6px;text-align:left;vertical-align:top}
+    .actions{display:flex;gap:4px;flex-wrap:nowrap;align-items:center}
+    .actions button{width:auto;padding:7px 8px;font-size:11px;white-space:nowrap;min-width:72px}
+    .actions-col{min-width:150px;width:150px}
+    .modalbg{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;padding:20px;z-index:50}
+    .modal{width:100%;max-width:640px;background:#fff;border-radius:16px;padding:16px}
+    .login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+    .hidden{display:none!important}
+    .section-title{font-size:22px;color:#1f2937;font-weight:700;margin:0 0 16px}
+    @media (max-width: 900px){
+      .layout{grid-template-columns:1fr}
+      .sidebar{position:static}
+      .tabs{flex-direction:row;flex-wrap:wrap}
+      .tab{text-align:center}
+    }
+    @media (max-width: 1100px){
+      #definitions .grid{grid-template-columns:1fr !important}
+    }
+    .topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-top:12px}
+    .ok{color:#15803d;font-weight:700}
+    .err{color:#b91c1c;font-weight:700}
+    .zone-box{border:1px solid #dbeafe;border-radius:12px;padding:12px;background:#f8fbff}
+    .zone-title{font-weight:700;color:#1e3a8a;margin-bottom:8px}
+    .online-user{display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid #e5e7eb}
+    .online-user:last-child{border-bottom:none}
+  </style>
+</head>
+<body>
+<div id="app">
+  <div id="loginView" class="login-wrap">
+    <div class="card" style="max-width:420px;width:100%">
+      <h2>Canlı Giriş</h2>
+      <div class="muted">Supabase bağlantılı sürüm</div><br>
+      <input id="email" placeholder="email" />
+      <input id="password" type="password" placeholder="şifre" />
+      <button id="loginBtn">Giriş Yap</button>
+      <div id="loginStatus" class="muted"></div><pre id="debugBox" style="display:none;white-space:pre-wrap;background:#0f172a;color:#e2e8f0;padding:10px;border-radius:10px;margin-top:10px"></pre>
+    </div>
+  </div>
+  <div id="mainView" class="hidden">
+    <header><div style="font-size:18px;opacity:.9;margin-bottom:6px">⛏️ MADEN OPERASYON TAKİP SİSTEMİ</div><h1>AÇIK OCAK VARDİYA RAPORU</h1></header>
+    <div class="topbar">
+      <div class="card" style="padding:10px 14px"><div><b id="userName">-</b></div><div class="muted" id="userRole">-</div><div class="muted" id="userRoleRaw"></div></div>
+      <div class="card" style="padding:10px 14px"><div id="syncStatus" class="ok">Canlı bağlantı hazır</div></div>
+      <div class="actions">
+        <button class="secondary" id="refreshBtn">Yenile</button>
+        <button class="secondary" id="exportBtn">Excel Export</button>
+        <button class="secondary" id="logoutBtn">Çıkış</button>
+      </div>
+    </div>
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="card" style="padding:14px;background:linear-gradient(180deg,#f8fbff,#eef5ff);border:1px solid #dbeafe">
+          <div style="font-weight:800;color:#1e3a8a;margin-bottom:10px;padding:4px 4px 8px">MENÜ</div>
+          <div class="tabs" id="tabs"></div>
+        </div>
+      </aside>
+      <main class="content">
+        <section id="dashboard" class="page active"></section>
+        <section id="definitions" class="page"></section>
+        <section id="production" class="page"></section>
+        <section id="breakdown" class="page"></section>
+        <section id="rental" class="page"></section>
+        <section id="records" class="page"></section>
+      </main>
+    </div>
+  </div>
+</div>
+
+<div class="modalbg" id="equipmentModal"><div class="modal"><h3 id="equipmentModalTitle">Ekipman</h3><input type="hidden" id="equipmentId"><label>İsim</label><input id="equipmentName"><label>Tip</label><select id="equipmentType"><option>Ekskavatör</option><option>Kamyon</option><option>Yardımcı Ekipman</option></select><br><br><div class="inline"><button class="secondary" onclick="closeModal('equipmentModal')">Kapat</button><button onclick="saveEquipment()">Kaydet</button></div></div></div>
+<div class="modalbg" id="packageModal"><div class="modal"><h3>Paket</h3><input type="hidden" id="packageId"><label>Paket adı</label><input id="packageName"><br><br><div class="inline"><button class="secondary" onclick="closeModal('packageModal')">Kapat</button><button onclick="savePackage()">Kaydet</button></div></div></div>
+<div class="modalbg" id="productionStartModal"><div class="modal"><h3>Üretim Başlat</h3><input type="hidden" id="productionEquipmentId"><div class="grid g2"><div><label>Paket</label><select id="productionPackageId"></select></div><div><label>Vardiya</label><select id="productionShift"><option>1. Vardiya</option><option>2. Vardiya</option></select></div><div><label>Nereden</label><input id="productionFrom"></div><div><label>Nereye</label><input id="productionTo"></div></div><br><div class="inline"><button class="secondary" onclick="closeModal('productionStartModal')">Kapat</button><button onclick="confirmStartProduction()">Başlat</button></div></div></div>
+<div class="modalbg" id="helperStartModal"><div class="modal"><h3>Yardımcı Ekipman Başlat</h3><input type="hidden" id="helperEquipmentId"><div class="grid g2"><div><label>Vardiya</label><select id="helperShift"><option>1. Vardiya</option><option>2. Vardiya</option></select></div><div><label>Çalıştığı Bölge</label><input id="helperRegion"></div></div><br><div class="inline"><button class="secondary" onclick="closeModal('helperStartModal')">Kapat</button><button onclick="confirmStartHelper()">Başlat</button></div></div></div>
+<div class="modalbg" id="truckStartModal"><div class="modal"><h3>Kamyon Başlat</h3><input type="hidden" id="truckEquipmentId"><label>Vardiya</label><select id="truckShift"><option>1. Vardiya</option><option>2. Vardiya</option></select><br><br><div class="inline"><button class="secondary" onclick="closeModal('truckStartModal')">Kapat</button><button onclick="confirmStartTruck()">Başlat</button></div></div></div>
+<div class="modalbg" id="breakdownModal"><div class="modal"><h3>Arıza Bitir</h3><input type="hidden" id="breakdownEquipmentId"><div class="grid g2"><div><label>Neden</label><input id="breakdownReason"></div><div><label>Vardiya</label><select id="breakdownShift"><option>1. Vardiya</option><option>2. Vardiya</option></select></div></div><label>Açıklama</label><textarea id="breakdownNote" rows="3"></textarea><br><div class="inline"><button class="secondary" onclick="closeModal('breakdownModal')">Kapat</button><button onclick="confirmStopBreakdown()">Kaydet</button></div></div></div>
+<div class="modalbg" id="rentalModal"><div class="modal"><h3>Kiralık Başlat</h3><input type="hidden" id="rentalEquipmentId"><label>Çalıştığı Bölge</label><input id="rentalLocation"><br><br><div class="inline"><button class="secondary" onclick="closeModal('rentalModal')">Kapat</button><button onclick="confirmStartRental()">Başlat</button></div></div></div>
+<div class="modalbg" id="editProductionModal"><div class="modal"><h3>Üretim Düzenle</h3><input type="hidden" id="editProductionId"><div class="grid"><div><label>Ekipman</label><select id="editProductionEquipment"></select></div><div><label>Paket</label><select id="editProductionPackage"></select></div><div><label>Vardiya</label><select id="editProductionShift"><option>1. Vardiya</option><option>2. Vardiya</option></select></div><div><label>Nereden</label><input id="editProductionFrom"></div><div><label>Nereye</label><input id="editProductionTo"></div><div><label>Durum/Bölge</label><input id="editProductionStatus"></div><div><label>Başlangıç</label><input id="editProductionStart" type="datetime-local"></div><div><label>Bitiş</label><input id="editProductionEnd" type="datetime-local"></div><div><label>Açıklama</label><textarea id="editProductionNote" rows="3"></textarea></div></div><br><div class="inline"><button class="secondary" onclick="closeModal('editProductionModal')">Kapat</button><button onclick="saveProductionEdit()">Kaydet</button></div></div></div>
+<div class="modalbg" id="editBreakdownModal"><div class="modal"><h3>Arıza Düzenle</h3><input type="hidden" id="editBreakdownId"><div class="grid"><div><label>Ekipman</label><select id="editBreakdownEquipment"></select></div><div><label>Vardiya</label><select id="editBreakdownShift"><option>1. Vardiya</option><option>2. Vardiya</option></select></div><div><label>Neden</label><input id="editBreakdownReason"></div><div><label>Başlangıç</label><input id="editBreakdownStart" type="datetime-local"></div><div><label>Bitiş</label><input id="editBreakdownEnd" type="datetime-local"></div><div><label>Açıklama</label><textarea id="editBreakdownNote" rows="3"></textarea></div></div><br><div class="inline"><button class="secondary" onclick="closeModal('editBreakdownModal')">Kapat</button><button onclick="saveBreakdownEdit()">Kaydet</button></div></div></div>
+<div class="modalbg" id="editRentalModal"><div class="modal"><h3>Kiralık Düzenle</h3><input type="hidden" id="editRentalId"><div class="grid"><div><label>Ekipman</label><select id="editRentalEquipment"></select></div><div><label>Tür</label><input id="editRentalType"></div><div><label>Bölge</label><input id="editRentalLocation"></div><div><label>Başlangıç</label><input id="editRentalStart" type="datetime-local"></div><div><label>Bitiş</label><input id="editRentalEnd" type="datetime-local"></div></div><br><div class="inline"><button class="secondary" onclick="closeModal('editRentalModal')">Kapat</button><button onclick="saveRentalEdit()">Kaydet</button></div></div></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const SUPABASE_URL = "https://ktsizubtpghonokmdcll.supabase.co";
+const SUPABASE_KEY = "sb_publishable_tDuB3P12S8Pndm2Kub3qxQ_3JfcGDx4";
+const { createClient } = window.supabase;
+const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+const state = { user:null, profile:null, equipments:[], packages:[], productions:[], breakdowns:[], rentals:[], activeProduction:{}, activeBreakdowns:{}, activeRentals:{}, onlineUsers:[], currentPage:'dashboard' };
+let realtimeChannel = null;
+let presenceChannel = null;
+
+function escapeHtml(s){return String(s ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'","&#39;");}
+function fmtDate(v){return v ? new Date(v).toLocaleString('tr-TR') : '';}
+function isoToLocalInput(v){if(!v) return ''; const d=new Date(v); const off=d.getTimezoneOffset(); const local = new Date(d.getTime()-off*60000); return local.toISOString().slice(0,16);}
+function localInputToIso(v){return v ? new Date(v).toISOString() : null;}
+function durationMinutes(start,end){return Math.max(0, Math.round((new Date(end)-new Date(start))/60000));}
+function closeModal(id){ const el = document.getElementById(id); if(el) el.style.display='none'; }
+function openModal(id){ const el = document.getElementById(id); if(el) el.style.display='flex'; }
+function currentRole(){ return state.profile?.role || 'guest'; }
+function isStaff(){ return ['manager','supervisor'].includes(currentRole()); }
+
+function isManager(){ return currentRole()==='manager'; }
+function canSeeDefinitions(){ return isManager(); }
+function roleLabel(role){ return role==='manager' ? 'Yönetici' : role==='supervisor' ? 'Vardiya Sorumlusu' : 'Misafir'; }
+function pageLabel(id){ return id==='dashboard' ? 'Dashboard' : id==='definitions' ? 'Tanımlar' : id==='production' ? 'Üretim' : id==='breakdown' ? 'Arıza' : id==='rental' ? 'Kiralık' : id==='records' ? 'Kayıtlar' : id; }
+
+function buildTabs(){
+  let tabs;
+  if(currentRole()==='guest'){
+    tabs = [['dashboard','Dashboard']];
+  } else if(currentRole()==='supervisor'){
+    tabs = [['dashboard','Dashboard'],['production','Üretim'],['breakdown','Arıza'],['rental','Kiralık'],['records','Kayıtlar']];
+  } else {
+    tabs = [['dashboard','Dashboard'],['definitions','Tanımlar'],['production','Üretim'],['breakdown','Arıza'],['rental','Kiralık'],['records','Kayıtlar']];
+  }
+  document.getElementById('tabs').innerHTML = tabs.map((t,i)=>`<button class="tab ${i===0?'active':''}" onclick="showPage('${t[0]}', this)">${t[1]}</button>`).join('');
+}
+function showPage(id, btn){
+  if(currentRole()==='guest' && id!=='dashboard') return;
+  if(currentRole()==='supervisor' && id==='definitions') return;
+  state.currentPage = id;
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  const page = document.getElementById(id); if(page) page.classList.add('active');
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  syncPresence();
+}
+async function login(){
+  const email = document.getElementById('email').value.trim();
+  const password = document.getElementById('password').value.trim();
+  const statusEl = document.getElementById('loginStatus');
+  const debugEl = document.getElementById('debugBox');
+  debugEl.style.display = 'none';
+  debugEl.textContent = '';
+  statusEl.textContent = 'Giriş yapılıyor...';
+
+  try {
+    const { data, error } = await sb.auth.signInWithPassword({ email, password });
+    if (error) {
+      statusEl.innerHTML = `<span class="err">${escapeHtml(error.message)}</span>`;
+      debugEl.style.display = 'block';
+      debugEl.textContent = JSON.stringify({ stage: 'signInWithPassword', error: error.message }, null, 2);
+      return;
+    }
+
+    statusEl.innerHTML = `<span class="ok">Giriş başarılı, veriler yükleniyor...</span>`;
+
+    try {
+      await bootstrap();
+      statusEl.innerHTML = `<span class="ok">Giriş başarılı</span>`;
+    } catch (bootErr) {
+      statusEl.innerHTML = `<span class="err">Giriş oldu ama uygulama verileri yüklenemedi</span>`;
+      debugEl.style.display = 'block';
+      debugEl.textContent = JSON.stringify({
+        stage: 'bootstrap',
+        message: String(bootErr?.message || bootErr)
+      }, null, 2);
+    }
+  } catch (err) {
+    statusEl.innerHTML = `<span class="err">Beklenmeyen hata</span>`;
+    debugEl.style.display = 'block';
+    debugEl.textContent = JSON.stringify({
+      stage: 'login-catch',
+      message: String(err?.message || err)
+    }, null, 2);
+  }
+}
+async function logout(){ await sb.auth.signOut(); location.reload(); }
+async function bootstrap(){
+  const authRes = await sb.auth.getUser();
+  state.user = authRes?.data?.user || null;
+  if(!state.user) throw new Error('Auth kullanıcısı bulunamadı');
+
+  const profileRes = await sb.from('profiles').select('*').eq('id', state.user.id).maybeSingle();
+  if(profileRes.error) throw new Error('Profil okunamadı: ' + profileRes.error.message);
+  state.profile = profileRes.data || { role:'guest', full_name: state.user.email };
+
+  document.getElementById('loginView').classList.add('hidden');
+  document.getElementById('mainView').classList.remove('hidden');
+  document.getElementById('userName').textContent = state.profile.full_name || state.user.email;
+  document.getElementById('userRole').textContent = currentRole()==='manager' ? 'Yönetici' : currentRole()==='supervisor' ? 'Vardiya Sorumlusu' : 'Misafir';
+  document.getElementById('userRoleRaw').textContent = 'Rol kodu: ' + currentRole();
+  buildTabs();
+  await loadAll();
+  renderAll();
+  initRealtime();
+}
+async function loadAll(){
+  const [eq, pk, pr, br, rt] = await Promise.all([
+    sb.from('equipments').select('*').order('created_at',{ascending:false}),
+    sb.from('packages').select('*').order('created_at',{ascending:false}),
+    sb.from('productions').select('*').order('created_at',{ascending:false}),
+    sb.from('breakdowns').select('*').order('created_at',{ascending:false}),
+    sb.from('rentals').select('*').order('created_at',{ascending:false})
+  ]);
+  state.equipments = eq.data || [];
+  state.packages = pk.data || [];
+  state.productions = pr.data || [];
+  state.breakdowns = br.data || [];
+  state.rentals = rt.data || [];
+  deriveActive();
+}
+function deriveActive(){
+  state.activeProduction = {}; state.activeBreakdowns = {}; state.activeRentals = {};
+  for(const r of state.productions){ if(r.start_at && !r.end_at) state.activeProduction[r.equipment_id] = r; }
+  for(const r of state.breakdowns){ if(r.start_at && !r.end_at) state.activeBreakdowns[r.equipment_id] = r; }
+  for(const r of state.rentals){ if(r.start_at && !r.end_at) state.activeRentals[r.equipment_id] = r; }
+}
+
+function renderAll(){
+  renderDashboard();
+  renderDefinitions();
+  renderProduction();
+  renderBreakdown();
+  renderRental();
+  renderRecords();
+}
+
+
+let autoRefreshTimer = null;
+function startAutoRefresh(){
+  if(autoRefreshTimer) clearInterval(autoRefreshTimer);
+  autoRefreshTimer = setInterval(async () => {
+    try {
+      await loadAll();
+      renderAll();
+    } catch (e) {
+      console.warn('Auto refresh error:', e);
+    }
+  }, 5000);
+}
+
+function initRealtime(){
+  realtimeChannel = sb.channel('openpit-live')
+    .on('postgres_changes',{event:'*',schema:'public',table:'equipments'}, async()=>{await loadAll(); renderAll();})
+    .on('postgres_changes',{event:'*',schema:'public',table:'packages'}, async()=>{await loadAll(); renderAll();})
+    .on('postgres_changes',{event:'*',schema:'public',table:'productions'}, async()=>{await loadAll(); renderAll();})
+    .on('postgres_changes',{event:'*',schema:'public',table:'breakdowns'}, async()=>{await loadAll(); renderAll();})
+    .on('postgres_changes',{event:'*',schema:'public',table:'rentals'}, async()=>{await loadAll(); renderAll();})
+    .subscribe((status)=>{ document.getElementById('syncStatus').textContent = status === 'SUBSCRIBED' ? 'Canlı bağlantı aktif + 5 sn otomatik yenileme' : `Bağlantı: ${status} + 5 sn otomatik yenileme`; });
+}
+
+function initPresence(){
+  if(!state.user) return;
+  presenceChannel = sb.channel('online-users', {
+    config: { presence: { key: state.user.id } }
+  });
+
+  presenceChannel
+    .on('presence', { event: 'sync' }, () => {
+      const presenceState = presenceChannel.presenceState();
+      state.onlineUsers = Object.values(presenceState).flat().map(entry => ({
+        id: entry.user_id || '',
+        name: entry.full_name || entry.email || 'Kullanıcı',
+        role: entry.role || 'guest',
+        page: entry.page || 'dashboard',
+        last_seen: entry.online_at || ''
+      }));
+      if(state.currentPage === 'dashboard') renderDashboard();
+    })
+    .subscribe(async (status) => {
+      if (status === 'SUBSCRIBED') {
+        await syncPresence();
+      }
+    });
+}
+
+async function syncPresence(){
+  if(!presenceChannel || !state.user) return;
+  await presenceChannel.track({
+    user_id: state.user.id,
+    email: state.user.email,
+    full_name: state.profile?.full_name || state.user.email,
+    role: currentRole(),
+    page: state.currentPage || 'dashboard',
+    online_at: new Date().toISOString()
+  });
+}
+
+function collectZoneData(){
+  const zones = {};
+  function push(zone, item){
+    const key = zone && zone.trim() ? zone.trim() : 'Belirtilmemiş Bölge';
+    if(!zones[key]) zones[key] = [];
+    zones[key].push(item);
+  }
+
+  Object.values(state.activeProduction).forEach(r => {
+    const eq = state.equipments.find(e => e.id === r.equipment_id);
+    const zone = eq?.type === 'Ekskavatör' ? (r.from_location || r.to_location || 'Belirtilmemiş Bölge')
+      : eq?.type === 'Kamyon' ? (r.to_location || r.from_location || 'Sahada')
+      : (r.status_text || 'Belirtilmemiş Bölge');
+    push(zone, { name: r.equipment_name, type: eq?.type || '', status: 'Üretim' });
+  });
+
+  Object.values(state.activeRentals).forEach(r => {
+    push(r.location || 'Belirtilmemiş Bölge', { name: r.equipment_name, type: r.type || '', status: 'Kiralık' });
+  });
+
+  Object.values(state.activeBreakdowns).forEach(r => {
+    push('Arıza Alanı', { name: r.equipment_name, type: '', status: 'Arıza' });
+  });
+
+  return zones;
+}
+
+function countsByType(listMap){ const out={'Ekskavatör':0,'Kamyon':0,'Yardımcı Ekipman':0}; Object.values(listMap).forEach(r=>{ const eq=state.equipments.find(e=>e.id===r.equipment_id); if(eq && out[eq.type]!=null) out[eq.type]++;}); return out; }
+function renderDashboard(){
+  const activeCounts = countsByType(state.activeProduction);
+  const rentedCounts = countsByType(state.activeRentals);
+  const totalBreakMinutes = state.breakdowns.filter(x=>x.end_at).reduce((s,x)=>s+(x.duration_min||0),0);
+
+  document.getElementById('dashboard').innerHTML = `
+    <h2 class="section-title">Dashboard</h2>
+    <div class="card" style="margin-bottom:16px">
+      <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center">
+        <div>
+          <div style="font-weight:700;color:#0f172a">Rol: ${currentRole()==='manager'?'Yönetici':currentRole()==='supervisor'?'Vardiya Sorumlusu':'Misafir'}</div>
+          <div class="muted">${currentRole()==='guest' ? 'Misafir kullanıcılar sadece dashboard ekranını görür.' : ''}</div>
+        </div>
+        <div class="pill">Supabase Canlı</div>
+      </div>
+    </div>
+
+    <div class="grid g4">
+      <div class="card statbox"><div class="muted">Çalışan Ekskavatör</div><div class="stat">${activeCounts['Ekskavatör']}</div></div>
+      <div class="card statbox"><div class="muted">Çalışan Kamyon</div><div class="stat">${activeCounts['Kamyon']}</div></div>
+      <div class="card statbox"><div class="muted">Çalışan Yardımcı Ekipman</div><div class="stat">${activeCounts['Yardımcı Ekipman']}</div></div>
+      <div class="card statbox"><div class="muted">Aktif Arıza</div><div class="stat">${Object.keys(state.activeBreakdowns).length}</div></div>
+      <div class="card statbox"><div class="muted">Kiralık Ekskavatör</div><div class="stat">${rentedCounts['Ekskavatör']}</div></div>
+      <div class="card statbox"><div class="muted">Kiralık Kamyon</div><div class="stat">${rentedCounts['Kamyon']}</div></div>
+      <div class="card statbox"><div class="muted">Kiralık Yardımcı Ekipman</div><div class="stat">${rentedCounts['Yardımcı Ekipman']}</div></div>
+    </div>
+
+    <br>
+
+    <div class="card">
+      <h2>Sahadaki Makina Dağılımı</h2>
+      ${(() => {
+        const excavators = state.equipments.filter(e => e.type === 'Ekskavatör');
+        const prod = excavators.filter(e => state.activeProduction[e.id]);
+        const rent = excavators.filter(e => !state.activeProduction[e.id] && state.activeRentals[e.id]);
+        const groups = {};
+
+        prod.forEach(e => {
+          const p = state.activeProduction[e.id];
+          const area = p.from_location || 'Bölge Belirtilmedi';
+          if(!groups[area]) groups[area] = [];
+          groups[area].push({
+            name: e.name,
+            status: 'Üretimde',
+            detail: `Paket: ${escapeHtml(p.package_name || '-')}<br>Rota: ${escapeHtml(p.from_location || '-')} → ${escapeHtml(p.to_location || '-')}`,
+            bg: '#dcfce7',
+            border: '#16a34a'
+          });
+        });
+
+        rent.forEach(e => {
+          const r = state.activeRentals[e.id];
+          const area = r.location || 'Bölge Belirtilmedi';
+          if(!groups[area]) groups[area] = [];
+          groups[area].push({
+            name: e.name,
+            status: 'Kiralıkta',
+            detail: `Bölge: ${escapeHtml(r.location || '-')}`,
+            bg: '#fef3c7',
+            border: '#d97706'
+          });
+        });
+
+        const areas = Object.keys(groups);
+        return areas.length ? `
+          <div class="grid g3">
+            ${areas.map(area => `
+              <div class="card">
+                <h3>${escapeHtml(area)}</h3>
+                ${groups[area].map(item => `
+                  <div class="card" style="background:${item.bg};border-left:6px solid ${item.border};margin-bottom:10px;box-shadow:none;padding:12px">
+                    <div style="font-weight:700;font-size:16px;margin-bottom:6px">${escapeHtml(item.name)}</div>
+                    <div class="pill" style="margin-bottom:8px">${item.status}</div>
+                    <div class="muted" style="display:block;color:#1f2937">${item.detail}</div>
+                  </div>
+                `).join('')}
+              </div>
+            `).join('')}
+          </div>
+        ` : '<div class="muted">Aktif ekskavatör kaydı yok.</div>';
+      })()}
+    </div>
+
+    <br>
+
+    <div class="card" style="background:#fee2e2;border-left:6px solid #dc2626;">
+      <h2 style="color:#b91c1c">Şu Anda Arızada Olanlar</h2>
+      ${Object.values(state.activeBreakdowns).length ? Object.values(state.activeBreakdowns).map(r=>`
+        <div class="list-card" style="background:#fff5f5;border:1px solid #fca5a5">
+          <div><b style="color:#7f1d1d">${escapeHtml(r.equipment_name)}</b></div>
+          <div class="muted" style="color:#7f1d1d">${fmtDate(r.start_at)}</div>
+        </div>
+      `).join('') : '<div class="muted" style="color:#7f1d1d">Aktif arıza yok.</div>'}
+    </div>
+  `;
+}
+
+function renderDefinitions(){ document.getElementById('definitions').innerHTML = canSeeDefinitions() ? `<h2 class="section-title">Tanımlar</h2><div class="grid g2"><div class="card"><div class="inline"><button onclick="openAddEquipment()">Ekipman Ekle</button></div><br><div class="table-wrap"><table><thead><tr><th>İsim</th><th>Tip</th><th class="actions-col">İşlem</th></tr></thead><tbody>${state.equipments.map(e=>`<tr><td>${escapeHtml(e.name)}</td><td>${escapeHtml(e.type)}</td><td class="actions actions-col"><button class="warning" onclick="openEditEquipment('${e.id}')">Düzenle</button><button class="danger" onclick="deleteEquipment('${e.id}')">Sil</button></td></tr>`).join('')}</tbody></table></div></div><div class="card" style="overflow:visible"><div class="inline"><button onclick="openAddPackage()">Paket Ekle</button></div><br><div class="table-wrap" style="overflow-x:auto"><table><thead><tr><th>Paket</th><th class="actions-col">İşlem</th></tr></thead><tbody>${state.packages.map(p=>`<tr><td>${escapeHtml(p.name)}</td><td class="actions actions-col"><button class="warning" onclick="openEditPackage('${p.id}','${escapeHtml(p.name)}')">Düzenle</button><button class="danger" onclick="deletePackage('${p.id}')">Sil</button></td></tr>`).join('')}</tbody></table></div></div></div>` : `<div class="card"><div class="muted">Tanımlar sadece yönetici tarafından görüntülenebilir.</div></div>`; }
+
+function renderEquipmentButtons(kind, activeMap, mode){
+  return state.equipments
+    .filter(e => e.type === kind)
+    .map(e => {
+      const active = activeMap[e.id];
+      let detail = '';
+      if(mode === 'prod'){
+        if(active){
+          if(kind === 'Ekskavatör'){
+            detail = `Paket: ${escapeHtml(active.package_name || '-')}<br>Rota: ${escapeHtml(active.from_location || '-')} → ${escapeHtml(active.to_location || '-')}`;
+          } else if(kind === 'Kamyon'){
+            detail = 'Vardiyada çalışıyor';
+          } else {
+            detail = `Bölge: ${escapeHtml(active.status_text || '-')}`;
+          }
+        } else {
+          if(kind === 'Ekskavatör') detail = 'Paket / Rota ile başlat';
+          else if(kind === 'Kamyon') detail = 'Tıklayınca vardiyada çalışıyor olur';
+          else detail = 'Bölge ile başlat';
+        }
+      } else if(mode === 'break'){
+        detail = active ? 'AKTİF ARIZA' : 'Arıza Başlat / Bitir';
+      } else if(mode === 'rent'){
+        detail = active ? `Kiralık Çalışıyor<br>Yer: ${escapeHtml(active.location || '-')}` : 'Başlat / Bitir';
+      }
+
+      return `<button class="equip-btn ${active ? (mode === 'break' ? 'break' : 'active') : ''}" onclick="${mode === 'prod' ? 'toggleProduction' : mode === 'break' ? 'toggleBreakdown' : 'toggleRental'}('${e.id}')">
+        <span class="equip-name" style="color:${active ? '#fff' : '#111827'}">${escapeHtml(e.name)}</span>
+        <span class="muted" style="color:${active ? '#fff' : '#374151'}">${detail}</span>
+      </button>`;
+    })
+    .join('') || '<div class="muted">Tanımlı ekipman yok.</div>';
+}
+
+function renderProduction(){
+  document.getElementById('production').innerHTML = isStaff()
+    ? `<h2 class="section-title">Üretim</h2>
+       <div class="grid g3">
+         <div class="card"><h3>Ekskavatör</h3><div class="equip-grid">${renderEquipmentButtons('Ekskavatör', state.activeProduction, 'prod')}</div></div>
+         <div class="card"><h3>Kamyon</h3><div class="equip-grid">${renderEquipmentButtons('Kamyon', state.activeProduction, 'prod')}</div></div>
+         <div class="card"><h3>Yardımcı Ekipman</h3><div class="equip-grid">${renderEquipmentButtons('Yardımcı Ekipman', state.activeProduction, 'prod')}</div></div>
+       </div>`
+    : '<div class="card"><div class="muted">Bu sayfa için yetkin yok.</div></div>';
+}
+function renderBreakdown(){
+  document.getElementById('breakdown').innerHTML = isStaff()
+    ? `<h2 class="section-title">Arıza</h2>
+       <div class="grid g3">
+         <div class="card"><h3>Ekskavatör</h3><div class="equip-grid">${renderEquipmentButtons('Ekskavatör', state.activeBreakdowns, 'break')}</div></div>
+         <div class="card"><h3>Kamyon</h3><div class="equip-grid">${renderEquipmentButtons('Kamyon', state.activeBreakdowns, 'break')}</div></div>
+         <div class="card"><h3>Yardımcı Ekipman</h3><div class="equip-grid">${renderEquipmentButtons('Yardımcı Ekipman', state.activeBreakdowns, 'break')}</div></div>
+       </div>`
+    : '<div class="card"><div class="muted">Bu sayfa için yetkin yok.</div></div>';
+}
+function renderRental(){
+  document.getElementById('rental').innerHTML = isStaff()
+    ? `<h2 class="section-title">Kiralık</h2>
+       <div class="grid g3">
+         <div class="card"><h3>Ekskavatör</h3><div class="equip-grid">${renderEquipmentButtons('Ekskavatör', state.activeRentals, 'rent')}</div></div>
+         <div class="card"><h3>Kamyon</h3><div class="equip-grid">${renderEquipmentButtons('Kamyon', state.activeRentals, 'rent')}</div></div>
+         <div class="card"><h3>Yardımcı Ekipman</h3><div class="equip-grid">${renderEquipmentButtons('Yardımcı Ekipman', state.activeRentals, 'rent')}</div></div>
+       </div>`
+    : '<div class="card"><div class="muted">Bu sayfa için yetkin yok.</div></div>';
+}
+function renderRecords(){ document.getElementById('records').innerHTML = isStaff() ? `<h2 class="section-title">Kayıtlar</h2><div class="card"><div class="actions"><button class="danger" onclick="clearTable('productions')">Tüm Üretimi Sil</button><button class="danger" onclick="clearTable('breakdowns')">Tüm Arızaları Sil</button><button class="danger" onclick="clearTable('rentals')">Tüm Kiralıkları Sil</button></div></div><div class="grid"><div class="card"><h2>Üretim Kayıtları</h2><div class="table-wrap"><table><thead><tr><th>Ekipman</th><th>Detay</th><th>Vardiya</th><th>Başlangıç</th><th>Bitiş</th><th>Süre</th><th class="actions-col">İşlem</th></tr></thead><tbody>${state.productions.filter(x=>x.end_at).map(r=>`<tr><td>${escapeHtml(r.equipment_name)}</td><td>${escapeHtml(r.package_name || '')}<br><span class="muted">${escapeHtml(r.from_location||r.status_text||'-')}${r.to_location ? ' → '+escapeHtml(r.to_location) : ''}</span></td><td>${escapeHtml(r.shift||'')}</td><td>${fmtDate(r.start_at)}</td><td>${fmtDate(r.end_at)}</td><td>${r.duration_min||0} dk</td><td class="actions actions-col"><button class="warning" onclick="openEditProduction('${r.id}')">Düzenle</button><button class="danger" onclick="deleteRow('productions','${r.id}')">Sil</button></td></tr>`).join('') || '<tr><td colspan="7" class="muted">Kayıt yok.</td></tr>'}</tbody></table></div></div><div class="card"><h2>Arıza Kayıtları</h2><div class="table-wrap"><table><thead><tr><th>Ekipman</th><th>Vardiya</th><th>Başlangıç</th><th>Bitiş</th><th>Süre</th><th>Neden</th><th class="actions-col">İşlem</th></tr></thead><tbody>${state.breakdowns.filter(x=>x.end_at).map(r=>`<tr><td>${escapeHtml(r.equipment_name)}</td><td>${escapeHtml(r.shift||'')}</td><td>${fmtDate(r.start_at)}</td><td>${fmtDate(r.end_at)}</td><td>${r.duration_min||0} dk</td><td>${escapeHtml(r.reason||'')}</td><td class="actions actions-col"><button class="warning" onclick="openEditBreakdown('${r.id}')">Düzenle</button><button class="danger" onclick="deleteRow('breakdowns','${r.id}')">Sil</button></td></tr>`).join('') || '<tr><td colspan="7" class="muted">Kayıt yok.</td></tr>'}</tbody></table></div></div><div class="card"><h2>Kiralık Kayıtları</h2><div class="table-wrap"><table><thead><tr><th>Ekipman</th><th>Tür</th><th>Bölge</th><th>Başlangıç</th><th>Bitiş</th><th>Süre</th><th class="actions-col">İşlem</th></tr></thead><tbody>${state.rentals.filter(x=>x.end_at).map(r=>`<tr><td>${escapeHtml(r.equipment_name)}</td><td>${escapeHtml(r.type||'')}</td><td>${escapeHtml(r.location||'')}</td><td>${fmtDate(r.start_at)}</td><td>${fmtDate(r.end_at)}</td><td>${r.duration_min||0} dk</td><td class="actions actions-col"><button class="warning" onclick="openEditRental('${r.id}')">Düzenle</button><button class="danger" onclick="deleteRow('rentals','${r.id}')">Sil</button></td></tr>`).join('') || '<tr><td colspan="7" class="muted">Kayıt yok.</td></tr>'}</tbody></table></div></div></div>` : ''; }
+
+function openAddEquipment(){ document.getElementById('equipmentModalTitle').textContent='Ekipman Ekle'; document.getElementById('equipmentId').value=''; document.getElementById('equipmentName').value=''; document.getElementById('equipmentType').value='Ekskavatör'; openModal('equipmentModal'); }
+function openEditEquipment(id){ const e = state.equipments.find(x=>x.id===id); if(!e) return; document.getElementById('equipmentModalTitle').textContent='Ekipman Düzenle'; document.getElementById('equipmentId').value=e.id; document.getElementById('equipmentName').value=e.name; document.getElementById('equipmentType').value=e.type; openModal('equipmentModal'); }
+async function saveEquipment(){ const id=document.getElementById('equipmentId').value; const payload={name:document.getElementById('equipmentName').value.trim(), type:document.getElementById('equipmentType').value}; if(!payload.name) return; const q=id?sb.from('equipments').update(payload).eq('id',id):sb.from('equipments').insert(payload); const {error}=await q; if(error) return alert(error.message); closeModal('equipmentModal'); await loadAll(); renderAll(); }
+async function deleteEquipment(id){ if(!confirm('Ekipman silinsin mi?')) return; const {error}=await sb.from('equipments').delete().eq('id',id); if(error) alert(error.message); }
+function openAddPackage(){ document.getElementById('packageId').value=''; document.getElementById('packageName').value=''; openModal('packageModal'); }
+function openEditPackage(id,name){ document.getElementById('packageId').value=id; document.getElementById('packageName').value=name; openModal('packageModal'); }
+async function savePackage(){ const id=document.getElementById('packageId').value; const name=document.getElementById('packageName').value.trim(); if(!name) return; const q=id?sb.from('packages').update({name}).eq('id',id):sb.from('packages').insert({name}); const {error}=await q; if(error) return alert(error.message); closeModal('packageModal'); await loadAll(); renderAll(); }
+async function deletePackage(id){ if(!confirm('Paket silinsin mi?')) return; const {error}=await sb.from('packages').delete().eq('id',id); if(error) alert(error.message); }
+
+function populatePackageSelect(selId){ document.getElementById(selId).innerHTML = `<option value="">Seçilmedi</option>` + state.packages.map(p=>`<option value="${p.id}">${escapeHtml(p.name)}</option>`).join(''); }
+function toggleProduction(equipmentId){ const active=state.activeProduction[equipmentId]; const eq=state.equipments.find(e=>e.id===equipmentId); if(!eq) return; if(active) return stopProduction(active.id); if(eq.type==='Ekskavatör'){ document.getElementById('productionEquipmentId').value=equipmentId; populatePackageSelect('productionPackageId'); document.getElementById('productionFrom').value=''; document.getElementById('productionTo').value=''; openModal('productionStartModal'); } else if(eq.type==='Kamyon'){ document.getElementById('truckEquipmentId').value=equipmentId; openModal('truckStartModal'); } else { document.getElementById('helperEquipmentId').value=equipmentId; document.getElementById('helperRegion').value=''; openModal('helperStartModal'); } }
+async function confirmStartProduction(){ const equipmentId=document.getElementById('productionEquipmentId').value; const eq=state.equipments.find(e=>e.id===equipmentId); if(!eq) return; const packageId=document.getElementById('productionPackageId').value || null; const pkg=state.packages.find(p=>p.id===packageId); const payload={equipment_id:eq.id,equipment_name:eq.name,package_id:packageId,package_name:pkg?.name||'',shift:document.getElementById('productionShift').value,from_location:document.getElementById('productionFrom').value.trim(),to_location:document.getElementById('productionTo').value.trim(),status_text:'',note:'',start_at:new Date().toISOString(),end_at:null,duration_min:null,created_by:state.user.id}; const {error}=await sb.from('productions').insert(payload); if(error) return alert(error.message); closeModal('productionStartModal'); }
+async function confirmStartTruck(){ const equipmentId=document.getElementById('truckEquipmentId').value; const eq=state.equipments.find(e=>e.id===equipmentId); if(!eq) return; const {error}=await sb.from('productions').insert({equipment_id:eq.id,equipment_name:eq.name,package_id:null,package_name:'',shift:document.getElementById('truckShift').value,from_location:'',to_location:'',status_text:'Vardiyada çalışıyor',note:'',start_at:new Date().toISOString(),end_at:null,duration_min:null,created_by:state.user.id}); if(error) return alert(error.message); closeModal('truckStartModal'); }
+async function confirmStartHelper(){ const equipmentId=document.getElementById('helperEquipmentId').value; const eq=state.equipments.find(e=>e.id===equipmentId); if(!eq) return; const {error}=await sb.from('productions').insert({equipment_id:eq.id,equipment_name:eq.name,package_id:null,package_name:'',shift:document.getElementById('helperShift').value,from_location:'',to_location:'',status_text:document.getElementById('helperRegion').value.trim(),note:'',start_at:new Date().toISOString(),end_at:null,duration_min:null,created_by:state.user.id}); if(error) return alert(error.message); closeModal('helperStartModal'); }
+async function stopProduction(id){ const row=state.productions.find(x=>x.id===id); if(!row) return; const end=new Date().toISOString(); const {error}=await sb.from('productions').update({end_at:end,duration_min:durationMinutes(row.start_at,end)}).eq('id',id); if(error) alert(error.message); }
+
+async function toggleBreakdown(equipmentId){ const active=state.activeBreakdowns[equipmentId]; if(active){ document.getElementById('breakdownEquipmentId').value=equipmentId; document.getElementById('breakdownReason').value=''; document.getElementById('breakdownNote').value=''; openModal('breakdownModal'); } else { if(state.activeProduction[equipmentId]){ await stopProduction(state.activeProduction[equipmentId].id); } const eq=state.equipments.find(e=>e.id===equipmentId); if(!eq) return; const {error}=await sb.from('breakdowns').insert({equipment_id:eq.id,equipment_name:eq.name,shift:'1. Vardiya',reason:'',note:'',start_at:new Date().toISOString(),end_at:null,duration_min:null,created_by:state.user.id}); if(error) alert(error.message); } }
+async function confirmStopBreakdown(){ const equipmentId=document.getElementById('breakdownEquipmentId').value; const active=state.activeBreakdowns[equipmentId]; if(!active) return; const end=new Date().toISOString(); const {error}=await sb.from('breakdowns').update({reason:document.getElementById('breakdownReason').value.trim(),note:document.getElementById('breakdownNote').value.trim(),shift:document.getElementById('breakdownShift').value,end_at:end,duration_min:durationMinutes(active.start_at,end)}).eq('id',active.id); if(error) return alert(error.message); closeModal('breakdownModal'); }
+
+function toggleRental(equipmentId){ const active=state.activeRentals[equipmentId]; if(active) return stopRental(active.id); document.getElementById('rentalEquipmentId').value=equipmentId; document.getElementById('rentalLocation').value=''; openModal('rentalModal'); }
+async function confirmStartRental(){ const equipmentId=document.getElementById('rentalEquipmentId').value; const eq=state.equipments.find(e=>e.id===equipmentId); if(!eq) return; const {error}=await sb.from('rentals').insert({equipment_id:eq.id,equipment_name:eq.name,type:eq.type,location:document.getElementById('rentalLocation').value.trim(),start_at:new Date().toISOString(),end_at:null,duration_min:null,created_by:state.user.id}); if(error) return alert(error.message); closeModal('rentalModal'); }
+async function stopRental(id){ const row=state.rentals.find(x=>x.id===id); if(!row) return; const end=new Date().toISOString(); const {error}=await sb.from('rentals').update({end_at:end,duration_min:durationMinutes(row.start_at,end)}).eq('id',id); if(error) alert(error.message); }
+
+function openEditProduction(id){ const r=state.productions.find(x=>x.id===id); if(!r) return; document.getElementById('editProductionId').value=id; document.getElementById('editProductionEquipment').innerHTML = state.equipments.map(e=>`<option value="${e.id}" ${e.id===r.equipment_id?'selected':''}>${escapeHtml(e.name)} (${escapeHtml(e.type)})</option>`).join(''); document.getElementById('editProductionPackage').innerHTML = `<option value="">Seçilmedi</option>` + state.packages.map(p=>`<option value="${p.id}" ${p.id===r.package_id?'selected':''}>${escapeHtml(p.name)}</option>`).join(''); document.getElementById('editProductionShift').value=r.shift||'1. Vardiya'; document.getElementById('editProductionFrom').value=r.from_location||''; document.getElementById('editProductionTo').value=r.to_location||''; document.getElementById('editProductionStatus').value=r.status_text||''; document.getElementById('editProductionStart').value=isoToLocalInput(r.start_at); document.getElementById('editProductionEnd').value=isoToLocalInput(r.end_at); document.getElementById('editProductionNote').value=r.note||''; openModal('editProductionModal'); }
+async function saveProductionEdit(){ const id=document.getElementById('editProductionId').value; const eqId=document.getElementById('editProductionEquipment').value; const eq=state.equipments.find(e=>e.id===eqId); const pkgId=document.getElementById('editProductionPackage').value||null; const pkg=state.packages.find(p=>p.id===pkgId); const payload={equipment_id:eqId,equipment_name:eq?.name||'',package_id:pkgId,package_name:pkg?.name||'',shift:document.getElementById('editProductionShift').value,from_location:document.getElementById('editProductionFrom').value.trim(),to_location:document.getElementById('editProductionTo').value.trim(),status_text:document.getElementById('editProductionStatus').value.trim(),start_at:localInputToIso(document.getElementById('editProductionStart').value),end_at:localInputToIso(document.getElementById('editProductionEnd').value),note:document.getElementById('editProductionNote').value.trim()}; payload.duration_min=payload.end_at?durationMinutes(payload.start_at,payload.end_at):null; const {error}=await sb.from('productions').update(payload).eq('id',id); if(error) return alert(error.message); closeModal('editProductionModal'); }
+function openEditBreakdown(id){ const r=state.breakdowns.find(x=>x.id===id); if(!r) return; document.getElementById('editBreakdownId').value=id; document.getElementById('editBreakdownEquipment').innerHTML = state.equipments.map(e=>`<option value="${e.id}" ${e.id===r.equipment_id?'selected':''}>${escapeHtml(e.name)} (${escapeHtml(e.type)})</option>`).join(''); document.getElementById('editBreakdownShift').value=r.shift||'1. Vardiya'; document.getElementById('editBreakdownReason').value=r.reason||''; document.getElementById('editBreakdownStart').value=isoToLocalInput(r.start_at); document.getElementById('editBreakdownEnd').value=isoToLocalInput(r.end_at); document.getElementById('editBreakdownNote').value=r.note||''; openModal('editBreakdownModal'); }
+async function saveBreakdownEdit(){ const id=document.getElementById('editBreakdownId').value; const eqId=document.getElementById('editBreakdownEquipment').value; const eq=state.equipments.find(e=>e.id===eqId); const payload={equipment_id:eqId,equipment_name:eq?.name||'',shift:document.getElementById('editBreakdownShift').value,reason:document.getElementById('editBreakdownReason').value.trim(),start_at:localInputToIso(document.getElementById('editBreakdownStart').value),end_at:localInputToIso(document.getElementById('editBreakdownEnd').value),note:document.getElementById('editBreakdownNote').value.trim()}; payload.duration_min=payload.end_at?durationMinutes(payload.start_at,payload.end_at):null; const {error}=await sb.from('breakdowns').update(payload).eq('id',id); if(error) return alert(error.message); closeModal('editBreakdownModal'); }
+function openEditRental(id){ const r=state.rentals.find(x=>x.id===id); if(!r) return; document.getElementById('editRentalId').value=id; document.getElementById('editRentalEquipment').innerHTML = state.equipments.map(e=>`<option value="${e.id}" ${e.id===r.equipment_id?'selected':''}>${escapeHtml(e.name)} (${escapeHtml(e.type)})</option>`).join(''); document.getElementById('editRentalType').value=r.type||''; document.getElementById('editRentalLocation').value=r.location||''; document.getElementById('editRentalStart').value=isoToLocalInput(r.start_at); document.getElementById('editRentalEnd').value=isoToLocalInput(r.end_at); openModal('editRentalModal'); }
+async function saveRentalEdit(){ const id=document.getElementById('editRentalId').value; const eqId=document.getElementById('editRentalEquipment').value; const eq=state.equipments.find(e=>e.id===eqId); const payload={equipment_id:eqId,equipment_name:eq?.name||'',type:document.getElementById('editRentalType').value.trim()||eq?.type||'',location:document.getElementById('editRentalLocation').value.trim(),start_at:localInputToIso(document.getElementById('editRentalStart').value),end_at:localInputToIso(document.getElementById('editRentalEnd').value)}; payload.duration_min=payload.end_at?durationMinutes(payload.start_at,payload.end_at):null; const {error}=await sb.from('rentals').update(payload).eq('id',id); if(error) return alert(error.message); closeModal('editRentalModal'); }
+async function deleteRow(table,id){ if(!confirm('Kayıt silinsin mi?')) return; const {error}=await sb.from(table).delete().eq('id',id); if(error) alert(error.message); }
+async function clearTable(table){ if(!confirm('Tüm kayıtlar silinsin mi?')) return; const {error}=await sb.from(table).delete().neq('id','00000000-0000-0000-0000-000000000000'); if(error) alert(error.message); }
+function exportCSV(){ function esc(v){return `"${String(v ?? '').replaceAll('"','""')}"`;} const lines=[]; lines.push('ÜRETİM'); lines.push(['Ekipman','Paket','Nereden','Nereye','Durum/Bölge','Vardiya','Başlangıç','Bitiş','Süre','Açıklama'].map(esc).join(';')); state.productions.forEach(r=>lines.push([r.equipment_name,r.package_name,r.from_location,r.to_location,r.status_text,r.shift,fmtDate(r.start_at),fmtDate(r.end_at),r.duration_min||'',r.note||''].map(esc).join(';'))); lines.push(''); lines.push('ARIZA'); lines.push(['Ekipman','Vardiya','Başlangıç','Bitiş','Süre','Neden','Açıklama'].map(esc).join(';')); state.breakdowns.forEach(r=>lines.push([r.equipment_name,r.shift,fmtDate(r.start_at),fmtDate(r.end_at),r.duration_min||'',r.reason||'',r.note||''].map(esc).join(';'))); lines.push(''); lines.push('KİRALIK'); lines.push(['Ekipman','Tür','Bölge','Başlangıç','Bitiş','Süre'].map(esc).join(';')); state.rentals.forEach(r=>lines.push([r.equipment_name,r.type,r.location,fmtDate(r.start_at),fmtDate(r.end_at),r.duration_min||''].map(esc).join(';'))); const blob=new Blob(['\ufeff'+lines.join('\n')],{type:'text/csv;charset=utf-8;'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='acik_ocak_vardiya_raporu.csv'; document.body.appendChild(a); a.click(); a.remove(); }
+
+document.getElementById('loginBtn').addEventListener('click', login);
+document.getElementById('email').addEventListener('keydown', (e)=>{ if(e.key==='Enter') login(); });
+document.getElementById('password').addEventListener('keydown', (e)=>{ if(e.key==='Enter') login(); });
+document.getElementById('logoutBtn').addEventListener('click', logout);
+document.getElementById('refreshBtn').addEventListener('click', async()=>{await loadAll(); renderAll();});
+document.getElementById('exportBtn').addEventListener('click', exportCSV);
+bootstrap();
+</script>
+</body>
+</html>
