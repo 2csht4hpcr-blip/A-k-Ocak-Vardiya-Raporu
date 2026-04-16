@@ -854,7 +854,12 @@
     modal: { type:null, data:null },
     shiftConfig: loadShiftConfig(),
     recordFilters: { equipment_id:'', package_id:'', shift_name:'', location:'', day:'' },
-    dashboardProFilters: { shiftKey:'', zone:'', equipment:'', search:'', sort:'trip_desc' }
+    dashboardProFilters: { shiftKey:'', zone:'', equipment:'', search:'', sort:'trip_desc' },
+    presence: {
+      channel: null,
+      sessionKey: `${Date.now()}_${Math.random().toString(36).slice(2,10)}`,
+      heartbeatTimer: null
+    }
   };
 
   const debugBox = document.getElementById('debugBox');
@@ -1050,6 +1055,124 @@
     return state.sb;
   }
 
+
+  function getPresencePayload(){
+    const fullName = state.profile?.full_name || state.user?.email || 'Kullanıcı';
+    return {
+      user_id: state.user?.id || '',
+      session_key: state.presence.sessionKey,
+      full_name: fullName,
+      role: state.profile?.role || 'manager',
+      email: state.user?.email || '',
+      ts: Date.now()
+    };
+  }
+
+  function onlineUserEntriesFromPresence(){
+    const channel = state.presence?.channel;
+    if(!channel || typeof channel.presenceState !== 'function') return [];
+    const rawState = channel.presenceState() || {};
+    const flattened = [];
+    Object.values(rawState).forEach(entries=>{
+      (entries || []).forEach(item=>{
+        const payload = item && item.user_id ? item : (item?.metas?.[0] || item);
+        if(payload && payload.user_id) flattened.push(payload);
+      });
+    });
+    const bySession = new Map();
+    flattened.forEach(entry=>{
+      const key = entry.session_key || `${entry.user_id}_${entry.ts || ''}`;
+      if(!bySession.has(key)) bySession.set(key, entry);
+    });
+    return Array.from(bySession.values()).sort((a,b)=> String(a.full_name || '').localeCompare(String(b.full_name || ''), 'tr'));
+  }
+
+  function updateOnlineUsersCard(){
+    const entries = onlineUserEntriesFromPresence();
+    const countEl = document.getElementById('userName');
+    const roleEl = document.getElementById('userRole');
+    const cardEl = document.getElementById('onlineUsersCard');
+    if(countEl) countEl.textContent = String(entries.length || 1);
+    if(roleEl){
+      if(entries.length){
+        const roleSummary = entries.map(e=>`${e.full_name || e.email || 'Kullanıcı'} (${roleLabelTr(e.role)})`).join(', ');
+        roleEl.textContent = roleSummary.length > 80 ? `${entries.length} kişi çevrimiçi` : roleSummary;
+      }else{
+        roleEl.textContent = roleLabelTr(state.profile?.role);
+      }
+    }
+    if(cardEl){
+      const title = entries.length
+        ? entries.map(e=>`${e.full_name || e.email || 'Kullanıcı'} • ${roleLabelTr(e.role)}`).join('
+')
+        : `${state.profile?.full_name || state.user?.email || 'Kullanıcı'} • ${roleLabelTr(state.profile?.role)}`;
+      cardEl.title = title;
+    }
+  }
+
+  async function setupOnlinePresence(){
+    try{
+      const sb = await initClient();
+      if(state.presence.heartbeatTimer){
+        clearInterval(state.presence.heartbeatTimer);
+        state.presence.heartbeatTimer = null;
+      }
+      if(state.presence.channel){
+        try{ await state.presence.channel.untrack(); }catch(e){}
+        try{ await sb.removeChannel(state.presence.channel); }catch(e){}
+        state.presence.channel = null;
+      }
+      const key = `${state.user?.id || 'anon'}:${state.presence.sessionKey}`;
+      const channel = sb.channel('online-users', { config:{ presence:{ key } } });
+      state.presence.channel = channel;
+
+      channel
+        .on('presence', { event:'sync' }, updateOnlineUsersCard)
+        .on('presence', { event:'join' }, updateOnlineUsersCard)
+        .on('presence', { event:'leave' }, updateOnlineUsersCard);
+
+      await new Promise((resolve, reject)=>{
+        let settled = false;
+        channel.subscribe(async status=>{
+          if(status === 'SUBSCRIBED'){
+            try{
+              await channel.track(getPresencePayload());
+              updateOnlineUsersCard();
+              if(!state.presence.heartbeatTimer){
+                state.presence.heartbeatTimer = setInterval(async ()=>{
+                  try{ await channel.track(getPresencePayload()); }catch(e){}
+                }, 25000);
+              }
+            }catch(e){}
+            if(!settled){ settled = true; resolve(true); }
+          }else if(status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED'){
+            if(!settled){ settled = true; reject(new Error(`Presence ${status}`)); }
+          }
+        });
+      });
+    }catch(err){
+      const roleEl = document.getElementById('userRole');
+      if(roleEl) roleEl.textContent = `${roleLabelTr(state.profile?.role)} • online izleme pasif`;
+      log({stage:'presence-error', message:String(err.message || err)});
+    }
+  }
+
+  async function teardownOnlinePresence(){
+    try{
+      if(state.presence.heartbeatTimer){
+        clearInterval(state.presence.heartbeatTimer);
+        state.presence.heartbeatTimer = null;
+      }
+      const sb = state.sb;
+      const channel = state.presence.channel;
+      if(channel && sb){
+        try{ await channel.untrack(); }catch(e){}
+        try{ await sb.removeChannel(channel); }catch(e){}
+      }
+    }catch(e){}
+    state.presence.channel = null;
+  }
+
   async function testConnection(){
     try{
       setStatus('Bağlantı test ediliyor...');
@@ -1117,16 +1240,17 @@
     document.getElementById('loginView').classList.add('hidden');
     document.getElementById('appView').classList.remove('hidden');
     document.getElementById('userName').textContent = '1';
-    document.getElementById('userRole').textContent = 'İsimler için üzerine gel';
+    document.getElementById('userRole').textContent = roleLabelTr(state.profile?.role);
     const onlineLabel = state.profile.full_name || state.user.email || 'Kullanıcı';
     const roleLabel = roleLabelTr(state.profile?.role);
     const onlineCard = document.getElementById('onlineUsersCard');
     if(onlineCard) onlineCard.title = `${onlineLabel} • ${roleLabel}`;
-    document.getElementById('userRole').textContent = roleLabel;
 
     await loadAllSafe();
     renderAll();
     applyRolePermissions();
+    await setupOnlinePresence();
+    updateOnlineUsersCard();
   }
 
   async function safeSelect(table){
@@ -3274,12 +3398,19 @@ function renderDeleted(){
   }
 
   async function refreshData(){ await loadAllSafe(); renderAll(); }
-  async function logout(){ try{ const sb = await initClient(); await sb.auth.signOut(); } catch(e){} location.reload(); }
+  async function logout(){ try{ await teardownOnlinePresence(); const sb = await initClient(); await sb.auth.signOut(); } catch(e){} location.reload(); }
 
   document.getElementById('testBtn').addEventListener('click', testConnection);
   document.getElementById('loginBtn').addEventListener('click', login);
   document.getElementById('refreshBtn').addEventListener('click', refreshData);
   document.getElementById('logoutBtn').addEventListener('click', logout);
+
+  window.addEventListener('beforeunload', ()=>{ try{ teardownOnlinePresence(); }catch(e){} });
+  document.addEventListener('visibilitychange', ()=>{
+    if(document.visibilityState === 'visible' && state.user){
+      try{ updateOnlineUsersCard(); if(state.presence.channel) state.presence.channel.track(getPresencePayload()); }catch(e){}
+    }
+  });
   document.querySelectorAll('.menu-btn').forEach(btn=>{ btn.addEventListener('click', ()=>showPage(btn.dataset.page)); });
   document.getElementById('email').addEventListener('keydown', e=>{ if(e.key==='Enter') login(); });
   document.getElementById('password').addEventListener('keydown', e=>{ if(e.key==='Enter') login(); });
