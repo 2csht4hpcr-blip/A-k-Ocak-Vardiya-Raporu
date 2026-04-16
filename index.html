@@ -1103,8 +1103,7 @@
     }
     if(cardEl){
       const title = entries.length
-        ? entries.map(e=>`${e.full_name || e.email || 'Kullanıcı'} • ${roleLabelTr(e.role)}`).join('
-')
+        ? entries.map(e=>`${e.full_name || e.email || 'Kullanıcı'} • ${roleLabelTr(e.role)}`).join('\n')
         : `${state.profile?.full_name || state.user?.email || 'Kullanıcı'} • ${roleLabelTr(state.profile?.role)}`;
       cardEl.title = title;
     }
