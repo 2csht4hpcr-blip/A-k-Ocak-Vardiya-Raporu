@@ -348,6 +348,130 @@
     }
   }
 
+
+  function normalizeShiftConfig(config){
+    const src = config && typeof config === 'object' ? config : {};
+    const shifts = Array.isArray(src.shifts) ? src.shifts.map(s=>({
+      name: String(s?.name || '').trim(),
+      start: String(s?.start || '').trim(),
+      end: String(s?.end || '').trim()
+    })).filter(s=>s.name && s.start && s.end) : [];
+    return { count: shifts.length, shifts };
+  }
+  function normalizeTruckModels(models){
+    return Array.isArray(models) ? models.map(m=>({
+      id: String(m?.id || '').trim() || `tm_${Date.now()}_${Math.random().toString(36).slice(2,7)}`,
+      name: String(m?.name || '').trim(),
+      nominal_tonnage: Number(m?.nominal_tonnage || 0)
+    })).filter(m=>m.name && Number.isFinite(m.nominal_tonnage) && m.nominal_tonnage > 0) : [];
+  }
+  function normalizeEquipmentModelMap(map){
+    const src = map && typeof map === 'object' ? map : {};
+    const cleaned = {};
+    Object.keys(src).forEach(k=>{ cleaned[String(k)] = String(src[k] || ''); });
+    return cleaned;
+  }
+  async function loadAppSettingValue(key){
+    try{
+      const sb = state.sb || await initClient();
+      if(!sb || !state.user) return null;
+      const res = await sb.from('app_settings').select('value').eq('key', key).maybeSingle();
+      if(res.error) throw res.error;
+      return res.data?.value ?? null;
+    }catch(e){
+      return null;
+    }
+  }
+  async function saveAppSettingValue(key, value){
+    const sb = state.sb || await initClient();
+    if(!sb || !state.user) throw new Error('Supabase hazır değil');
+    const payload = { key, value, updated_at: new Date().toISOString(), updated_by: state.user.id };
+    const res = await sb.from('app_settings').upsert(payload, { onConflict:'key' });
+    if(res.error) throw res.error;
+    return true;
+  }
+  async function loadShiftConfigRemote(){
+    const remote = await loadAppSettingValue('shift_config');
+    if(remote){
+      const cleaned = normalizeShiftConfig(remote);
+      state.shiftConfig = cleaned;
+      saveShiftConfig(cleaned);
+      state.shiftConfigSource = 'supabase';
+      return true;
+    }
+    state.shiftConfigSource = 'local';
+    return false;
+  }
+  async function saveShiftConfigRemote(config, showSavedToast){
+    const cleaned = normalizeShiftConfig(config);
+    state.shiftConfig = cleaned;
+    saveShiftConfig(cleaned);
+    try{
+      await saveAppSettingValue('shift_config', cleaned);
+      state.shiftConfigSource = 'supabase';
+      if(showSavedToast) showToast('Vardiya ayarları Supabase kaydedildi');
+      return true;
+    }catch(e){
+      state.shiftConfigSource = 'local';
+      if(showSavedToast) showToast('Vardiya ayarları bu cihazda saklandı');
+      return false;
+    }
+  }
+  async function loadTruckModelsRemote(){
+    const remote = await loadAppSettingValue('truck_models');
+    if(remote){
+      const cleaned = normalizeTruckModels(remote);
+      state.truckModels = cleaned;
+      saveTruckModels(cleaned);
+      state.truckModelsSource = 'supabase';
+      return true;
+    }
+    state.truckModelsSource = 'local';
+    return false;
+  }
+  async function saveTruckModelsRemote(models, showSavedToast){
+    const cleaned = normalizeTruckModels(models);
+    state.truckModels = cleaned;
+    saveTruckModels(cleaned);
+    try{
+      await saveAppSettingValue('truck_models', cleaned);
+      state.truckModelsSource = 'supabase';
+      if(showSavedToast) showToast('Kamyon modelleri Supabase kaydedildi');
+      return true;
+    }catch(e){
+      state.truckModelsSource = 'local';
+      if(showSavedToast) showToast('Kamyon modelleri bu cihazda saklandı');
+      return false;
+    }
+  }
+  async function loadEquipmentModelMapRemote(){
+    const remote = await loadAppSettingValue('equipment_model_map');
+    if(remote){
+      const cleaned = normalizeEquipmentModelMap(remote);
+      state.equipmentModelMap = cleaned;
+      saveEquipmentModelMap(cleaned);
+      state.equipmentModelMapSource = 'supabase';
+      return true;
+    }
+    state.equipmentModelMapSource = 'local';
+    return false;
+  }
+  async function saveEquipmentModelMapRemote(map, showSavedToast){
+    const cleaned = normalizeEquipmentModelMap(map);
+    state.equipmentModelMap = cleaned;
+    saveEquipmentModelMap(cleaned);
+    try{
+      await saveAppSettingValue('equipment_model_map', cleaned);
+      state.equipmentModelMapSource = 'supabase';
+      if(showSavedToast) showToast('Ekipman model eşleşmeleri Supabase kaydedildi');
+      return true;
+    }catch(e){
+      state.equipmentModelMapSource = 'local';
+      if(showSavedToast) showToast('Ekipman model eşleşmeleri bu cihazda saklandı');
+      return false;
+    }
+  }
+
   const DEFAULT_ALERT_RULES = {
     lowProductionRatio: 0.70,
     highFuelRatio: 1.30,
@@ -445,7 +569,7 @@
       `;
     }).join('') : '<div class="muted">Önce vardiya sayısını girin.</div>';
   }
-  function saveShiftConfigFromForm(){
+  async function saveShiftConfigFromForm(){
     try{
       if(!canManageShiftConfig()) throw new Error('Vardiya ayarları yalnızca yönetici tarafından değiştirilebilir');
       let count = Number(document.getElementById('shift_count')?.value || 0);
@@ -461,9 +585,9 @@
         shifts.push({ name, start, end });
       }
       state.shiftConfig = { count, shifts };
-      saveShiftConfig(state.shiftConfig);
+      await saveShiftConfigRemote(state.shiftConfig, false);
       renderShiftConfigCardRefresh();
-      showToast('Vardiya tanımı kaydedildi');
+      showToast(state.shiftConfigSource === 'supabase' ? 'Vardiya tanımı Supabase kaydedildi' : 'Vardiya tanımı bu cihazda saklandı');
     }catch(err){
       alert(err.message || err);
     }
@@ -1432,6 +1556,9 @@
     equipmentModelMap: loadEquipmentModelMap(),
     packageTonnageFactors: loadPackageTonnageFactors(),
     packageTonnageSource: 'local',
+    shiftConfigSource: 'local',
+    truckModelsSource: 'local',
+    equipmentModelMapSource: 'local',
     alertRules: loadAlertRules(),
     alertRulesSource: 'local',
     presence: {
@@ -1855,6 +1982,9 @@
       log({stage:'profile-catch', message:String(err.message||err)});
     }
     state.profile = profile || { full_name: state.user.email, role: 'manager' };
+    await loadShiftConfigRemote();
+    await loadTruckModelsRemote();
+    await loadEquipmentModelMapRemote();
     await loadPackageTonnageFactorsRemote();
     await loadAlertRulesRemote();
 
@@ -3739,7 +3869,7 @@
         const equipmentTargetId = row.id || res.data?.id;
         if(equipmentTargetId){
           state.equipmentModelMap[String(equipmentTargetId)] = /kamyon/i.test(payload.type) ? String(truckModelId || '') : '';
-          saveEquipmentModelMap(state.equipmentModelMap);
+          await saveEquipmentModelMapRemote(state.equipmentModelMap, false);
         }
         closeModal();
         await refreshData();
@@ -3798,10 +3928,10 @@
         } else {
           state.truckModels = [{ id:`tm_${Date.now()}_${Math.random().toString(36).slice(2,7)}`, name, nominal_tonnage: nominalTonnage }, ...(state.truckModels || [])];
         }
-        saveTruckModels(state.truckModels);
+        await saveTruckModelsRemote(state.truckModels, false);
         closeModal();
         renderAll();
-        showToast(row.id ? 'Kamyon modeli güncellendi' : 'Kamyon modeli eklendi');
+        showToast(state.truckModelsSource === 'supabase' ? (row.id ? 'Kamyon modeli Supabase güncellendi' : 'Kamyon modeli Supabase eklendi') : (row.id ? 'Kamyon modeli bu cihazda güncellendi' : 'Kamyon modeli bu cihazda eklendi'));
         return;
       }
     }catch(err){ alert(err.message || err); }
@@ -3819,10 +3949,10 @@
       Object.keys(state.equipmentModelMap || {}).forEach(eqId=>{
         if(String(state.equipmentModelMap[eqId] || '') === safeId) state.equipmentModelMap[eqId] = '';
       });
-      saveTruckModels(state.truckModels);
-      saveEquipmentModelMap(state.equipmentModelMap);
+      await saveTruckModelsRemote(state.truckModels, false);
+      await saveEquipmentModelMapRemote(state.equipmentModelMap, false);
       renderAll();
-      showToast('Kamyon modeli silindi');
+      showToast(state.truckModelsSource === 'supabase' ? 'Kamyon modeli Supabase silindi' : 'Kamyon modeli bu cihazda silindi');
     }catch(err){ alert(err.message || err); }
   }
 
