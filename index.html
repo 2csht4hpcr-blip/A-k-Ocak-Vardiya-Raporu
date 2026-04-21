@@ -301,6 +301,52 @@
   function savePackageTonnageFactors(map){
     try{ localStorage.setItem('maden_package_tonnage_factors', JSON.stringify(map && typeof map === 'object' ? map : {})); }catch(e){}
   }
+  function normalizePackageTonnageFactors(map){
+    const cleaned = {};
+    const src = map && typeof map === 'object' ? map : {};
+    Object.keys(src).forEach(key=>{
+      const num = Number(src[key]);
+      if(Number.isFinite(num) && num > 0) cleaned[String(key)] = num;
+    });
+    return cleaned;
+  }
+  async function loadPackageTonnageFactorsRemote(){
+    try{
+      const sb = state.sb || await initClient();
+      if(!sb || !state.user) return false;
+      const res = await sb.from('app_settings').select('value').eq('key', 'package_tonnage_factors').maybeSingle();
+      if(res.error) throw res.error;
+      const cleaned = normalizePackageTonnageFactors(res.data?.value || {});
+      if(Object.keys(cleaned).length){
+        state.packageTonnageFactors = cleaned;
+        savePackageTonnageFactors(cleaned);
+      }
+      state.packageTonnageSource = res.data ? 'supabase' : 'local';
+      return true;
+    }catch(e){
+      state.packageTonnageSource = 'local';
+      return false;
+    }
+  }
+  async function savePackageTonnageFactorsRemote(map, showSavedToast){
+    const cleaned = normalizePackageTonnageFactors(map);
+    state.packageTonnageFactors = cleaned;
+    savePackageTonnageFactors(cleaned);
+    try{
+      const sb = state.sb || await initClient();
+      if(!sb || !state.user) throw new Error('Supabase hazır değil');
+      const payload = { key:'package_tonnage_factors', value: cleaned, updated_at: new Date().toISOString(), updated_by: state.user.id };
+      const res = await sb.from('app_settings').upsert(payload, { onConflict:'key' });
+      if(res.error) throw res.error;
+      state.packageTonnageSource = 'supabase';
+      if(showSavedToast) showToast('Paket tonaj faktörleri Supabase kaydedildi');
+      return true;
+    }catch(e){
+      state.packageTonnageSource = 'local';
+      if(showSavedToast) showToast('Tonaj faktörleri bu cihazda saklandı');
+      return false;
+    }
+  }
 
   const DEFAULT_ALERT_RULES = {
     lowProductionRatio: 0.70,
@@ -1385,6 +1431,7 @@
     truckModels: loadTruckModels(),
     equipmentModelMap: loadEquipmentModelMap(),
     packageTonnageFactors: loadPackageTonnageFactors(),
+    packageTonnageSource: 'local',
     alertRules: loadAlertRules(),
     alertRulesSource: 'local',
     presence: {
@@ -1808,6 +1855,7 @@
       log({stage:'profile-catch', message:String(err.message||err)});
     }
     state.profile = profile || { full_name: state.user.email, role: 'manager' };
+    await loadPackageTonnageFactorsRemote();
     await loadAlertRulesRemote();
 
     document.getElementById('loginView').classList.add('hidden');
@@ -3731,7 +3779,7 @@
         const packageTargetId = row.id || res.data?.id;
         if(packageTargetId){
           state.packageTonnageFactors[String(packageTargetId)] = tonnageFactor;
-          savePackageTonnageFactors(state.packageTonnageFactors);
+          await savePackageTonnageFactorsRemote(state.packageTonnageFactors, false);
         }
         closeModal();
         await refreshData();
