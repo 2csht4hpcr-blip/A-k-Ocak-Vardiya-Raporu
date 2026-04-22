@@ -202,6 +202,17 @@
     .pro-kpi .k-label{font-size:10px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.35px}
     .pro-kpi .k-value{font-size:20px;font-weight:900;color:#0f172a;margin-top:4px}
 
+  
+    .users-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}
+    .user-card{border:1px solid #e5e7eb;border-radius:16px;padding:14px;background:linear-gradient(180deg,#ffffff 0%,#f8fafc 100%);box-shadow:0 8px 20px rgba(15,23,42,.05)}
+    .user-card-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;margin-bottom:10px;flex-wrap:wrap}
+    .user-card-name{font-size:16px;font-weight:900;color:#0f172a}
+    .user-card-sub{font-size:12px;color:#64748b;word-break:break-all}
+    .user-card-body{display:grid;gap:10px}
+    .user-card-row label{display:block;font-size:12px;font-weight:800;color:#475569;margin-bottom:6px;text-transform:uppercase;letter-spacing:.35px}
+    .user-card-actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-top:8px}
+    .user-card-actions button{width:auto;min-width:110px}
+
   </style>
 </head>
 <body>
@@ -6213,38 +6224,44 @@ function renderDeleted(){
           <button class="secondary" onclick="refreshData()">Listeyi Yenile</button>
         </div>
         <div class="muted" style="margin-bottom:12px">Vardiyalar virgülle ayrılır. Örnek: <b>Gündüz</b> veya <b>Gece</b>. Tanımlı vardiyalar: ${escapeHtml(shiftOptionsHint)}</div>
-        <div class="table-wrap"><table>
-          <thead>
-            <tr>
-              <th>Ad</th>
-              <th>Kullanıcı</th>
-              <th>Rol</th>
-              <th>Vardiyalar</th>
-              <th>Geçmiş</th>
-              <th>Durum</th>
-              <th>İşlem</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${rows.length ? rows.map(r=>`
-              <tr>
-                <td>${escapeHtml(r.full_name || '-')}</td>
-                <td>${escapeHtml(r.email || r.id || '-')}</td>
-                <td>
+        <div class="users-grid">
+          ${rows.length ? rows.map(r=>`
+            <div class="user-card">
+              <div class="user-card-head">
+                <div>
+                  <div class="user-card-name">${escapeHtml(r.full_name || '-')}</div>
+                  <div class="user-card-sub">${escapeHtml(r.email || r.id || '-')}</div>
+                </div>
+                <span class="pill ${normalizeRole(r.role)==='manager' ? 'green' : (normalizeRole(r.role)==='shift_lead' ? 'orange' : '')}">${normalizeRole(r.role)==='manager' ? 'Yönetici' : (normalizeRole(r.role)==='shift_lead' ? 'Vardiya Sorumlusu' : 'Misafir')}</span>
+              </div>
+              <div class="user-card-body">
+                <div class="user-card-row">
+                  <label>Rol</label>
                   <select id="u_role_${r.id}">
                     <option value="manager" ${normalizeRole(r.role)==='manager' ? 'selected' : ''}>Yönetici</option>
                     <option value="shift_lead" ${normalizeRole(r.role)==='shift_lead' ? 'selected' : ''}>Vardiya Sorumlusu</option>
                     <option value="guest" ${normalizeRole(r.role)==='guest' ? 'selected' : ''}>Misafir</option>
                   </select>
-                </td>
-                <td><input id="u_shifts_${r.id}" value="${escapeHtml((r.assigned_shift_names || []).join(', '))}" placeholder="Gündüz, Gece" /></td>
-                <td style="white-space:nowrap"><label><input id="u_past_${r.id}" type="checkbox" ${r.can_view_past_shifts ? 'checked' : ''} /> Geçmişi görsün</label></td>
-                <td style="white-space:nowrap"><label><input id="u_active_${r.id}" type="checkbox" ${r.is_active !== false ? 'checked' : ''} /> Aktif</label></td>
-                <td><button onclick="saveUserRoleSettings('${r.id}')">Kaydet</button></td>
-              </tr>
-            `).join('') : '<tr><td colspan="7">Henüz kullanıcı bulunamadı.</td></tr>'}
-          </tbody>
-        </table></div>
+                </div>
+                <div class="user-card-row">
+                  <label>Atanmış Vardiyalar</label>
+                  <input id="u_shifts_${r.id}" value="${escapeHtml((r.assigned_shift_names || []).join(', '))}" placeholder="Gündüz, Gece" />
+                </div>
+                <div class="inline">
+                  <div class="user-card-row">
+                    <label><input id="u_past_${r.id}" type="checkbox" ${r.can_view_past_shifts ? 'checked' : ''} /> Geçmiş vardiyaları görsün</label>
+                  </div>
+                  <div class="user-card-row">
+                    <label><input id="u_active_${r.id}" type="checkbox" ${r.is_active !== false ? 'checked' : ''} /> Aktif kullanıcı</label>
+                  </div>
+                </div>
+              </div>
+              <div class="user-card-actions">
+                <button onclick="saveUserRoleSettings('${r.id}')">Kaydet</button>
+              </div>
+            </div>
+          `).join('') : '<div class="empty">Henüz kullanıcı bulunamadı.</div>'}
+        </div>
       </div>
     `;
   }
@@ -6437,7 +6454,7 @@ function renderDeleted(){
   document.getElementById('email').addEventListener('keydown', e=>{ if(e.key==='Enter') login(); });
   document.getElementById('password').addEventListener('keydown', e=>{ if(e.key==='Enter') login(); });
 
-  Object.assign(window, { openModal, closeModal, fillTruckRouteFromExcavator, updateAutoMeterLabels, updateProductionStartMeterHints, updateTripProductionContext, updateFuelProductionContext, updateMeterCorrectionContext, toggleProductionEditLinkedField, refreshLogisticsEquipmentSelect, markShiftSelectManual, continueBreakdownToCurrentShift, finishBreakdownFromWarning, saveStartProductionExcavator, saveStartProductionTruck, saveStartProductionOther, saveEndProduction, saveStartBreakdown, saveEndBreakdown, saveStartRental, saveEndRental, saveNewTrip, saveNewFuel, saveNewMeter, confirmSoftDelete, restoreDeleted, deleteAllDeletedRecordsNow, deleteDeletedOlderThan30Days, saveEditRecord, saveDefinition, deleteTruckModel, toggleDefinitionTruckModelField, renderShiftConfigInputs, saveShiftConfigFromForm, renderShiftConfigCardRefresh, applyRecordFiltersFromUI, resetRecordFilters, bulkDeleteRecordTable, exportRecordsToExcel });
+  Object.assign(window, { openModal, closeModal, fillTruckRouteFromExcavator, updateAutoMeterLabels, updateProductionStartMeterHints, updateTripProductionContext, updateFuelProductionContext, updateMeterCorrectionContext, toggleProductionEditLinkedField, refreshLogisticsEquipmentSelect, markShiftSelectManual, continueBreakdownToCurrentShift, finishBreakdownFromWarning, saveStartProductionExcavator, saveStartProductionTruck, saveStartProductionOther, saveEndProduction, saveStartBreakdown, saveEndBreakdown, saveStartRental, saveEndRental, saveNewTrip, saveNewFuel, saveNewMeter, confirmSoftDelete, restoreDeleted, deleteAllDeletedRecordsNow, deleteDeletedOlderThan30Days, saveEditRecord, saveDefinition, deleteTruckModel, toggleDefinitionTruckModelField, renderShiftConfigInputs, saveShiftConfigFromForm, renderShiftConfigCardRefresh, applyRecordFiltersFromUI, resetRecordFilters, bulkDeleteRecordTable, exportRecordsToExcel, saveUserRoleSettings, refreshData });
 
   (async function autoSession(){
     try{
