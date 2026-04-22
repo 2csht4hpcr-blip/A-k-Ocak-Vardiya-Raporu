@@ -2244,19 +2244,19 @@
     state.rentals = (results[TABLES.RENTALS]?.data || []).map(r=>({ ...r, equipment_name: r.equipment_name || r.equipment_name_snapshot || '' }));
     state.fuel_logs = (results[TABLES.FUEL_LOGS]?.data || []).map(r=>({
       ...r,
-      equipment_name: r.equipment_name || equipmentNameById(r.equipment_id) || '',
+      equipment_name: r.equipment_name || (findEquipmentById(r.equipment_id)?.name || '') || '',
       created_at: r.created_at || r.recorded_at || nowIso()
     }));
     state.meter_logs = (results[TABLES.METER_LOGS]?.data || []).map(r=>({
       ...r,
-      equipment_name: r.equipment_name || equipmentNameById(r.equipment_id) || '',
+      equipment_name: r.equipment_name || (findEquipmentById(r.equipment_id)?.name || '') || '',
       created_at: r.created_at || r.recorded_at || nowIso()
     }));
     state.truck_trips = (results[TABLES.TRUCK_TRIPS]?.data || []).map(r=>({
       ...r,
-      equipment_name: r.equipment_name || equipmentNameById(r.equipment_id) || '',
+      equipment_name: r.equipment_name || (findEquipmentById(r.equipment_id)?.name || '') || '',
       package_name: r.package_name || packageName(r.package_id) || '',
-      linked_excavator_name: r.linked_excavator_name || equipmentNameById(r.linked_excavator_id) || '',
+      linked_excavator_name: r.linked_excavator_name || (findEquipmentById(r.linked_excavator_id)?.name || '') || '',
       created_at: r.created_at || r.recorded_at || nowIso()
     }));
 
