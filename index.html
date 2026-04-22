@@ -3277,11 +3277,8 @@
       const payload = {
         equipment_id,
         equipment_name_snapshot: eq?.name || '',
-        equipment_name: eq?.name || '',
         package_id,
         package_name_snapshot: packageName(package_id),
-        package_name: packageName(package_id),
-        material_type: packageMaterialTypeById(package_id),
         from_location: document.getElementById('m_from_location').value.trim(),
         to_location: document.getElementById('m_to_location').value.trim(),
         start_at: nowIso(),
@@ -3290,7 +3287,7 @@
         start_meter_type: 'saat',
         start_meter_value: document.getElementById('m_start_meter').value === '' ? (preferredStartMeterForProduction(equipment_id, nowIso()).value ?? 0) : num(document.getElementById('m_start_meter').value)
       };
-      const { error } = await state.sb.from(TABLES.PRODUCTIONS).insert(payload);
+      const { error } = await insertWithOptionalColumns(TABLES.PRODUCTIONS, payload, ['equipment_name_snapshot','package_name_snapshot','linked_excavator_name_snapshot','shift_name','shift_date','start_meter_type','start_meter_value']);
       if(error) throw error;
       closeModal();
       await refreshData();
@@ -3312,10 +3309,8 @@
       const payload = {
         equipment_id,
         equipment_name_snapshot: eq?.name || '',
-        equipment_name: eq?.name || '',
         package_id,
-        package_name: packageName(package_id) || linkedProd?.package_name || '',
-        material_type: packageMaterialTypeById(package_id) || linkedProd?.material_type || '',
+        package_name_snapshot: packageName(package_id) || linkedProd?.package_name || '',
         from_location: document.getElementById('m_from_location').value.trim() || linkedProd?.from_location || '',
         to_location: document.getElementById('m_to_location').value.trim() || linkedProd?.to_location || '',
         start_at: nowIso(),
@@ -3325,9 +3320,8 @@
         start_meter_value: document.getElementById('m_start_meter').value === '' ? (preferredStartMeterForProduction(equipment_id, nowIso()).value ?? 0) : num(document.getElementById('m_start_meter').value),
         linked_excavator_id: linkedProd?.equipment_id || null,
         linked_excavator_name_snapshot: linkedProd?.equipment_name || null,
-        linked_excavator_name: linkedProd?.equipment_name || null
       };
-      const { error } = await state.sb.from(TABLES.PRODUCTIONS).insert(payload);
+      const { error } = await insertWithOptionalColumns(TABLES.PRODUCTIONS, payload, ['equipment_name_snapshot','package_name_snapshot','linked_excavator_name_snapshot','shift_name','shift_date','start_meter_type','start_meter_value']);
       if(error) throw error;
       closeModal();
       await refreshData();
@@ -3351,7 +3345,6 @@
       const payload = {
         equipment_id,
         equipment_name_snapshot: eq?.name || '',
-        equipment_name: eq?.name || '',
         from_location: document.getElementById('m_from_location').value.trim(),
         to_location: '',
         start_at: nowIso(),
@@ -3360,10 +3353,10 @@
         start_meter_type: unit,
         start_meter_value: startMeter
       };
-      let { error } = await state.sb.from(TABLES.PRODUCTIONS).insert(payload);
+      let { error } = await insertWithOptionalColumns(TABLES.PRODUCTIONS, payload, ['equipment_name_snapshot','shift_name','shift_date','start_meter_type','start_meter_value']);
       if(error && /küçük olamaz|smaller|less than/i.test(String(error.message || ''))){
         payload.start_meter_value = latest ?? startMeter;
-        const retry = await state.sb.from(TABLES.PRODUCTIONS).insert(payload);
+        const retry = await insertWithOptionalColumns(TABLES.PRODUCTIONS, payload, ['equipment_name_snapshot','shift_name','shift_date','start_meter_type','start_meter_value']);
         error = retry.error;
       }
       if(error) throw error;
@@ -3443,7 +3436,6 @@
       const payload = {
         equipment_id,
         equipment_name_snapshot: eq?.name || '',
-        equipment_name: eq?.name || '',
         reason: document.getElementById('m_reason').value.trim(),
         start_at: nowIso(),
         shift_name: resolveShiftNameForDateTime(nowIso()) || 'Tanımsız',
@@ -3451,7 +3443,7 @@
         start_meter_type,
         start_meter_value
       };
-      const brRes = await state.sb.from(TABLES.BREAKDOWNS).insert(payload);
+      const brRes = await insertWithOptionalColumns(TABLES.BREAKDOWNS, payload, ['equipment_name_snapshot','shift_name','shift_date','reason','start_meter_type','start_meter_value']);
       if(brRes.error) throw brRes.error;
       closeModal();
       await refreshData();
@@ -3495,13 +3487,14 @@
       const eq = findEquipmentById(equipment_id);
       const payload = {
         equipment_id,
-        equipment_name: eq?.name || '-',
-        location,
+        equipment_name_snapshot: eq?.name || '-',
+        vendor_name: '',
+        from_location: location,
         start_at: nowIso(),
         shift_name: resolveShiftNameForDateTime(nowIso()) || 'Tanımsız',
         shift_date: todayStr()
       };
-      const { error } = await state.sb.from(TABLES.RENTALS).insert(payload);
+      const { error } = await insertWithOptionalColumns(TABLES.RENTALS, payload, ['equipment_name_snapshot','vendor_name','from_location','shift_name','shift_date']);
       if(error) throw error;
       closeModal();
       await refreshData();
@@ -3542,25 +3535,21 @@
       const payload = {
         equipment_id,
         equipment_name_snapshot: eq?.name || '',
-        equipment_name: eq?.name || '',
         trip_count: tripCount,
         package_id,
-        package_name: packageName(package_id) || matchedProduction?.package_name || '',
         material_type: packageMaterialTypeById(package_id) || matchedProduction?.material_type || '',
         from_location: document.getElementById('m_trip_from_location').value.trim() || matchedProduction?.from_location || '',
         to_location: document.getElementById('m_trip_to_location').value.trim() || matchedProduction?.to_location || '',
         linked_excavator_id: matchedProduction?.linked_excavator_id || null,
-        linked_excavator_name: matchedProduction?.linked_excavator_name || null,
         production_id: matchedProduction?.id || production_id || null,
         shift_name: selectedShift,
         shift_date: logisticsExplicitShiftDate({ production_id: matchedProduction?.id || production_id || null, shift_name: selectedShift, created_at: eventAt, logistics_shift_date: tripDate }),
-        logistics_shift_date: tripDate,
         recorded_at: eventAt,
         created_at: eventAt,
         created_by: state.user?.id || null,
         updated_by: state.user?.id || null
       };
-      const res = await insertWithOptionalColumns(TABLES.TRUCK_TRIPS, payload, ['production_id','shift_name','material_type','shift_date','logistics_shift_date']);
+      const res = await insertWithOptionalColumns(TABLES.TRUCK_TRIPS, payload, ['production_id','shift_name','material_type','shift_date','recorded_at']);
       if(res.error) throw res.error;
       const insertedRow = (res.data && res.data[0]) ? res.data[0] : { ...payload, id:`temp_trip_${Date.now()}` };
       state.truck_trips = [insertedRow, ...state.truck_trips.filter(r=>String(r.id)!==String(insertedRow.id))];
@@ -3594,20 +3583,18 @@
       const payload = {
         equipment_id,
         equipment_name_snapshot: eq?.name || '',
-        equipment_name: eq?.name || '',
         liters,
         meter_type: autoMeterTypeForEquipment(document.getElementById('m_fuel_equipment_id').value),
         meter_value: num(document.getElementById('m_fuel_meter_value').value),
         production_id: matchedProduction?.id || production_id || null,
         shift_name: selectedShift,
         shift_date: logisticsExplicitShiftDate({ production_id: matchedProduction?.id || production_id || null, shift_name: selectedShift, created_at: eventAt, logistics_shift_date: fuelDate }),
-        logistics_shift_date: fuelDate,
         recorded_at: eventAt,
         created_at: eventAt,
         created_by: state.user?.id || null,
         updated_by: state.user?.id || null
       };
-      const res = await insertWithOptionalColumns(TABLES.FUEL_LOGS, payload, ['production_id','shift_name','shift_date','logistics_shift_date']);
+      const res = await insertWithOptionalColumns(TABLES.FUEL_LOGS, payload, ['production_id','shift_name','shift_date','recorded_at','source']);
       if(res.error) throw res.error;
       const insertedRow = (res.data && res.data[0]) ? res.data[0] : { ...payload, id:`temp_fuel_${Date.now()}` };
       state.fuel_logs = [insertedRow, ...state.fuel_logs.filter(r=>String(r.id)!==String(insertedRow.id))];
@@ -3684,16 +3671,13 @@
       const payload = {
         equipment_id,
         equipment_name_snapshot: eq?.name || '',
-        equipment_name: eq?.name || '',
         meter_type: autoMeterTypeForEquipment(document.getElementById('m_meter_equipment_id').value),
         meter_value: endVal,
         start_meter_value: startVal,
         end_meter_value: endVal,
         production_id: matchedProduction?.id || production_id || null,
         shift_name: selectedShift,
-        source: 'manual_correction',
         shift_date: logisticsExplicitShiftDate({ production_id: matchedProduction?.id || production_id || null, shift_name: selectedShift, created_at: eventAt, logistics_shift_date: meterDate }),
-        logistics_shift_date: meterDate,
         recorded_at: eventAt,
         created_at: eventAt,
         created_by: state.user?.id || null,
@@ -3790,12 +3774,10 @@
         payload = {
           equipment_id,
           equipment_name_snapshot: eq?.name || '',
-        equipment_name: eq?.name || '',
           start_meter_type: row.start_meter_type || autoMeterTypeForEquipment(equipment_id),
           end_meter_type: end_meter_value === null || end_meter_value === undefined || end_meter_value === '' ? row.end_meter_type : (row.end_meter_type || autoMeterTypeForEquipment(equipment_id)),
           package_id,
           package_name_snapshot: packageName(package_id),
-        package_name: packageName(package_id),
           material_type: packageMaterialTypeById(package_id),
           from_location: document.getElementById('m_edit_from_location').value.trim(),
           to_location: document.getElementById('m_edit_to_location').value.trim(),
@@ -3813,7 +3795,6 @@
         payload = {
           equipment_id,
           equipment_name_snapshot: eq?.name || '',
-        equipment_name: eq?.name || '',
           reason: document.getElementById('m_edit_reason').value.trim(),
           start_at: document.getElementById('m_edit_start_at').value ? asLocalIsoString(document.getElementById('m_edit_start_at').value) : null,
           end_at: document.getElementById('m_edit_end_at').value ? asLocalIsoString(document.getElementById('m_edit_end_at').value) : null,
@@ -3831,10 +3812,8 @@
         payload = {
           equipment_id,
           equipment_name_snapshot: eq?.name || '',
-        equipment_name: eq?.name || '',
           package_id,
           package_name_snapshot: packageName(package_id),
-        package_name: packageName(package_id),
           material_type: packageMaterialTypeById(package_id),
           linked_excavator_id,
           linked_excavator_name: linkedEq?.name || null,
@@ -3851,7 +3830,6 @@
         payload = {
           equipment_id,
           equipment_name_snapshot: eq?.name || '',
-        equipment_name: eq?.name || '',
           meter_type: autoMeterTypeForEquipment(equipment_id),
           liters: num(document.getElementById('m_edit_liters').value),
           meter_value,
@@ -3870,7 +3848,6 @@
         payload = {
           equipment_id,
           equipment_name_snapshot: eq?.name || '',
-        equipment_name: eq?.name || '',
           meter_type: autoMeterTypeForEquipment(equipment_id),
           start_meter_value,
           end_meter_value,
@@ -3887,16 +3864,15 @@
         payload = {
           equipment_id,
           equipment_name_snapshot: eq?.name || '',
-        equipment_name: eq?.name || '',
           location: document.getElementById('m_edit_location').value.trim(),
           start_at: document.getElementById('m_edit_start_at').value ? asLocalIsoString(document.getElementById('m_edit_start_at').value) : null,
           end_at: document.getElementById('m_edit_end_at').value ? asLocalIsoString(document.getElementById('m_edit_end_at').value) : null,
         };
       }
       const updateRes = table === 'truck_trips'
-        ? await updateWithOptionalColumns(table, payload, ['production_id','shift_name','material_type'], row.id)
+        ? await updateWithOptionalColumns(table, payload, ['production_id','shift_name','material_type','shift_date','recorded_at'], row.id)
         : table === 'meter_logs'
-          ? await updateWithOptionalColumns(table, payload, ['production_id','shift_name','shift_date','logistics_shift_date','start_meter_value','end_meter_value'], row.id)
+          ? await updateWithOptionalColumns(table, payload, ['production_id','shift_name','shift_date','recorded_at','start_meter_value','end_meter_value'], row.id)
           : await state.sb.from(resolveDbTableName(table)).update(payload).eq('id', row.id);
       if(updateRes.error) throw updateRes.error;
       if(table === 'truck_trips' && row.production_id){
