@@ -163,44 +163,6 @@
       .modal-box{padding:16px}
       table{min-width:760px}
     }
-  
-    .pro-hero{background:linear-gradient(135deg,#0f172a 0%,#1d4ed8 55%,#38bdf8 100%);color:#fff;border:none;box-shadow:0 18px 40px rgba(15,23,42,.22)}
-    .pro-hero .muted{color:rgba(255,255,255,.82)}
-    .pro-stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-top:16px}
-    .pro-stat-card{position:relative;overflow:hidden;border-radius:22px;padding:18px;border:1px solid #dbeafe;background:linear-gradient(180deg,#ffffff 0%,#f8fbff 100%);box-shadow:0 12px 28px rgba(15,23,42,.08)}
-    .pro-stat-card::after{content:'';position:absolute;right:-18px;top:-18px;width:74px;height:74px;border-radius:50%;background:rgba(37,99,235,.08)}
-    .pro-stat-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
-    .pro-stat-title{font-size:12px;font-weight:800;color:#64748b;letter-spacing:.35px;text-transform:uppercase}
-    .pro-stat-chip{font-size:11px;font-weight:900;padding:5px 8px;border-radius:999px;background:#eff6ff;color:#2563eb;border:1px solid #bfdbfe}
-    .pro-stat-value{font-size:31px;font-weight:900;color:#0f172a;margin-top:10px;line-height:1}
-    .pro-stat-sub{margin-top:10px;font-size:12px;color:#475569;line-height:1.45}
-    .pro-alert-card{padding:14px 15px;border-radius:18px;border:1px solid #e2e8f0;background:linear-gradient(180deg,#fff 0%,#f8fafc 100%);box-shadow:0 8px 18px rgba(15,23,42,.05);margin-bottom:10px}
-    .pro-alert-card.red{border-color:#fecaca;background:linear-gradient(180deg,#fff 0%,#fef2f2 100%)}
-    .pro-alert-card.orange{border-color:#fed7aa;background:linear-gradient(180deg,#fff 0%,#fff7ed 100%)}
-    .pro-alert-head{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:8px}
-    .pro-alert-title{font-size:14px;font-weight:900;color:#0f172a}
-    .pro-alert-text{font-size:13px;color:#475569;line-height:1.45}
-    .pro-summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
-    .pro-mini-card{padding:13px 14px;border-radius:18px;background:linear-gradient(180deg,#ffffff 0%,#f8fafc 100%);border:1px solid #e2e8f0;box-shadow:0 6px 16px rgba(15,23,42,.05)}
-    .pro-mini-label{font-size:11px;font-weight:800;color:#64748b;letter-spacing:.35px;text-transform:uppercase}
-    .pro-mini-value{font-size:24px;font-weight:900;color:#0f172a;margin-top:6px}
-    .pro-mini-sub{font-size:12px;color:#475569;margin-top:6px}
-    .pro-bar-wrap{margin-top:10px}
-    .pro-bar-track{height:9px;border-radius:999px;background:#e2e8f0;overflow:hidden}
-    .pro-bar-fill{height:100%;border-radius:999px;background:linear-gradient(90deg,#2563eb 0%,#38bdf8 100%)}
-    .pro-bar-fill.orange{background:linear-gradient(90deg,#f59e0b 0%,#fb7185 100%)}
-    .pro-bar-fill.green{background:linear-gradient(90deg,#10b981 0%,#34d399 100%)}
-    .pro-item-grid{display:grid;gap:12px}
-    .pro-item-card{border:1px solid #e2e8f0;border-radius:20px;padding:16px;background:linear-gradient(180deg,#fff 0%,#fbfdff 100%);box-shadow:0 10px 24px rgba(15,23,42,.05)}
-    .pro-item-top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap}
-    .pro-item-name{font-size:18px;font-weight:900;color:#0f172a}
-    .pro-item-route{font-size:13px;color:#64748b;margin-top:3px}
-    .pro-item-badges{display:flex;gap:8px;flex-wrap:wrap}
-    .pro-kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-top:14px}
-    .pro-kpi{padding:10px 11px;border-radius:14px;background:#f8fafc;border:1px solid #e2e8f0}
-    .pro-kpi .k-label{font-size:10px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.35px}
-    .pro-kpi .k-value{font-size:20px;font-weight:900;color:#0f172a;margin-top:4px}
-
   </style>
 </head>
 <body>
@@ -1591,7 +1553,8 @@
     recordTab: 'operations',
     modal: { type:null, data:null },
     shiftConfig: loadShiftConfig(),
-    recordFilters: { equipment_type:'', equipment_id:'', package_id:'', shift_name:'', day:'' },
+    recordFilters: { equipment_type:'', equipment_id:'', package_id:'', shift_name:'', day:'', start_day:'', end_day:'', page_size:'50' },
+    recordPages: {},
     dashboardProFilters: { day:'', shift_name:'', equipment_type:'', equipment_id:'', sort:'trip_desc' },
     definitionsFilters: { equipment_type:'', package_material:'' },
     truckModels: loadTruckModels(),
@@ -3240,9 +3203,10 @@
             <div class="form-field"><label>Makine</label><select id="m_edit_equipment_id">${eqOptions}</select></div>
             <div class="form-field"><label>Başlangıç Zamanı</label><input id="m_edit_start_at" type="datetime-local" value="${escapeHtml(startAt)}"></div>
             <div class="form-field"><label>Bitiş Zamanı</label><input id="m_edit_end_at" type="datetime-local" value="${escapeHtml(endAt)}"></div>
+            <div class="form-field"><label>Başlangıç Sayaç</label><input id="m_edit_start_meter_value" type="number" step="0.01" value="${escapeHtml(row.start_meter_value ?? '')}"></div>
+            <div class="form-field"><label>Bitiş Sayaç</label><input id="m_edit_end_meter_value" type="number" step="0.01" value="${escapeHtml(row.end_meter_value ?? '')}"></div>
             <div class="form-field" style="grid-column:1 / -1"><label>Arıza Nedeni</label><textarea id="m_edit_reason">${escapeHtml(row.reason || '')}</textarea></div>
           </div>
-          <div class="notice" style="margin-top:10px">Sayaç bilgileri arıza kayıtlarında düzenlemeden kaldırıldı. Başlangıç ve bitiş sayaç değerleri mevcut kayıt üzerinden korunur.</div>
           <div class="actions"><button class="secondary" data-close-modal="1">İptal</button><button type="button" data-action="saveEditRecord">Kaydet</button></div>
         `);
         return;
@@ -3257,6 +3221,9 @@
             <div class="form-field"><label>Sefer Sayısı</label><input id="m_edit_trip_count" type="number" step="1" value="${escapeHtml(row.trip_count || 0)}"></div>
             <div class="form-field"><label>Nereden</label><input id="m_edit_from_location" value="${escapeHtml(row.from_location || '')}"></div>
             <div class="form-field"><label>Nereye</label><input id="m_edit_to_location" value="${escapeHtml(row.to_location || '')}"></div>
+            <div class="form-field"><label>Tarih</label><input id="m_edit_shift_date" type="date" value="${escapeHtml(row.shift_date || String(row.created_at || '').slice(0,10) || '')}"></div>
+            <div class="form-field"><label>Vardiya</label><select id="m_edit_shift_name"><option value="">Otomatik</option>${(state.shiftConfig?.shifts || []).map(s=>`<option value="${escapeHtml(s.name)}" ${String(row.shift_name || '')===String(s.name || '')?'selected':''}>${escapeHtml(s.name)}</option>`).join('')}</select></div>
+            <div class="form-field"><label>Bağlı Üretim</label><select id="m_edit_production_id">${['<option value="">Bağlı değil</option>'].concat((state.productions || []).filter(r=>!r.deleted_at).map(r=>`<option value="${escapeHtml(r.id)}" ${String(row.production_id || '')===String(r.id)?'selected':''}>${escapeHtml((r.equipment_name || '-') + ' • ' + (getShiftNameForRow(r) || '-'))}</option>`)).join('')}</select></div>
             <div class="form-field"><label>Kayıt Zamanı</label><input id="m_edit_created_at" type="datetime-local" value="${escapeHtml(createdAt)}"></div>
           </div>
           <div class="actions"><button class="secondary" data-close-modal="1">İptal</button><button type="button" data-action="saveEditRecord">Kaydet</button></div>
@@ -3271,6 +3238,10 @@
             <div class="form-field"><label>Makine</label><select id="m_edit_equipment_id">${eqOptions}</select></div>
             <div class="form-field"><label>Litre</label><input id="m_edit_liters" type="number" step="0.01" value="${escapeHtml(row.liters || 0)}"></div>
             <div class="form-field"><label>Sayaç Değeri (${escapeHtml(unit)})</label><input id="m_edit_meter_value" type="number" step="0.01" value="${escapeHtml(row.meter_value || '')}"></div>
+            <div class="form-field"><label>Kaynak / Not</label><input id="m_edit_source" value="${escapeHtml(row.source || '')}"></div>
+            <div class="form-field"><label>Tarih</label><input id="m_edit_shift_date" type="date" value="${escapeHtml(row.shift_date || String(row.created_at || '').slice(0,10) || '')}"></div>
+            <div class="form-field"><label>Vardiya</label><select id="m_edit_shift_name"><option value="">Otomatik</option>${(state.shiftConfig?.shifts || []).map(s=>`<option value="${escapeHtml(s.name)}" ${String(row.shift_name || '')===String(s.name || '')?'selected':''}>${escapeHtml(s.name)}</option>`).join('')}</select></div>
+            <div class="form-field"><label>Bağlı Üretim</label><select id="m_edit_production_id">${['<option value="">Bağlı değil</option>'].concat((state.productions || []).filter(r=>!r.deleted_at).map(r=>`<option value="${escapeHtml(r.id)}" ${String(row.production_id || '')===String(r.id)?'selected':''}>${escapeHtml((r.equipment_name || '-') + ' • ' + (getShiftNameForRow(r) || '-'))}</option>`)).join('')}</select></div>
             <div class="form-field"><label>Kayıt Zamanı</label><input id="m_edit_created_at" type="datetime-local" value="${escapeHtml(createdAt)}"></div>
           </div>
           <div class="actions"><button class="secondary" data-close-modal="1">İptal</button><button type="button" data-action="saveEditRecord">Kaydet</button></div>
@@ -3283,9 +3254,12 @@
         el.innerHTML = modalShell('Kiralık Kaydı Düzenle', `
           <div class="form-grid">
             <div class="form-field"><label>Makine</label><select id="m_edit_equipment_id">${eqOptions}</select></div>
+            <div class="form-field"><label>Tedarikçi</label><input id="m_edit_vendor_name" value="${escapeHtml(row.vendor_name || '')}"></div>
             <div class="form-field"><label>Bölge</label><input id="m_edit_location" value="${escapeHtml(row.location || '')}"></div>
             <div class="form-field"><label>Başlangıç Zamanı</label><input id="m_edit_start_at" type="datetime-local" value="${escapeHtml(startAt)}"></div>
             <div class="form-field"><label>Bitiş Zamanı</label><input id="m_edit_end_at" type="datetime-local" value="${escapeHtml(endAt)}"></div>
+            <div class="form-field"><label>Başlangıç Sayaç</label><input id="m_edit_start_meter_value" type="number" step="0.01" value="${escapeHtml(row.start_meter_value ?? '')}"></div>
+            <div class="form-field"><label>Bitiş Sayaç</label><input id="m_edit_end_meter_value" type="number" step="0.01" value="${escapeHtml(row.end_meter_value ?? '')}"></div>
           </div>
           <div class="actions"><button class="secondary" data-close-modal="1">İptal</button><button type="button" data-action="saveEditRecord">Kaydet</button></div>
         `);
@@ -3899,6 +3873,9 @@
         const equipment_id = document.getElementById('m_edit_equipment_id').value;
         const eq = findEquipmentById(equipment_id);
         const unit = row.start_meter_type || autoMeterTypeForEquipment(equipment_id);
+        const start_meter_value = document.getElementById('m_edit_start_meter_value')?.value === '' ? null : num(document.getElementById('m_edit_start_meter_value')?.value || row.start_meter_value || 0);
+        const end_meter_value = document.getElementById('m_edit_end_meter_value')?.value === '' ? null : num(document.getElementById('m_edit_end_meter_value')?.value || row.end_meter_value || 0);
+        ensureNonNegativeMeterWindow(start_meter_value ?? 0, end_meter_value ?? start_meter_value ?? 0, unit, 'Arıza');
         payload = {
           equipment_id,
           equipment_name_snapshot: eq?.name || '',
@@ -3906,9 +3883,9 @@
           start_at: document.getElementById('m_edit_start_at').value ? asLocalIsoString(document.getElementById('m_edit_start_at').value) : null,
           end_at: document.getElementById('m_edit_end_at').value ? asLocalIsoString(document.getElementById('m_edit_end_at').value) : null,
           start_meter_type: unit,
-          end_meter_type: row.end_meter_value === null || row.end_meter_value === undefined || row.end_meter_value === '' ? null : (row.end_meter_type || unit),
-          start_meter_value: row.start_meter_value ?? null,
-          end_meter_value: row.end_meter_value === undefined ? null : row.end_meter_value
+          end_meter_type: end_meter_value === null ? null : (row.end_meter_type || unit),
+          start_meter_value,
+          end_meter_value
         };
       } else if(table === 'truck_trips'){
         const equipment_id = document.getElementById('m_edit_equipment_id').value;
@@ -3919,6 +3896,9 @@
         payload = {
           equipment_id,
           package_id,
+          production_id: document.getElementById('m_edit_production_id')?.value || null,
+          shift_name: document.getElementById('m_edit_shift_name')?.value || null,
+          shift_date: document.getElementById('m_edit_shift_date')?.value || null,
           material_type: packageMaterialTypeById(package_id),
           linked_excavator_id,
           trip_count: num(document.getElementById('m_edit_trip_count').value),
@@ -3934,6 +3914,10 @@
         payload = {
           equipment_id,
           equipment_name_snapshot: eq?.name || '',
+          production_id: document.getElementById('m_edit_production_id')?.value || null,
+          shift_name: document.getElementById('m_edit_shift_name')?.value || null,
+          shift_date: document.getElementById('m_edit_shift_date')?.value || null,
+          source: document.getElementById('m_edit_source')?.value?.trim() || null,
           meter_type: autoMeterTypeForEquipment(equipment_id),
           liters: num(document.getElementById('m_edit_liters').value),
           meter_value,
@@ -3965,12 +3949,21 @@
       } else if(table === 'rentals'){
         const equipment_id = document.getElementById('m_edit_equipment_id').value;
         const eq = findEquipmentById(equipment_id);
+        const start_meter_value = document.getElementById('m_edit_start_meter_value')?.value === '' ? null : num(document.getElementById('m_edit_start_meter_value')?.value || row.start_meter_value || 0);
+        const end_meter_value = document.getElementById('m_edit_end_meter_value')?.value === '' ? null : num(document.getElementById('m_edit_end_meter_value')?.value || row.end_meter_value || 0);
+        const unit = row.start_meter_type || autoMeterTypeForEquipment(equipment_id);
+        if(start_meter_value !== null || end_meter_value !== null) ensureNonNegativeMeterWindow(start_meter_value ?? 0, end_meter_value ?? start_meter_value ?? 0, unit, 'Kiralık');
         payload = {
           equipment_id,
           equipment_name_snapshot: eq?.name || '',
+          vendor_name: document.getElementById('m_edit_vendor_name')?.value?.trim() || null,
           location: document.getElementById('m_edit_location').value.trim(),
           start_at: document.getElementById('m_edit_start_at').value ? asLocalIsoString(document.getElementById('m_edit_start_at').value) : null,
           end_at: document.getElementById('m_edit_end_at').value ? asLocalIsoString(document.getElementById('m_edit_end_at').value) : null,
+          start_meter_type: unit,
+          end_meter_type: end_meter_value === null ? null : (row.end_meter_type || unit),
+          start_meter_value,
+          end_meter_value
         };
       }
       if(['truck_trips','fuel_logs','meter_logs'].includes(table)){
@@ -4443,10 +4436,10 @@
     const shiftSelectOptions = getDashboardProShiftOptionsForDay(filters.day).map(name=>`<option value="${escapeHtml(name)}" ${String(filters.shift_name||'')===String(name)?'selected':''}>${escapeHtml(name)}</option>`).join('');
     document.getElementById('dashboardPro').innerHTML = `
       <h2 class="section-title">Dashboard Pro</h2>
-      <div class="card pro-hero" style="margin-bottom:16px">
-        <div style="font-size:24px;font-weight:900">Geçmiş Vardiya Analizi</div>
-        <div class="muted" style="margin-top:8px">Karar odaklı görünüm: vardiya üretimi, ekipman verimi, yakıt davranışı ve kritik uyarılar tek panelde.</div>
-        <div class="muted" style="margin-top:8px">Rol: ${escapeHtml(roleLabelTr(state.profile?.role))}</div>
+      <div class="card" style="margin-bottom:16px">
+        <div style="font-size:18px;font-weight:800">Geçmiş Vardiya Analizi</div>
+        <div class="muted" style="margin-top:6px">Bu ekran yalnızca tamamlanmış vardiyaları analiz eder. Canlı vardiya klasik dashboard'da kalır.</div>
+        <div class="muted" style="margin-top:6px">Rol: ${escapeHtml(roleLabelTr(state.profile?.role))}</div>
       </div>
       <div class="card" style="margin-bottom:16px">
         <div class="filter-bar">
@@ -4486,37 +4479,15 @@
           </div>
         </div>
       </div>
-      <div class="pro-stat-grid">
-        <div class="pro-stat-card">
-          <div class="pro-stat-head"><div class="pro-stat-title">Toplam Sefer</div><div class="pro-stat-chip">Üretim</div></div>
-          <div class="pro-stat-value" id="proTripsStat">-</div>
-          <div class="pro-stat-sub" id="proTripsSub"></div>
-        </div>
-        <div class="pro-stat-card">
-          <div class="pro-stat-head"><div class="pro-stat-title">Toplam Verilen Yakıt</div><div class="pro-stat-chip">Yakıt</div></div>
-          <div class="pro-stat-value" id="proFuelStat">-</div>
-          <div class="pro-stat-sub" id="proFuelSub"></div>
-        </div>
-        <div class="pro-stat-card">
-          <div class="pro-stat-head"><div class="pro-stat-title">Toplam Tonaj</div><div class="pro-stat-chip">Tonaj</div></div>
-          <div class="pro-stat-value" id="proMeterStat">-</div>
-          <div class="pro-stat-sub" id="proMeterSub"></div>
-        </div>
-        <div class="pro-stat-card">
-          <div class="pro-stat-head"><div class="pro-stat-title">Kamyon Başına Ort. Sefer</div><div class="pro-stat-chip">Filo</div></div>
-          <div class="pro-stat-value" id="proAvgTripStat">-</div>
-          <div class="pro-stat-sub" id="proAvgTripSub"></div>
-        </div>
-        <div class="pro-stat-card">
-          <div class="pro-stat-head"><div class="pro-stat-title">Sefer Başına Kamyon Yakıtı</div><div class="pro-stat-chip">Verim</div></div>
-          <div class="pro-stat-value" id="proFuelPerTripStat">-</div>
-          <div class="pro-stat-sub" id="proFuelPerTripSub"></div>
-        </div>
-        <div class="pro-stat-card">
-          <div class="pro-stat-head"><div class="pro-stat-title">Önceki Vardiya Kıyası</div><div class="pro-stat-chip">Trend</div></div>
-          <div class="pro-stat-value" id="proCompareStat">-</div>
-          <div class="pro-stat-sub" id="proCompareSub"></div>
-        </div>
+      <div class="grid g4">
+        <div class="stat-card"><div class="stat-label">Toplam Sefer</div><div class="stat" id="proTripsStat">-</div><div class="muted" id="proTripsSub" style="margin-top:10px"></div></div>
+        <div class="stat-card"><div class="stat-label">Toplam Verilen Yakıt</div><div class="stat" id="proFuelStat">-</div><div class="muted" id="proFuelSub" style="margin-top:10px"></div></div>
+        <div class="stat-card"><div class="stat-label">Toplam Tonaj</div><div class="stat" id="proMeterStat">-</div><div class="muted" id="proMeterSub" style="margin-top:10px"></div></div>
+        <div class="stat-card"><div class="stat-label">Kamyon Başına Ort. Sefer</div><div class="stat" id="proAvgTripStat">-</div><div class="muted" id="proAvgTripSub" style="margin-top:10px"></div></div>
+      </div>
+      <div class="grid g4" style="margin-top:16px">
+        <div class="stat-card"><div class="stat-label">Sefer Başına Kamyon Yakıtı</div><div class="stat" id="proFuelPerTripStat">-</div><div class="muted" id="proFuelPerTripSub" style="margin-top:10px"></div></div>
+        <div class="stat-card"><div class="stat-label">Önceki Vardiya Kıyası</div><div class="stat" id="proCompareStat">-</div><div class="muted" id="proCompareSub" style="margin-top:10px"></div></div>
       </div>
       <div class="grid g2" style="margin-top:16px">
         <div class="dashboard-block">
@@ -4804,88 +4775,52 @@
     excItems.forEach(e=>{
       if(fleetExcEff > 0 && (e.efficiency || 0) < fleetExcEff * alertRules.lowExcEfficiencyRatio) alerts.push({level:'orange', title:'Düşük ekskavatör verimi', text:`${e.name}: ${e.efficiency.toFixed(2)} sefer/saat.`});
     });
-    const maxTruckTrips = Math.max(1, ...truckItems.map(x=>Number(x.tripCount || 0) || 0));
-    const maxTruckTonnage = Math.max(1, ...truckItems.map(x=>Number(x.tonnage || 0) || 0));
-    const maxExcTrips = Math.max(1, ...excItems.map(x=>Number(x.tripCount || 0) || 0));
-    const maxExcTonPerHour = Math.max(1, ...excItems.map(x=>Number(x.tonPerHour || 0) || 0));
-
-    document.getElementById('dashboardProAlertsBody').innerHTML = alerts.length ? alerts.map(a=>`<div class="pro-alert-card ${a.level === 'red' ? 'red' : 'orange'}"><div class="pro-alert-head"><div class="pro-alert-title">${escapeHtml(a.title)}</div><span class="pill ${a.level === 'red' ? 'red' : 'orange'}">${a.level === 'red' ? 'Kritik' : 'Dikkat'}</span></div><div class="pro-alert-text">${escapeHtml(a.text)}</div></div>`).join('') : '<div class="empty">Seçilen filtre için kritik uyarı görünmüyor.</div>';
+    document.getElementById('dashboardProAlertsBody').innerHTML = alerts.length ? alerts.map(a=>`<div class="list-item"><div class="badge-col"><span class="pill ${a.level === 'red' ? 'red' : 'orange'}">${escapeHtml(a.title)}</span></div><div style="margin-top:6px">${escapeHtml(a.text)}</div></div>`).join('') : '<div class="empty">Seçilen filtre için kritik uyarı görünmüyor.</div>';
 
     document.getElementById('dashboardProSummaryBody').innerHTML = `
-      <div class="pro-summary-grid">
-        <div class="pro-mini-card">
-          <div class="pro-mini-label">Seçilen vardiya</div>
-          <div class="pro-mini-value" style="font-size:18px">${escapeHtml(summary.label)}</div>
-          <div class="pro-mini-sub">${sqlCurrent ? 'SQL özet bağlı' : 'Canlı hesaplama'}</div>
-        </div>
-        <div class="pro-mini-card">
-          <div class="pro-mini-label">Aktif ekipman</div>
-          <div class="pro-mini-value">${filteredTruckCount + filteredExcCount}</div>
-          <div class="pro-mini-sub">Kamyon ${filteredTruckCount} • Ekskavatör ${filteredExcCount}</div>
-        </div>
-        <div class="pro-mini-card">
-          <div class="pro-mini-label">Arıza etkisi</div>
-          <div class="pro-mini-value">${formatDurationMinutes(filteredBreakdownMinutes)}</div>
-          <div class="pro-mini-sub">Uzun arıza: ${filteredLongBreakdowns}</div>
-        </div>
-        <div class="pro-mini-card">
-          <div class="pro-mini-label">Karşılaştırma</div>
-          <div class="pro-mini-value" style="font-size:22px">${(sqlPrevious || previousSummary) ? `${compareDelta >= 0 ? '+' : ''}${compareDelta}` : '-'}</div>
-          <div class="pro-mini-sub">${sqlPrevious ? `Önceki: ${Number(sqlPrevious.total_trip_count || 0)} sefer` : (previousSummary ? `Önceki: ${previousSummary.total_trip_count} sefer` : 'Önceki veri yok')}</div>
-        </div>
-      </div>
+      <div class="list-item"><b>Seçilen vardiya</b><div class="muted">${escapeHtml(summary.label)} ${sqlCurrent ? '<span class="pill green">SQL özet bağlı</span>' : ''}</div></div>
+      <div class="list-item"><b>Aktif kamyon / ekskavatör</b><div class="muted">${filteredTruckCount} / ${filteredExcCount}</div></div>
+      <div class="list-item"><b>Toplam sefer</b><div class="muted">${filteredTripCount}</div></div>
+      <div class="list-item"><b>Toplam verilen yakıt</b><div class="muted">${filteredFuelLiters.toFixed(0)} L</div></div>
+      <div class="list-item"><b>Toplam tonaj</b><div class="muted">${filteredTonnage.toFixed(1)} ton</div></div>
+      <div class="list-item"><b>Arıza etkisi</b><div class="muted">${formatDurationMinutes(filteredBreakdownMinutes)} • Uzun arıza: ${filteredLongBreakdowns}</div></div>
     `;
 
-    document.getElementById('dashboardProTruckBody').innerHTML = truckItems.length ? `<div class="pro-item-grid">` + truckItems.map(item=>`
-      <div class="pro-item-card">
-        <div class="pro-item-top">
-          <div><div class="pro-item-name">${escapeHtml(item.name)}</div><div class="pro-item-route">${escapeHtml(item.route || '-')}</div></div>
-          <div class="pro-item-badges"><span class="pill">${escapeHtml(item.zone || '-')}</span><span class="${metricStatusClass(item.tonPerKm, 15, 8, true)}">Ton/KM ${(item.tonPerKm || 0).toFixed(2)}</span></div>
+    document.getElementById('dashboardProTruckBody').innerHTML = truckItems.length ? truckItems.map(item=>`
+      <div class="op-card">
+        <div class="op-card-head">
+          <div><div class="op-card-title">${escapeHtml(item.name)}</div><div class="op-card-sub">${escapeHtml(item.route || '-')}</div></div>
+          <div class="badge-col"><span class="pill">${escapeHtml(item.zone || '-')}</span><span class="${metricStatusClass(item.tonPerKm, 15, 8, true)}">Ton/KM ${Number(item.tonPerKm || 0).toFixed(2)}</span><span class="${metricStatusClass(item.meterDiff, 25, 35, false)}">Km ${item.meterDiff.toFixed(1)}</span></div>
         </div>
-        <div class="pro-kpi-row">
-          <div class="pro-kpi"><div class="k-label">Sefer</div><div class="k-value">${item.tripCount}</div></div>
-          <div class="pro-kpi"><div class="k-label">Yakıt</div><div class="k-value">${item.fuelLiters.toFixed(0)}</div></div>
-          <div class="pro-kpi"><div class="k-label">KM</div><div class="k-value">${item.meterDiff.toFixed(1)}</div></div>
-          <div class="pro-kpi"><div class="k-label">KM/Sefer</div><div class="k-value">${item.kmPerTrip.toFixed(1)}</div></div>
-          <div class="pro-kpi"><div class="k-label">Tonaj</div><div class="k-value">${item.tonnage.toFixed(0)}</div></div>
-          <div class="pro-kpi"><div class="k-label">Ton/Sefer</div><div class="k-value">${item.tonPerTrip.toFixed(1)}</div></div>
+        <div class="mini-breakdown">
+          <div class="mini-item"><div class="mini-label">Sefer</div><div class="mini-value">${item.tripCount}</div></div>
+          <div class="mini-item"><div class="mini-label">Yakıt</div><div class="mini-value">${item.fuelLiters.toFixed(0)}</div></div>
+          <div class="mini-item"><div class="mini-label">KM</div><div class="mini-value">${item.meterDiff.toFixed(1)}</div></div>
+          <div class="mini-item"><div class="mini-label">KM/Sefer</div><div class="mini-value">${item.kmPerTrip.toFixed(1)}</div></div>
+          <div class="mini-item"><div class="mini-label">Tonaj</div><div class="mini-value">${item.tonnage.toFixed(0)}</div></div>
+          <div class="mini-item"><div class="mini-label">Ton/Sefer</div><div class="mini-value">${item.tonPerTrip.toFixed(1)}</div></div>
+          <div class="mini-item"><div class="mini-label">Ton/KM</div><div class="mini-value">${(item.tonPerKm || 0).toFixed(2)}</div></div>
         </div>
-        <div class="pro-bar-wrap">
-          <div class="muted">Sefer yoğunluğu</div>
-          <div class="pro-bar-track"><div class="pro-bar-fill" style="width:${Math.max(8, Math.min(100, ((item.tripCount || 0) / maxTruckTrips) * 100))}%"></div></div>
-        </div>
-        <div class="pro-bar-wrap">
-          <div class="muted">Tonaj katkısı</div>
-          <div class="pro-bar-track"><div class="pro-bar-fill green" style="width:${Math.max(8, Math.min(100, ((item.tonnage || 0) / maxTruckTonnage) * 100))}%"></div></div>
-        </div>
-        <div class="muted" style="margin-top:10px">Paket: <b>${escapeHtml(item.packageName || '-')}</b> • Ekskavatör: <b>${escapeHtml(item.linkedName || '-')}</b></div>
+        <div class="muted">Paket: <b>${escapeHtml(item.packageName || '-')}</b> • Ekskavatör: <b>${escapeHtml(item.linkedName || '-')}</b></div>
       </div>
-    `).join('') + `</div>` : '<div class="empty">Filtreye uygun kamyon analizi yok.</div>';
+    `).join('') : '<div class="empty">Filtreye uygun kamyon analizi yok.</div>';
 
-    document.getElementById('dashboardProExcBody').innerHTML = excItems.length ? `<div class="pro-item-grid">` + excItems.map(item=>`
-      <div class="pro-item-card">
-        <div class="pro-item-top">
-          <div><div class="pro-item-name">${escapeHtml(item.name)}</div><div class="pro-item-route">${escapeHtml(item.route || '-')}</div></div>
-          <div class="pro-item-badges"><span class="pill">${escapeHtml(item.zone || '-')}</span><span class="${metricStatusClass(item.efficiency, 2.5, 1, true)}">Sefer/Saat ${item.efficiency.toFixed(2)}</span></div>
+    document.getElementById('dashboardProExcBody').innerHTML = excItems.length ? excItems.map(item=>`
+      <div class="op-card">
+        <div class="op-card-head">
+          <div><div class="op-card-title">${escapeHtml(item.name)}</div><div class="op-card-sub">${escapeHtml(item.route || '-')}</div></div>
+          <div class="badge-col"><span class="pill">${escapeHtml(item.zone || '-')}</span><span class="${metricStatusClass(item.efficiency, 2.5, 1, true)}">Sefer/Saat ${item.efficiency.toFixed(2)}</span></div>
         </div>
-        <div class="pro-kpi-row">
-          <div class="pro-kpi"><div class="k-label">Sefer</div><div class="k-value">${item.tripCount}</div></div>
-          <div class="pro-kpi"><div class="k-label">Bağlı Kamyon</div><div class="k-value">${item.linkedTruckCount || 0}</div></div>
-          <div class="pro-kpi"><div class="k-label">Tonaj</div><div class="k-value">${(item.tonnage || 0).toFixed(0)}</div></div>
-          <div class="pro-kpi"><div class="k-label">Sayaç Saati</div><div class="k-value">${(item.workHours || 0).toFixed(1)}</div></div>
-          <div class="pro-kpi"><div class="k-label">Ton/Saat</div><div class="k-value">${(item.tonPerHour || 0).toFixed(1)}</div></div>
+        <div class="mini-breakdown">
+          <div class="mini-item"><div class="mini-label">Sefer</div><div class="mini-value">${item.tripCount}</div></div>
+          <div class="mini-item"><div class="mini-label">Bağlı Kamyon</div><div class="mini-value">${item.linkedTruckCount || 0}</div></div>
+          <div class="mini-item"><div class="mini-label">Tonaj</div><div class="mini-value">${(item.tonnage || 0).toFixed(0)}</div></div>
+          <div class="mini-item"><div class="mini-label">Sayaç Saati</div><div class="mini-value">${(item.workHours || 0).toFixed(1)}</div></div>
+          <div class="mini-item"><div class="mini-label">Ton/Saat</div><div class="mini-value">${(item.tonPerHour || 0).toFixed(1)}</div></div>
         </div>
-        <div class="pro-bar-wrap">
-          <div class="muted">Sefer yoğunluğu</div>
-          <div class="pro-bar-track"><div class="pro-bar-fill" style="width:${Math.max(8, Math.min(100, ((item.tripCount || 0) / maxExcTrips) * 100))}%"></div></div>
-        </div>
-        <div class="pro-bar-wrap">
-          <div class="muted">Ton / saat verimi</div>
-          <div class="pro-bar-track"><div class="pro-bar-fill orange" style="width:${Math.max(8, Math.min(100, ((item.tonPerHour || 0) / maxExcTonPerHour) * 100))}%"></div></div>
-        </div>
-        <div class="muted" style="margin-top:10px">Paket: <b>${escapeHtml(item.packageName || '-')}</b></div>
+        <div class="muted">Paket: <b>${escapeHtml(item.packageName || '-')}</b></div>
       </div>
-    `).join('') + `</div>` : '<div class="empty">Filtreye uygun ekskavatör analizi yok.</div>';
+    `).join('') : '<div class="empty">Filtreye uygun ekskavatör analizi yok.</div>';
 
     const packageMap = {};
     filteredTrips.forEach(row=>{
@@ -4896,24 +4831,19 @@
       packageMap[packageId].tonnage += getTripRowTonnage(row);
     });
     const packageItems = Object.values(packageMap).sort((a,b)=>(b.tonnage||0)-(a.tonnage||0));
-    const maxPackageTonnage = Math.max(1, ...packageItems.map(x=>Number(x.tonnage || 0) || 0));
-    document.getElementById('dashboardProPackageBody').innerHTML = packageItems.length ? `<div class="pro-item-grid">` + packageItems.map(item=>`
-      <div class="pro-item-card">
-        <div class="pro-item-top">
-          <div><div class="pro-item-name">${escapeHtml(item.name)}</div><div class="pro-item-route">Paket faktörü: ${item.factor.toFixed(2)}</div></div>
-          <div class="pro-item-badges"><span class="pill">Tonaj ${item.tonnage.toFixed(1)}</span></div>
+    document.getElementById('dashboardProPackageBody').innerHTML = packageItems.length ? packageItems.map(item=>`
+      <div class="op-card">
+        <div class="op-card-head">
+          <div><div class="op-card-title">${escapeHtml(item.name)}</div><div class="op-card-sub">Paket faktörü: ${item.factor.toFixed(2)}</div></div>
+          <div class="badge-col"><span class="pill">Tonaj ${item.tonnage.toFixed(1)}</span></div>
         </div>
-        <div class="pro-kpi-row">
-          <div class="pro-kpi"><div class="k-label">Sefer</div><div class="k-value">${item.tripCount}</div></div>
-          <div class="pro-kpi"><div class="k-label">Tonaj</div><div class="k-value">${item.tonnage.toFixed(0)}</div></div>
-          <div class="pro-kpi"><div class="k-label">Ton/Sefer</div><div class="k-value">${item.tripCount ? (item.tonnage / item.tripCount).toFixed(1) : '0.0'}</div></div>
-        </div>
-        <div class="pro-bar-wrap">
-          <div class="muted">Toplam tonaj katkısı</div>
-          <div class="pro-bar-track"><div class="pro-bar-fill green" style="width:${Math.max(8, Math.min(100, ((item.tonnage || 0) / maxPackageTonnage) * 100))}%"></div></div>
+        <div class="mini-breakdown">
+          <div class="mini-item"><div class="mini-label">Sefer</div><div class="mini-value">${item.tripCount}</div></div>
+          <div class="mini-item"><div class="mini-label">Tonaj</div><div class="mini-value">${item.tonnage.toFixed(0)}</div></div>
+          <div class="mini-item"><div class="mini-label">Ton/Sefer</div><div class="mini-value">${item.tripCount ? (item.tonnage / item.tripCount).toFixed(1) : '0.0'}</div></div>
         </div>
       </div>
-    `).join('') + `</div>` : '<div class="empty">Seçilen filtre için paket bazlı tonaj analizi yok.</div>';
+    `).join('') : '<div class="empty">Seçilen filtre için paket bazlı tonaj analizi yok.</div>';
 
     state.lastDashboardProExport = {
       selectedLabel: summary.label,
@@ -5324,7 +5254,47 @@
     return String(v ?? '').trim().toLowerCase();
   }
 
-  function applyRecordFilters(rows){
+  
+  function getDefaultRecordDateRange(){
+    const end = new Date();
+    const start = new Date();
+    start.setDate(end.getDate() - 6);
+    const fmt = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    return { start_day: fmt(start), end_day: fmt(end) };
+  }
+  function ensureRecordFilterDefaults(){
+    state.recordFilters = state.recordFilters || {};
+    state.recordPages = state.recordPages || {};
+    if(!state.recordFilters.start_day && !state.recordFilters.end_day && !state.recordFilters.day){
+      Object.assign(state.recordFilters, getDefaultRecordDateRange());
+    }
+    if(!state.recordFilters.page_size) state.recordFilters.page_size = '50';
+  }
+  function recordRowDateKey(row){
+    return String(row?.created_at || row?.start_at || row?.start_time || row?.recorded_at || row?.end_at || row?.end_time || '').slice(0,10);
+  }
+  function recordRowTimestamp(row){
+    const raw = row?.created_at || row?.recorded_at || row?.start_at || row?.start_time || row?.end_at || row?.end_time || '';
+    const t = new Date(raw).getTime();
+    return Number.isFinite(t) ? t : 0;
+  }
+  function getRecordPageState(tableName, totalCount){
+    ensureRecordFilterDefaults();
+    const size = Math.max(10, Number(state.recordFilters.page_size || 50) || 50);
+    const totalPages = Math.max(1, Math.ceil((Number(totalCount)||0) / size));
+    const current = Math.min(totalPages, Math.max(1, Number((state.recordPages||{})[tableName] || 1) || 1));
+    state.recordPages[tableName] = current;
+    return { size, totalPages, current, startIndex:(current-1)*size, endIndex:(current-1)*size + size };
+  }
+  function changeRecordPage(tableName, delta){
+    ensureRecordFilterDefaults();
+    const current = Number((state.recordPages||{})[tableName] || 1) || 1;
+    state.recordPages[tableName] = Math.max(1, current + Number(delta||0));
+    renderRecords();
+  }
+
+function applyRecordFilters(rows){
+    ensureRecordFilterDefaults();
     const f = state.recordFilters || {};
     return (rows || []).filter(r=>{
       if(f.equipment_type){
@@ -5334,13 +5304,12 @@
       if(f.equipment_id && String(r.equipment_id||'') !== String(f.equipment_id)) return false;
       if(f.package_id && String(r.package_id||'') !== String(f.package_id)) return false;
       if(f.shift_name && normalizeFilterValue(getShiftNameForRow(r)) !== normalizeFilterValue(f.shift_name)) return false;
-      if(f.day){
-        const raw = r.created_at || r.start_at || r.start_time || r.end_at || r.end_time || '';
-        const d = String(raw).slice(0,10);
-        if(d !== f.day) return false;
-      }
+      const d = recordRowDateKey(r);
+      if(f.day && d !== f.day) return false;
+      if(!f.day && f.start_day && d && d < f.start_day) return false;
+      if(!f.day && f.end_day && d && d > f.end_day) return false;
       return true;
-    });
+    }).sort((a,b)=>recordRowTimestamp(b) - recordRowTimestamp(a));
   }
 
   function equipmentTypeLabelForRow(r){
@@ -5353,6 +5322,7 @@
   }
 
   function renderRecordFilters(){
+    ensureRecordFilterDefaults();
     const f = state.recordFilters || {};
     const shiftSet = new Set();
     [...state.productions, ...state.breakdowns, ...state.rentals, ...state.truck_trips, ...state.fuel_logs, ...state.meter_logs].forEach(r=>{
@@ -5393,10 +5363,25 @@
             </select>
           </div>
           <div>
-            <div class="muted" style="margin-bottom:6px">Gün</div>
+            <div class="muted" style="margin-bottom:6px">Başlangıç Tarihi</div>
+            <input id="recordsFilterStartDay" type="date" value="${escapeHtml(f.start_day||'')}" />
+          </div>
+          <div>
+            <div class="muted" style="margin-bottom:6px">Bitiş Tarihi</div>
+            <input id="recordsFilterEndDay" type="date" value="${escapeHtml(f.end_day||'')}" />
+          </div>
+          <div>
+            <div class="muted" style="margin-bottom:6px">Tek Gün</div>
             <input id="recordsFilterDay" type="date" value="${escapeHtml(f.day||'')}" />
           </div>
-          <div class="inline" style="align-items:end;justify-content:flex-end">
+          <div>
+            <div class="muted" style="margin-bottom:6px">Sayfa Başına</div>
+            <select id="recordsFilterPageSize">
+              ${['25','50','100','250'].map(v=>`<option value="${v}" ${String(f.page_size||'50')===v?'selected':''}>${v}</option>`).join('')}
+            </select>
+          </div>
+          <div class="inline" style="align-items:end;justify-content:flex-end;grid-column:1 / -1">
+            <span class="subtle">Varsayılan görünüm son 7 gün ile açılır.</span>
             <button class="success" type="button" onclick="exportRecordsToExcel()">Excel'e Aktar</button>
             <button class="secondary" type="button" onclick="resetRecordFilters()">Filtreyi Temizle</button>
           </div>
@@ -5405,25 +5390,33 @@
   }
 
   function applyRecordFiltersFromUI(){
+    ensureRecordFilterDefaults();
     state.recordFilters = {
       equipment_type: document.getElementById('recordsFilterEquipmentType')?.value || '',
       equipment_id: document.getElementById('recordsFilterEquipment')?.value || '',
       package_id: document.getElementById('recordsFilterPackage')?.value || '',
       shift_name: document.getElementById('recordsFilterShift')?.value || '',
-      day: document.getElementById('recordsFilterDay')?.value || ''
+      day: document.getElementById('recordsFilterDay')?.value || '',
+      start_day: document.getElementById('recordsFilterStartDay')?.value || '',
+      end_day: document.getElementById('recordsFilterEndDay')?.value || '',
+      page_size: document.getElementById('recordsFilterPageSize')?.value || '50'
     };
+    state.recordPages = {};
     renderRecords();
   }
 
   function resetRecordFilters(){
-    state.recordFilters = { equipment_type:'', equipment_id:'', package_id:'', shift_name:'', day:'' };
+    state.recordFilters = { equipment_type:'', equipment_id:'', package_id:'', shift_name:'', day:'', page_size:'50', ...getDefaultRecordDateRange() };
+    state.recordPages = {};
     renderRecords();
   }
 
   function renderGroupedRecordSection(title, tableName, rows, cols, colspan){
     const filtered = applyRecordFilters(rows).slice();
+    const page = getRecordPageState(tableName, filtered.length);
+    const paged = filtered.slice(page.startIndex, page.endIndex);
     const groups = { 'Ekskavatör': [], 'Kamyon': [], 'Yardımcı Makina': [] };
-    filtered.forEach(r=>{
+    paged.forEach(r=>{
       const t = equipmentTypeLabelForRow(r);
       if(t === 'Ekskavatör') groups['Ekskavatör'].push(r);
       else if(t === 'Kamyon') groups['Kamyon'].push(r);
@@ -5436,6 +5429,7 @@
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
             <div class="records-section-title">${escapeHtml(title)}</div>
             <span class="records-section-badge">Toplam ${totalCount} kayıt</span>
+            <span class="pill">Sayfa ${page.current}/${page.totalPages}</span>
           </div>
           <button class="danger records-delete-btn" type="button" onclick="bulkDeleteRecordTable('${tableName}')">Tümünü Sil</button>
         </div>
@@ -5453,6 +5447,10 @@
                 </tbody>
               </table></div>
             </div>`).join('')}
+          <div class="toolbar" style="justify-content:flex-end;margin-top:12px">
+            <button class="secondary" type="button" onclick="changeRecordPage('${tableName}', -1)" ${page.current<=1?'disabled':''}>Önceki</button>
+            <button class="secondary" type="button" onclick="changeRecordPage('${tableName}', 1)" ${page.current>=page.totalPages?'disabled':''}>Sonraki</button>
+          </div>
         </div>
       </div>`;
   }
@@ -5699,7 +5697,7 @@
 
 
   function attachRecordFilterEvents(){
-    ['recordsFilterEquipmentType','recordsFilterEquipment','recordsFilterPackage','recordsFilterShift','recordsFilterDay'].forEach(id=>{
+    ['recordsFilterEquipmentType','recordsFilterEquipment','recordsFilterPackage','recordsFilterShift','recordsFilterDay','recordsFilterStartDay','recordsFilterEndDay','recordsFilterPageSize'].forEach(id=>{
       const el = document.getElementById(id);
       if(!el || el.dataset.bound === '1') return;
       const evt = el.tagName === 'INPUT' ? 'input' : 'change';
@@ -5716,8 +5714,12 @@
           equipment_id: document.getElementById('recordsFilterEquipment')?.value || '',
           package_id: document.getElementById('recordsFilterPackage')?.value || '',
           shift_name: document.getElementById('recordsFilterShift')?.value || '',
-          day: document.getElementById('recordsFilterDay')?.value || ''
+          day: document.getElementById('recordsFilterDay')?.value || '',
+          start_day: document.getElementById('recordsFilterStartDay')?.value || '',
+          end_day: document.getElementById('recordsFilterEndDay')?.value || '',
+          page_size: document.getElementById('recordsFilterPageSize')?.value || '50'
         };
+        state.recordPages = {};
         renderRecords();
       });
       el.dataset.bound = '1';
@@ -5898,9 +5900,8 @@
           {label:'Çalışma', render:r=>`${Number((Number(getEffectiveProductionEndMeter(r) ?? 0) - Number(getEffectiveProductionStartMeter(r) ?? 0))) < 0 ? '⚠️ ' : ''}${escapeHtml(formatMeterValueWithUnit((Number(getEffectiveProductionEndMeter(r) ?? 0) - Number(getEffectiveProductionStartMeter(r) ?? 0)), r.end_meter_type || r.start_meter_type || autoMeterTypeForEquipment(r.equipment_id)))}`},
           {label:'Sefer', render:r=>isTruckEquipment(findEquipmentById(r.equipment_id)) ? String(productionTripTotal(r)) : ''},
           {label:'Yakıt', render:r=>productionFuelTotal(r) > 0 ? `${productionFuelTotal(r).toFixed(0)} L` : ''},
-          {label:'Sayaç Kaydı', render:r=>productionMeterSummary(r)},
-          {label:'İşlem', render:r=>actionButtons('productions', r, false, 'records')}
-        ], 13)}
+                    {label:'İşlem', render:r=>actionButtons('productions', r, false, 'records')}
+        ], 12)}
         ${renderGroupedRecordSection('Arıza', 'breakdowns', brRows, [
           {label:'Ekipman', render:r=>escapeHtml(r.equipment_name)},
           {label:'Neden', render:r=>escapeHtml(r.reason||'')},
