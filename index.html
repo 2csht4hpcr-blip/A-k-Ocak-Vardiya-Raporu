@@ -213,6 +213,14 @@
     .user-card-actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-top:8px}
     .user-card-actions button{width:auto;min-width:110px}
 
+  
+    .report-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+    .report-card{border:1px solid #e5e7eb;border-radius:18px;padding:16px;background:linear-gradient(180deg,#ffffff 0%,#f8fafc 100%);box-shadow:0 10px 24px rgba(15,23,42,.05)}
+    .report-card h3{margin:0 0 8px;font-size:18px}
+    .report-card .muted{margin-bottom:10px;display:block}
+    .report-actions{display:flex;gap:8px;flex-wrap:wrap}
+    .report-actions button{width:auto}
+
   </style>
 </head>
 <body>
@@ -266,6 +274,7 @@
         <div class="menu-title">Yönetim</div>
         <button class="menu-btn" data-page="definitions">Tanımlar</button>
         <button class="menu-btn" data-page="users">Kullanıcılar</button>
+        <button class="menu-btn" data-page="reports">Raporlar</button>
       </div>
     </aside>
 
@@ -297,6 +306,7 @@
       <section id="deleted" class="page"></section>
       <section id="definitions" class="page"></section>
       <section id="users" class="page"></section>
+      <section id="reports" class="page"></section>
     </main>
   </div>
 
@@ -308,6 +318,8 @@
 
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
 <script>
 (function(){
   function loadShiftConfig(){
@@ -6207,7 +6219,285 @@ function renderDeleted(){
     }
   }
 
-  function renderUsers(){
+  
+  function formatDateInputValue(v){
+    try{
+      const d = v ? new Date(v) : new Date();
+      if(Number.isNaN(d.getTime())) return todayStr();
+      return d.toISOString().slice(0,10);
+    }catch(e){ return todayStr(); }
+  }
+  function addDaysToDateStr(dateStr, days){
+    const d = new Date(dateStr + 'T00:00:00');
+    d.setDate(d.getDate() + days);
+    return d.toISOString().slice(0,10);
+  }
+  function mondayOfWeek(dateStr){
+    const d = new Date((dateStr || todayStr()) + 'T00:00:00');
+    const day = d.getDay(); // 0 Sun
+    const diff = day === 0 ? -6 : 1 - day;
+    d.setDate(d.getDate() + diff);
+    return d.toISOString().slice(0,10);
+  }
+  async function fetchSummaryRange(startDate, endDate){
+    const sb = state.sb || await initClient();
+    const res = await sb.from('v_shift_summary').select('*').gte('shift_date', startDate).lte('shift_date', endDate).order('shift_date', {ascending:true});
+    if(res.error) throw res.error;
+    return res.data || [];
+  }
+  async function fetchRowsForRange(table, startDate, endDate, shiftName){
+    const sb = state.sb || await initClient();
+    let query = sb.from(table).select('*').gte('shift_date', startDate).lte('shift_date', endDate).order('shift_date', {ascending:true}).order('created_at', {ascending:true});
+    if(shiftName) query = query.eq('shift_name', shiftName);
+    const res = await query;
+    if(res.error) throw res.error;
+    return res.data || [];
+  }
+  function shiftSummaryTotals(rows){
+    return (rows || []).reduce((acc, r)=>{
+      acc.trip += Number(r.total_trip_count || 0);
+      acc.fuel += Number(r.total_fuel_liters || 0);
+      acc.ton += Number(r.estimated_tonnage || 0);
+      acc.meter += Number(r.total_meter_diff || 0);
+      acc.equipment += Number(r.active_equipment_count || 0);
+      return acc;
+    }, {trip:0,fuel:0,ton:0,meter:0,equipment:0});
+  }
+  async function exportDailyPdf(){
+    if(currentUserRole() !== 'manager'){ alert('Bu rapor yalnızca yöneticiye açıktır.'); return; }
+    try{
+      const date = document.getElementById('report_daily_date')?.value || todayStr();
+      const summaryRows = await fetchSummaryRange(date, date);
+      const totals = shiftSummaryTotals(summaryRows);
+      const breakdowns = await fetchRowsForRange(TABLES.BREAKDOWNS, date, date);
+      const productions = await fetchRowsForRange(TABLES.PRODUCTIONS, date, date);
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({orientation:'p', unit:'pt', format:'a4'});
+      doc.setFontSize(18);
+      doc.text('Günlük Operasyon Raporu', 40, 40);
+      doc.setFontSize(11);
+      doc.text(`Tarih: ${date}`, 40, 62);
+      doc.text(`Toplam Sefer: ${Math.round(totals.trip)}`, 40, 84);
+      doc.text(`Tahmini Tonaj: ${Math.round(totals.ton)}`, 180, 84);
+      doc.text(`Toplam Yakıt: ${Math.round(totals.fuel)} L`, 340, 84);
+      doc.text(`Aktif Üretim Kaydı: ${productions.filter(r=>!r.deleted_at).length}`, 40, 106);
+      doc.text(`Arıza Kaydı: ${breakdowns.filter(r=>!r.deleted_at).length}`, 240, 106);
+
+      const summaryBody = summaryRows.map(r=>[
+        String(r.shift_date || ''),
+        String(r.shift_name || ''),
+        Math.round(Number(r.total_trip_count || 0)),
+        Math.round(Number(r.estimated_tonnage || 0)),
+        Math.round(Number(r.total_fuel_liters || 0)),
+        Math.round(Number(r.active_equipment_count || 0))
+      ]);
+      doc.autoTable({
+        startY: 130,
+        head:[['Tarih','Vardiya','Sefer','Tonaj','Yakıt (L)','Aktif Ekipman']],
+        body: summaryBody.length ? summaryBody : [['-','-','0','0','0','0']],
+        styles:{fontSize:9}
+      });
+
+      const openBreakdowns = breakdowns.filter(r=>!r.deleted_at && isOpenRow(r)).slice(0,20).map(r=>[
+        String(r.shift_name || ''),
+        String(r.equipment_name || r.equipment_name_snapshot || findEquipmentById(r.equipment_id)?.name || '-'),
+        String(r.reason || '-'),
+        fmtDate(r.start_at || r.created_at || '')
+      ]);
+      doc.autoTable({
+        startY: doc.lastAutoTable.finalY + 18,
+        head:[['Vardiya','Ekipman','Sebep','Başlangıç']],
+        body: openBreakdowns.length ? openBreakdowns : [['-','Açık arıza yok','-','-']],
+        styles:{fontSize:9}
+      });
+
+      doc.save(`gunluk_rapor_${date}.pdf`);
+    }catch(err){
+      alert(err.message || err);
+    }
+  }
+  async function exportWeeklyExcel(){
+    if(currentUserRole() !== 'manager'){ alert('Bu rapor yalnızca yöneticiye açıktır.'); return; }
+    try{
+      const refDate = document.getElementById('report_week_date')?.value || todayStr();
+      const startDate = mondayOfWeek(refDate);
+      const endDate = addDaysToDateStr(startDate, 6);
+      const summaryRows = await fetchSummaryRange(startDate, endDate);
+      const productions = await fetchRowsForRange(TABLES.PRODUCTIONS, startDate, endDate);
+      const trips = await fetchRowsForRange(TABLES.TRUCK_TRIPS, startDate, endDate);
+      const fuels = await fetchRowsForRange(TABLES.FUEL_LOGS, startDate, endDate);
+      const breakdowns = await fetchRowsForRange(TABLES.BREAKDOWNS, startDate, endDate);
+
+      const wb = new ExcelJS.Workbook();
+      wb.creator = 'OpenAI';
+      wb.created = new Date();
+
+      const ws1 = wb.addWorksheet('Haftalik Ozet');
+      ws1.columns = [
+        {header:'Tarih', key:'shift_date', width:14},
+        {header:'Vardiya', key:'shift_name', width:16},
+        {header:'Toplam Sefer', key:'total_trip_count', width:14},
+        {header:'Tahmini Tonaj', key:'estimated_tonnage', width:16},
+        {header:'Toplam Yakit (L)', key:'total_fuel_liters', width:16},
+        {header:'Aktif Ekipman', key:'active_equipment_count', width:14},
+      ];
+      summaryRows.forEach(r=>ws1.addRow({
+        shift_date:r.shift_date, shift_name:r.shift_name,
+        total_trip_count:Math.round(Number(r.total_trip_count||0)),
+        estimated_tonnage:Math.round(Number(r.estimated_tonnage||0)),
+        total_fuel_liters:Math.round(Number(r.total_fuel_liters||0)),
+        active_equipment_count:Math.round(Number(r.active_equipment_count||0))
+      }));
+
+      const ws2 = wb.addWorksheet('Uretim');
+      ws2.columns = [
+        {header:'Tarih', key:'shift_date', width:14},
+        {header:'Vardiya', key:'shift_name', width:14},
+        {header:'Ekipman', key:'equipment_name', width:20},
+        {header:'Paket', key:'package_name', width:18},
+        {header:'Rota', key:'route', width:28},
+        {header:'Sefer', key:'trip_count', width:10},
+        {header:'Durum', key:'status', width:12},
+      ];
+      productions.forEach(r=>ws2.addRow({
+        shift_date:r.shift_date, shift_name:r.shift_name,
+        equipment_name:r.equipment_name || r.equipment_name_snapshot || findEquipmentById(r.equipment_id)?.name || '',
+        package_name:r.package_name || r.package_name_snapshot || packageName(r.package_id) || '',
+        route:[r.from_location||'', r.to_location||''].filter(Boolean).join(' → '),
+        trip_count:r.trip_count || 0,
+        status:r.status || ''
+      }));
+
+      const ws3 = wb.addWorksheet('Sefer-Yakit');
+      ws3.columns = [
+        {header:'Tip', key:'type', width:12},
+        {header:'Tarih', key:'shift_date', width:14},
+        {header:'Vardiya', key:'shift_name', width:14},
+        {header:'Ekipman', key:'equipment_name', width:20},
+        {header:'Deger', key:'value', width:12},
+      ];
+      trips.forEach(r=>ws3.addRow({type:'Sefer', shift_date:r.shift_date, shift_name:r.shift_name, equipment_name:r.equipment_name || findEquipmentById(r.equipment_id)?.name || '', value:r.trip_count || 0}));
+      fuels.forEach(r=>ws3.addRow({type:'Yakıt', shift_date:r.shift_date, shift_name:r.shift_name, equipment_name:r.equipment_name || findEquipmentById(r.equipment_id)?.name || '', value:r.liters || 0}));
+
+      const ws4 = wb.addWorksheet('Ariza');
+      ws4.columns = [
+        {header:'Tarih', key:'shift_date', width:14},
+        {header:'Vardiya', key:'shift_name', width:14},
+        {header:'Ekipman', key:'equipment_name', width:20},
+        {header:'Sebep', key:'reason', width:24},
+        {header:'Durum', key:'status', width:12},
+      ];
+      breakdowns.forEach(r=>ws4.addRow({
+        shift_date:r.shift_date, shift_name:r.shift_name,
+        equipment_name:r.equipment_name || r.equipment_name_snapshot || findEquipmentById(r.equipment_id)?.name || '',
+        reason:r.reason || '',
+        status:r.status || ''
+      }));
+
+      [ws1,ws2,ws3,ws4].forEach(ws=>{
+        ws.getRow(1).font = {bold:true};
+        ws.views = [{state:'frozen', ySplit:1}];
+      });
+
+      const buf = await wb.xlsx.writeBuffer();
+      downloadBlob(buf, `haftalik_rapor_${startDate}_${endDate}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    }catch(err){
+      alert(err.message || err);
+    }
+  }
+  async function exportShiftReport(){
+    if(currentUserRole() !== 'manager'){ alert('Bu rapor yalnızca yöneticiye açıktır.'); return; }
+    try{
+      const date = document.getElementById('report_shift_date')?.value || todayStr();
+      const shiftName = document.getElementById('report_shift_name')?.value || '';
+      if(!shiftName) throw new Error('Vardiya seçiniz');
+      const productions = await fetchRowsForRange(TABLES.PRODUCTIONS, date, date, shiftName);
+      const trips = await fetchRowsForRange(TABLES.TRUCK_TRIPS, date, date, shiftName);
+      const fuels = await fetchRowsForRange(TABLES.FUEL_LOGS, date, date, shiftName);
+      const meters = await fetchRowsForRange(TABLES.METER_LOGS, date, date, shiftName);
+      const breakdowns = await fetchRowsForRange(TABLES.BREAKDOWNS, date, date, shiftName);
+      const rentals = await fetchRowsForRange(TABLES.RENTALS, date, date, shiftName);
+
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet('Vardiya Raporu');
+      ws.columns = [
+        {header:'Kategori', key:'category', width:14},
+        {header:'Ekipman', key:'equipment', width:20},
+        {header:'Paket/Rota/Sebep', key:'detail', width:30},
+        {header:'Deger', key:'value', width:14},
+        {header:'Not', key:'note', width:24},
+      ];
+      productions.forEach(r=>ws.addRow({category:'Üretim', equipment:r.equipment_name || r.equipment_name_snapshot || findEquipmentById(r.equipment_id)?.name || '', detail:[r.package_name || r.package_name_snapshot || packageName(r.package_id)||'', [r.from_location||'',r.to_location||''].filter(Boolean).join(' → ')].filter(Boolean).join(' | '), value:r.trip_count || 0, note:r.status || ''}));
+      trips.forEach(r=>ws.addRow({category:'Sefer', equipment:r.equipment_name || findEquipmentById(r.equipment_id)?.name || '', detail:[packageName(r.package_id)||'', [r.from_location||'',r.to_location||''].filter(Boolean).join(' → ')].filter(Boolean).join(' | '), value:r.trip_count || 0, note:''}));
+      fuels.forEach(r=>ws.addRow({category:'Yakıt', equipment:r.equipment_name || findEquipmentById(r.equipment_id)?.name || '', detail:'', value:r.liters || 0, note:r.source || ''}));
+      meters.forEach(r=>ws.addRow({category:'Sayaç', equipment:r.equipment_name || findEquipmentById(r.equipment_id)?.name || '', detail:r.meter_type || '', value:r.meter_value || 0, note:''}));
+      breakdowns.forEach(r=>ws.addRow({category:'Arıza', equipment:r.equipment_name || r.equipment_name_snapshot || findEquipmentById(r.equipment_id)?.name || '', detail:r.reason || '', value:'', note:r.status || ''}));
+      rentals.forEach(r=>ws.addRow({category:'Kiralık', equipment:r.equipment_name || r.equipment_name_snapshot || findEquipmentById(r.equipment_id)?.name || '', detail:r.vendor_name || '', value:'', note:r.status || ''}));
+      ws.getRow(1).font = {bold:true};
+      ws.views = [{state:'frozen', ySplit:1}];
+      const buf = await wb.xlsx.writeBuffer();
+      downloadBlob(buf, `vardiya_raporu_${shiftName}_${date}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    }catch(err){
+      alert(err.message || err);
+    }
+  }
+  function downloadBlob(buffer, filename, mime){
+    const blob = new Blob([buffer], {type:mime});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 5000);
+  }
+  function renderReports(){
+    const el = document.getElementById('reports');
+    if(!el) return;
+    if(currentUserRole() !== 'manager'){
+      el.innerHTML = `<div class="card"><h2 class="section-title">Raporlar</h2><div class="notice">Bu alan yalnızca yöneticiye açıktır.</div></div>`;
+      return;
+    }
+    const shiftOptions = (state.shiftConfig?.shifts || []).map(s=>`<option value="${escapeHtml(s.name)}">${escapeHtml(s.name)}</option>`).join('');
+    const today = todayStr();
+    el.innerHTML = `
+      <div class="card">
+        <h2 class="section-title">Raporlama Modu</h2>
+        <div class="report-grid">
+          <div class="report-card">
+            <h3>Günlük PDF</h3>
+            <span class="muted">Seçilen tarih için vardiya özetlerini ve açık arızaları PDF olarak indirir.</span>
+            <input id="report_daily_date" type="date" value="${today}" />
+            <div class="report-actions" style="margin-top:10px">
+              <button onclick="exportDailyPdf()">Günlük PDF İndir</button>
+            </div>
+          </div>
+          <div class="report-card">
+            <h3>Haftalık Excel</h3>
+            <span class="muted">Seçilen tarihin bulunduğu haftayı üretim, sefer, yakıt ve arıza detaylarıyla Excel'e aktarır.</span>
+            <input id="report_week_date" type="date" value="${today}" />
+            <div class="report-actions" style="margin-top:10px">
+              <button onclick="exportWeeklyExcel()">Haftalık Excel İndir</button>
+            </div>
+          </div>
+          <div class="report-card">
+            <h3>Vardiya Raporu</h3>
+            <span class="muted">Belirli bir tarih ve vardiya için tüm hareketleri tek Excel dosyasında indirir.</span>
+            <div class="inline">
+              <input id="report_shift_date" type="date" value="${today}" />
+              <select id="report_shift_name"><option value="">Vardiya seç</option>${shiftOptions}</select>
+            </div>
+            <div class="report-actions" style="margin-top:10px">
+              <button onclick="exportShiftReport()">Vardiya Raporu İndir</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+function renderUsers(){
     const el = document.getElementById('users');
     if(!el) return;
     if(!canManageUsers()){
@@ -6278,6 +6568,7 @@ function renderDeleted(){
     try{ renderDashboardPro(); }catch(err){ renderPageError('dashboardPro', 'Dashboard Pro', err); }
     try{ if(canAccessPage('definitions')) renderDefinitions(); else document.getElementById('definitions').innerHTML = `<div class="card"><h2 class="section-title">Tanımlar</h2><div class="notice">Bu alan yalnızca yöneticiye açıktır.</div></div>`; }catch(err){ renderPageError('definitions', 'Tanımlar', err); }
     try{ if(canManageUsers()) renderUsers(); else { const u=document.getElementById('users'); if(u) u.innerHTML = `<div class="card"><h2 class="section-title">Kullanıcılar</h2><div class="notice">Bu alan yalnızca yöneticiye açıktır.</div></div>`; } }catch(err){ renderPageError('users', 'Kullanıcılar', err); }
+    try{ if(currentUserRole()==='manager') renderReports(); else { const r=document.getElementById('reports'); if(r) r.innerHTML = `<div class="card"><h2 class="section-title">Raporlar</h2><div class="notice">Bu alan yalnızca yöneticiye açıktır.</div></div>`; } }catch(err){ renderPageError('reports', 'Raporlar', err); }
     try{
       if(canAccessPage('production')) renderActiveOperationPage({
         id:'production', title:'Üretimde Olanlar', pageType:'production', rows: state.productions,
@@ -6454,7 +6745,7 @@ function renderDeleted(){
   document.getElementById('email').addEventListener('keydown', e=>{ if(e.key==='Enter') login(); });
   document.getElementById('password').addEventListener('keydown', e=>{ if(e.key==='Enter') login(); });
 
-  Object.assign(window, { openModal, closeModal, fillTruckRouteFromExcavator, updateAutoMeterLabels, updateProductionStartMeterHints, updateTripProductionContext, updateFuelProductionContext, updateMeterCorrectionContext, toggleProductionEditLinkedField, refreshLogisticsEquipmentSelect, markShiftSelectManual, continueBreakdownToCurrentShift, finishBreakdownFromWarning, saveStartProductionExcavator, saveStartProductionTruck, saveStartProductionOther, saveEndProduction, saveStartBreakdown, saveEndBreakdown, saveStartRental, saveEndRental, saveNewTrip, saveNewFuel, saveNewMeter, confirmSoftDelete, restoreDeleted, deleteAllDeletedRecordsNow, deleteDeletedOlderThan30Days, saveEditRecord, saveDefinition, deleteTruckModel, toggleDefinitionTruckModelField, renderShiftConfigInputs, saveShiftConfigFromForm, renderShiftConfigCardRefresh, applyRecordFiltersFromUI, resetRecordFilters, bulkDeleteRecordTable, exportRecordsToExcel, saveUserRoleSettings, refreshData });
+  Object.assign(window, { openModal, closeModal, fillTruckRouteFromExcavator, updateAutoMeterLabels, updateProductionStartMeterHints, updateTripProductionContext, updateFuelProductionContext, updateMeterCorrectionContext, toggleProductionEditLinkedField, refreshLogisticsEquipmentSelect, markShiftSelectManual, continueBreakdownToCurrentShift, finishBreakdownFromWarning, saveStartProductionExcavator, saveStartProductionTruck, saveStartProductionOther, saveEndProduction, saveStartBreakdown, saveEndBreakdown, saveStartRental, saveEndRental, saveNewTrip, saveNewFuel, saveNewMeter, confirmSoftDelete, restoreDeleted, deleteAllDeletedRecordsNow, deleteDeletedOlderThan30Days, saveEditRecord, saveDefinition, deleteTruckModel, toggleDefinitionTruckModelField, renderShiftConfigInputs, saveShiftConfigFromForm, renderShiftConfigCardRefresh, applyRecordFiltersFromUI, resetRecordFilters, bulkDeleteRecordTable, exportRecordsToExcel, saveUserRoleSettings, refreshData, exportDailyPdf, exportWeeklyExcel, exportShiftReport });
 
   (async function autoSession(){
     try{
