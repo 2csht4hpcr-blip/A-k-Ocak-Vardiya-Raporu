@@ -2334,23 +2334,31 @@
   function normalizePayloadForTable(table, payload){
     const dbTable = resolveDbTableName(table);
     const p = { ...(payload || {}) };
-    if(['production_logs','breakdowns','rentals','fuel_logs','meter_logs'].includes(dbTable)){
+    if(dbTable === 'production_logs'){
+      if(Object.prototype.hasOwnProperty.call(p, 'equipment_name') && !Object.prototype.hasOwnProperty.call(p, 'equipment_name_snapshot')){
+        p.equipment_name_snapshot = p.equipment_name;
+      }
+      if(Object.prototype.hasOwnProperty.call(p, 'package_name') && !Object.prototype.hasOwnProperty.call(p, 'package_name_snapshot')){
+        p.package_name_snapshot = p.package_name;
+      }
+      if(Object.prototype.hasOwnProperty.call(p, 'linked_excavator_name') && !Object.prototype.hasOwnProperty.call(p, 'linked_excavator_name_snapshot')){
+        p.linked_excavator_name_snapshot = p.linked_excavator_name;
+      }
+      delete p.equipment_name;
+      delete p.package_name;
+      delete p.linked_excavator_name;
+    }
+    if(['breakdowns','rentals'].includes(dbTable)){
       if(Object.prototype.hasOwnProperty.call(p, 'equipment_name') && !Object.prototype.hasOwnProperty.call(p, 'equipment_name_snapshot')){
         p.equipment_name_snapshot = p.equipment_name;
       }
       delete p.equipment_name;
-
-      if(Object.prototype.hasOwnProperty.call(p, 'package_name') && !Object.prototype.hasOwnProperty.call(p, 'package_name_snapshot')){
-        p.package_name_snapshot = p.package_name;
-      }
       delete p.package_name;
-
-      if(Object.prototype.hasOwnProperty.call(p, 'linked_excavator_name') && !Object.prototype.hasOwnProperty.call(p, 'linked_excavator_name_snapshot')){
-        p.linked_excavator_name_snapshot = p.linked_excavator_name;
-      }
       delete p.linked_excavator_name;
+      delete p.package_name_snapshot;
+      delete p.linked_excavator_name_snapshot;
     }
-    if(dbTable === 'truck_trips'){
+    if(['truck_trips','fuel_logs','meter_logs'].includes(dbTable)){
       delete p.equipment_name_snapshot;
       delete p.package_name_snapshot;
       delete p.linked_excavator_name_snapshot;
@@ -3909,7 +3917,7 @@
           end_at: document.getElementById('m_edit_end_at').value ? asLocalIsoString(document.getElementById('m_edit_end_at').value) : null,
         };
       }
-      if(table === 'truck_trips'){
+      if(['truck_trips','fuel_logs','meter_logs'].includes(table)){
         delete payload.equipment_name_snapshot;
         delete payload.package_name_snapshot;
         delete payload.linked_excavator_name_snapshot;
