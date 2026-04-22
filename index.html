@@ -1502,7 +1502,7 @@
     const role = currentUserRole();
     if(role === 'manager') return true;
     if(role === 'shift_lead'){
-      return ['dashboard','production','breakdown','rental','trip','fuel','meter','definitions'].includes(pageId);
+      return ['dashboard','production','breakdown','rental','trip','fuel','meter','records'].includes(pageId);
     }
     return ['dashboard'].includes(pageId);
   }
@@ -1512,7 +1512,7 @@
   }
   function canManageDefinitions(){
     const role = currentUserRole();
-    return role === 'manager' || role === 'shift_lead';
+    return role === 'manager';
   }
   function canManageShiftConfig(){
     return currentUserRole() === 'manager';
@@ -1529,7 +1529,11 @@
     });
     if(!canAccessPage(state.currentPage)) showPage('dashboard');
     const roleText = document.getElementById('userRole');
-    if(roleText) roleText.textContent = roleLabelTr(role);
+    if(roleText){
+      if(role === 'manager') roleText.textContent = 'Yönetici • Tüm veriler';
+      else if(role === 'shift_lead') roleText.textContent = 'Vardiya Sorumlusu • Kendi vardiyası';
+      else roleText.textContent = 'Misafir • Sadece dashboard';
+    }
   }
   const SUPABASE_URL = "https://bskvsbqpkjoycgurgzxq.supabase.co";
   const SUPABASE_KEY = "sb_publishable_XkM3U1Y2oFI305rfmoB3BQ_rvf1xc9O";
