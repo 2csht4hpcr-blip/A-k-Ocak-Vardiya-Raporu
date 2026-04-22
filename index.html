@@ -1463,7 +1463,7 @@
       return {
         type:'truck',
         id,
-        name:eq.name || prod.equipment_name || '-',
+        name:eq.name || prod.equipment_name || prod.equipment_name_snapshot || prod.linked_excavator_name || '-',
         zone:prod.to_location || prod.from_location || '',
         route:`${prod.from_location || '-'} → ${prod.to_location || '-'}`,
         packageName:prod.package_name || packageName(prod.package_id) || '-',
@@ -1482,14 +1482,16 @@
       };
     });
 
-    const excavatorIds = Array.from(new Set(
-      excavatorProductions
-        .map(r=>String(r.equipment_id || ''))
-        .filter(Boolean)
-    ));
+    const excavatorIds = Array.from(new Set([
+      ...excavatorProductions.map(r=>String(r.equipment_id || '')),
+      ...trips.map(r=>String(r.linked_excavator_id || '')),
+      ...fuels.filter(r=>isExcavatorEquipment(findEquipmentById(r.equipment_id))).map(r=>String(r.equipment_id || '')),
+      ...meters.filter(r=>isExcavatorEquipment(findEquipmentById(r.equipment_id))).map(r=>String(r.equipment_id || ''))
+    ].filter(Boolean)));
     const excavatorAnalysis = excavatorIds.map(id=>{
       const prodRows = excavatorProductions.filter(r=>String(r.equipment_id||'') === id);
-      const prod = excavatorProductionMap[id] || prodRows[0] || {};
+      const tripRowsForExc = trips.filter(t=>String(t.linked_excavator_id||'') === id);
+      const prod = excavatorProductionMap[id] || prodRows[0] || tripRowsForExc[0] || {};
       const eq = findEquipmentById(id) || {};
       const meterWindow = shiftEquipmentMeterWindow(id, shiftName, shiftDate);
       const productionMeterDiff = prodRows.reduce((s,r)=>s + Math.max(0, Number(getEffectiveProductionEndMeter(r) || 0) - Number(getEffectiveProductionStartMeter(r) || 0)), 0);
@@ -1500,7 +1502,7 @@
       return {
         type:'excavator',
         id,
-        name:eq.name || prod.equipment_name || '-',
+        name:eq.name || prod.equipment_name || prod.equipment_name_snapshot || prod.linked_excavator_name || '-',
         zone:prod.from_location || prod.to_location || '',
         route:`${prod.from_location || '-'} → ${prod.to_location || '-'}`,
         packageName:prod.package_name || packageName(prod.package_id) || '-',
@@ -4915,7 +4917,6 @@
         </div>
         <div class="pro-kpi-row">
           <div class="pro-kpi"><div class="k-label">Sefer</div><div class="k-value">${item.tripCount}</div></div>
-          <div class="pro-kpi"><div class="k-label">Yakıt</div><div class="k-value">${item.fuelLiters.toFixed(0)}</div></div>
           <div class="pro-kpi"><div class="k-label">KM</div><div class="k-value">${item.meterDiff.toFixed(1)}</div></div>
           <div class="pro-kpi"><div class="k-label">KM/Sefer</div><div class="k-value">${item.kmPerTrip.toFixed(1)}</div></div>
           <div class="pro-kpi"><div class="k-label">Tonaj</div><div class="k-value">${item.tonnage.toFixed(0)}</div></div>
@@ -6263,55 +6264,196 @@ function renderDeleted(){
       return acc;
     }, {trip:0,fuel:0,ton:0,meter:0,equipment:0});
   }
+
+  function numFmt(v, digits=0){
+    const n = Number(v || 0);
+    return Number.isFinite(n) ? n.toLocaleString('tr-TR', {maximumFractionDigits:digits, minimumFractionDigits:digits}) : '0';
+  }
+  function minutesBetweenSafe(a, b){
+    try{
+      const d1 = new Date(a || 0).getTime();
+      const d2 = new Date(b || Date.now()).getTime();
+      if(!Number.isFinite(d1) || !Number.isFinite(d2) || d2 < d1) return 0;
+      return Math.round((d2 - d1) / 60000);
+    }catch(e){ return 0; }
+  }
+  function openPrintableReportHtml(title, bodyHtml){
+    const win = window.open('', '_blank', 'width=1100,height=900');
+    if(!win){ alert('Rapor penceresi açılamadı. Tarayıcı popup engelliyor olabilir.'); return; }
+    win.document.write(`<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>${title}</title>
+<style>
+  :root{--bg:#f8fafc;--card:#fff;--line:#e2e8f0;--text:#0f172a;--muted:#475569;--blue:#2563eb;--green:#15803d;--orange:#c2410c;--red:#dc2626}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text)}
+  .wrap{max-width:1100px;margin:0 auto;padding:28px}
+  .hero{background:linear-gradient(135deg,#0f172a 0%,#1d4ed8 100%);color:#fff;border-radius:20px;padding:22px 24px;margin-bottom:18px}
+  .hero h1{margin:0 0 6px;font-size:28px}
+  .hero .sub{font-size:14px;opacity:.92}
+  .grid{display:grid;gap:14px}
+  .g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px;box-shadow:0 8px 24px rgba(15,23,42,.06)}
+  .kpi .label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;font-weight:700}
+  .kpi .value{font-size:28px;font-weight:900;margin-top:6px}
+  .section-title{font-size:20px;font-weight:900;margin:0 0 12px}
+  table{width:100%;border-collapse:collapse}
+  th,td{padding:10px 8px;border-bottom:1px solid #edf2f7;text-align:left;vertical-align:top;font-size:12px}
+  th{font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);background:#f8fafc}
+  .muted{color:var(--muted)}
+  .badge{display:inline-block;padding:4px 8px;border-radius:999px;font-size:11px;font-weight:700;border:1px solid #dbeafe;background:#eff6ff;color:#1d4ed8}
+  .alert-list{display:grid;gap:10px}
+  .alert{padding:12px 14px;border-radius:14px;border:1px solid #fed7aa;background:#fff7ed}
+  .alert.red{border-color:#fecaca;background:#fef2f2}
+  .alert.green{border-color:#bbf7d0;background:#f0fdf4}
+  .small{font-size:12px}
+  @media print{
+    body{background:#fff}
+    .wrap{max-width:none;padding:12mm}
+    .card,.hero{box-shadow:none}
+    .hero{background:#1d4ed8 !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">${bodyHtml}</div>
+<script>setTimeout(()=>window.print(),300);</script>
+</body>
+</html>`);
+    win.document.close();
+  }
+  function styleWorksheet(ws){
+    ws.getRow(1).font = {bold:true, color:{argb:'FFFFFFFF'}};
+    ws.getRow(1).fill = {type:'pattern', pattern:'solid', fgColor:{argb:'1D4ED8'}};
+    ws.views = [{state:'frozen', ySplit:1}];
+    ws.eachRow((row, rowNumber)=>{
+      row.eachCell(cell=>{
+        cell.border = {
+          top:{style:'thin', color:{argb:'E2E8F0'}},
+          left:{style:'thin', color:{argb:'E2E8F0'}},
+          bottom:{style:'thin', color:{argb:'E2E8F0'}},
+          right:{style:'thin', color:{argb:'E2E8F0'}}
+        };
+        if(rowNumber > 1) cell.alignment = {vertical:'middle', wrapText:true};
+      });
+    });
+  }
+
   async function exportDailyPdf(){
     if(currentUserRole() !== 'manager'){ alert('Bu rapor yalnızca yöneticiye açıktır.'); return; }
     try{
       const date = document.getElementById('report_daily_date')?.value || todayStr();
       const summaryRows = await fetchSummaryRange(date, date);
+      const productions = (await fetchRowsForRange(TABLES.PRODUCTIONS, date, date)).filter(r=>!r.deleted_at);
+      const trips = (await fetchRowsForRange(TABLES.TRUCK_TRIPS, date, date)).filter(r=>!r.deleted_at);
+      const fuels = (await fetchRowsForRange(TABLES.FUEL_LOGS, date, date)).filter(r=>!r.deleted_at);
+      const breakdowns = (await fetchRowsForRange(TABLES.BREAKDOWNS, date, date)).filter(r=>!r.deleted_at);
+      const rentals = (await fetchRowsForRange(TABLES.RENTALS, date, date)).filter(r=>!r.deleted_at);
       const totals = shiftSummaryTotals(summaryRows);
-      const breakdowns = await fetchRowsForRange(TABLES.BREAKDOWNS, date, date);
-      const productions = await fetchRowsForRange(TABLES.PRODUCTIONS, date, date);
-      const { jsPDF } = window.jspdf;
-      const doc = new jsPDF({orientation:'p', unit:'pt', format:'a4'});
-      doc.setFontSize(18);
-      doc.text('Günlük Operasyon Raporu', 40, 40);
-      doc.setFontSize(11);
-      doc.text(`Tarih: ${date}`, 40, 62);
-      doc.text(`Toplam Sefer: ${Math.round(totals.trip)}`, 40, 84);
-      doc.text(`Tahmini Tonaj: ${Math.round(totals.ton)}`, 180, 84);
-      doc.text(`Toplam Yakıt: ${Math.round(totals.fuel)} L`, 340, 84);
-      doc.text(`Aktif Üretim Kaydı: ${productions.filter(r=>!r.deleted_at).length}`, 40, 106);
-      doc.text(`Arıza Kaydı: ${breakdowns.filter(r=>!r.deleted_at).length}`, 240, 106);
 
-      const summaryBody = summaryRows.map(r=>[
-        String(r.shift_date || ''),
-        String(r.shift_name || ''),
-        Math.round(Number(r.total_trip_count || 0)),
-        Math.round(Number(r.estimated_tonnage || 0)),
-        Math.round(Number(r.total_fuel_liters || 0)),
-        Math.round(Number(r.active_equipment_count || 0))
-      ]);
-      doc.autoTable({
-        startY: 130,
-        head:[['Tarih','Vardiya','Sefer','Tonaj','Yakıt (L)','Aktif Ekipman']],
-        body: summaryBody.length ? summaryBody : [['-','-','0','0','0','0']],
-        styles:{fontSize:9}
+      const openBreakdowns = breakdowns.filter(r=>isOpenRow(r));
+      const topEquipment = {};
+      productions.forEach(r=>{
+        const key = String(r.equipment_id || '');
+        if(!key) return;
+        if(!topEquipment[key]) topEquipment[key] = {name: r.equipment_name || r.equipment_name_snapshot || findEquipmentById(r.equipment_id)?.name || '-', trip:0, ton:0};
+        topEquipment[key].trip += Number(r.trip_count || 0);
+        topEquipment[key].ton += Number(r.trip_count || 0) * Number(packageFactorById?.(r.package_id) || 0 || 1);
       });
+      const topEquipmentRows = Object.values(topEquipment).sort((a,b)=>b.trip-a.trip).slice(0,8);
 
-      const openBreakdowns = breakdowns.filter(r=>!r.deleted_at && isOpenRow(r)).slice(0,20).map(r=>[
-        String(r.shift_name || ''),
-        String(r.equipment_name || r.equipment_name_snapshot || findEquipmentById(r.equipment_id)?.name || '-'),
-        String(r.reason || '-'),
-        fmtDate(r.start_at || r.created_at || '')
-      ]);
-      doc.autoTable({
-        startY: doc.lastAutoTable.finalY + 18,
-        head:[['Vardiya','Ekipman','Sebep','Başlangıç']],
-        body: openBreakdowns.length ? openBreakdowns : [['-','Açık arıza yok','-','-']],
-        styles:{fontSize:9}
-      });
+      const alerts = [];
+      if(openBreakdowns.length) alerts.push({type:'red', text:`Açık arıza sayısı ${openBreakdowns.length}. Kritik ekipmanları kontrol edin.`});
+      if(Number(totals.fuel || 0) > 0 && Number(totals.trip || 0) === 0) alerts.push({type:'red', text:'Yakıt kaydı var ancak toplam sefer 0 görünüyor.'});
+      if(Number(totals.trip || 0) > 0 && Number(totals.fuel || 0) / Math.max(Number(totals.trip || 0),1) > 50) alerts.push({type:'orange', text:'Sefer başına yakıt tüketimi yüksek görünüyor.'});
+      if(!alerts.length) alerts.push({type:'green', text:'Bugün için kritik uyarı görünmüyor.'});
 
-      doc.save(`gunluk_rapor_${date}.pdf`);
+      const html = `
+        <div class="hero">
+          <h1>Günlük Operasyon Raporu</h1>
+          <div class="sub">Tarih: <b>${escapeHtml(date)}</b> • Maden Takip v40</div>
+        </div>
+
+        <div class="grid g4" style="margin-bottom:16px">
+          <div class="card kpi"><div class="label">Toplam Sefer</div><div class="value">${numFmt(totals.trip)}</div></div>
+          <div class="card kpi"><div class="label">Tahmini Tonaj</div><div class="value">${numFmt(totals.ton)}</div></div>
+          <div class="card kpi"><div class="label">Toplam Yakıt</div><div class="value">${numFmt(totals.fuel)} L</div></div>
+          <div class="card kpi"><div class="label">Açık Arıza</div><div class="value">${numFmt(openBreakdowns.length)}</div></div>
+        </div>
+
+        <div class="grid g2">
+          <div class="card">
+            <h2 class="section-title">Vardiya Özeti</h2>
+            <table>
+              <thead><tr><th>Tarih</th><th>Vardiya</th><th>Sefer</th><th>Tonaj</th><th>Yakıt</th><th>Aktif Ekipman</th></tr></thead>
+              <tbody>
+                ${(summaryRows.length ? summaryRows : [{shift_date:date, shift_name:'-', total_trip_count:0, estimated_tonnage:0, total_fuel_liters:0, active_equipment_count:0}]).map(r=>`
+                  <tr>
+                    <td>${escapeHtml(String(r.shift_date || ''))}</td>
+                    <td>${escapeHtml(String(r.shift_name || ''))}</td>
+                    <td>${numFmt(r.total_trip_count)}</td>
+                    <td>${numFmt(r.estimated_tonnage)}</td>
+                    <td>${numFmt(r.total_fuel_liters)}</td>
+                    <td>${numFmt(r.active_equipment_count)}</td>
+                  </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>
+          <div class="card">
+            <h2 class="section-title">Akıllı Uyarılar</h2>
+            <div class="alert-list">
+              ${alerts.map(a=>`<div class="alert ${a.type==='red'?'red':(a.type==='green'?'green':'')}">${escapeHtml(a.text)}</div>`).join('')}
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:16px">
+          <h2 class="section-title">Ekipman Performans Özeti</h2>
+          <table>
+            <thead><tr><th>Ekipman</th><th>Sefer</th><th>Tahmini Tonaj</th></tr></thead>
+            <tbody>
+              ${(topEquipmentRows.length ? topEquipmentRows : [{name:'Veri yok',trip:0,ton:0}]).map(r=>`
+                <tr><td>${escapeHtml(r.name)}</td><td>${numFmt(r.trip)}</td><td>${numFmt(r.ton)}</td></tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="grid g2" style="margin-top:16px">
+          <div class="card">
+            <h2 class="section-title">Açık Arızalar</h2>
+            <table>
+              <thead><tr><th>Vardiya</th><th>Ekipman</th><th>Sebep</th><th>Süre</th></tr></thead>
+              <tbody>
+                ${(openBreakdowns.length ? openBreakdowns : [{shift_name:'-',equipment_name:'Açık arıza yok',reason:'-',start_at:''}]).map(r=>`
+                  <tr>
+                    <td>${escapeHtml(String(r.shift_name || '-'))}</td>
+                    <td>${escapeHtml(String(r.equipment_name || r.equipment_name_snapshot || findEquipmentById(r.equipment_id)?.name || '-'))}</td>
+                    <td>${escapeHtml(String(r.reason || '-'))}</td>
+                    <td>${numFmt(minutesBetweenSafe(r.start_at || r.created_at, r.end_at || null))} dk</td>
+                  </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>
+          <div class="card">
+            <h2 class="section-title">Kayıt Özeti</h2>
+            <table>
+              <tbody>
+                <tr><th>Üretim Kaydı</th><td>${numFmt(productions.length)}</td></tr>
+                <tr><th>Sefer Kaydı</th><td>${numFmt(trips.length)}</td></tr>
+                <tr><th>Yakıt Kaydı</th><td>${numFmt(fuels.length)}</td></tr>
+                <tr><th>Kiralık Kaydı</th><td>${numFmt(rentals.length)}</td></tr>
+                <tr><th>Arıza Kaydı</th><td>${numFmt(breakdowns.length)}</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+      openPrintableReportHtml(`Gunluk Rapor ${date}`, html);
     }catch(err){
       alert(err.message || err);
     }
@@ -6326,37 +6468,60 @@ function renderDeleted(){
       const productions = await fetchRowsForRange(TABLES.PRODUCTIONS, startDate, endDate);
       const trips = await fetchRowsForRange(TABLES.TRUCK_TRIPS, startDate, endDate);
       const fuels = await fetchRowsForRange(TABLES.FUEL_LOGS, startDate, endDate);
+      const meters = await fetchRowsForRange(TABLES.METER_LOGS, startDate, endDate);
       const breakdowns = await fetchRowsForRange(TABLES.BREAKDOWNS, startDate, endDate);
+      const rentals = await fetchRowsForRange(TABLES.RENTALS, startDate, endDate);
 
       const wb = new ExcelJS.Workbook();
       wb.creator = 'OpenAI';
       wb.created = new Date();
+      wb.subject = 'Haftalık Operasyon Raporu';
 
-      const ws1 = wb.addWorksheet('Haftalik Ozet');
+      const totals = shiftSummaryTotals(summaryRows);
+
+      const ws0 = wb.addWorksheet('Kapak');
+      ws0.columns = [{header:'Alan', key:'k', width:28},{header:'Değer', key:'v', width:36}];
+      [
+        ['Rapor Türü','Haftalık Operasyon Raporu'],
+        ['Başlangıç',startDate],
+        ['Bitiş',endDate],
+        ['Toplam Sefer',Math.round(totals.trip)],
+        ['Tahmini Tonaj',Math.round(totals.ton)],
+        ['Toplam Yakıt (L)',Math.round(totals.fuel)],
+        ['Aktif Ekipman Toplamı',Math.round(totals.equipment)]
+      ].forEach(([k,v])=>ws0.addRow({k,v}));
+      styleWorksheet(ws0);
+
+      const ws1 = wb.addWorksheet('Vardiya Özeti');
       ws1.columns = [
         {header:'Tarih', key:'shift_date', width:14},
         {header:'Vardiya', key:'shift_name', width:16},
         {header:'Toplam Sefer', key:'total_trip_count', width:14},
         {header:'Tahmini Tonaj', key:'estimated_tonnage', width:16},
-        {header:'Toplam Yakit (L)', key:'total_fuel_liters', width:16},
+        {header:'Toplam Yakıt (L)', key:'total_fuel_liters', width:16},
         {header:'Aktif Ekipman', key:'active_equipment_count', width:14},
+        {header:'Sayaç Farkı', key:'total_meter_diff', width:14},
       ];
       summaryRows.forEach(r=>ws1.addRow({
         shift_date:r.shift_date, shift_name:r.shift_name,
         total_trip_count:Math.round(Number(r.total_trip_count||0)),
         estimated_tonnage:Math.round(Number(r.estimated_tonnage||0)),
         total_fuel_liters:Math.round(Number(r.total_fuel_liters||0)),
-        active_equipment_count:Math.round(Number(r.active_equipment_count||0))
+        active_equipment_count:Math.round(Number(r.active_equipment_count||0)),
+        total_meter_diff:Math.round(Number(r.total_meter_diff||0))
       }));
+      styleWorksheet(ws1);
 
-      const ws2 = wb.addWorksheet('Uretim');
+      const ws2 = wb.addWorksheet('Üretim');
       ws2.columns = [
         {header:'Tarih', key:'shift_date', width:14},
         {header:'Vardiya', key:'shift_name', width:14},
-        {header:'Ekipman', key:'equipment_name', width:20},
+        {header:'Ekipman', key:'equipment_name', width:22},
         {header:'Paket', key:'package_name', width:18},
-        {header:'Rota', key:'route', width:28},
+        {header:'Rota', key:'route', width:30},
         {header:'Sefer', key:'trip_count', width:10},
+        {header:'Başlangıç', key:'start_at', width:18},
+        {header:'Bitiş', key:'end_at', width:18},
         {header:'Durum', key:'status', width:12},
       ];
       productions.forEach(r=>ws2.addRow({
@@ -6365,39 +6530,135 @@ function renderDeleted(){
         package_name:r.package_name || r.package_name_snapshot || packageName(r.package_id) || '',
         route:[r.from_location||'', r.to_location||''].filter(Boolean).join(' → '),
         trip_count:r.trip_count || 0,
+        start_at:fmtDate(r.start_at || r.created_at || ''),
+        end_at:fmtDate(r.end_at || ''),
         status:r.status || ''
       }));
+      styleWorksheet(ws2);
 
-      const ws3 = wb.addWorksheet('Sefer-Yakit');
+      const ws3 = wb.addWorksheet('Sefer');
       ws3.columns = [
-        {header:'Tip', key:'type', width:12},
         {header:'Tarih', key:'shift_date', width:14},
         {header:'Vardiya', key:'shift_name', width:14},
-        {header:'Ekipman', key:'equipment_name', width:20},
-        {header:'Deger', key:'value', width:12},
+        {header:'Kamyon', key:'equipment_name', width:22},
+        {header:'Bağlı Ekskavatör', key:'linked_exc_name', width:22},
+        {header:'Paket', key:'package_name', width:18},
+        {header:'Rota', key:'route', width:28},
+        {header:'Sefer', key:'trip_count', width:10},
       ];
-      trips.forEach(r=>ws3.addRow({type:'Sefer', shift_date:r.shift_date, shift_name:r.shift_name, equipment_name:r.equipment_name || findEquipmentById(r.equipment_id)?.name || '', value:r.trip_count || 0}));
-      fuels.forEach(r=>ws3.addRow({type:'Yakıt', shift_date:r.shift_date, shift_name:r.shift_name, equipment_name:r.equipment_name || findEquipmentById(r.equipment_id)?.name || '', value:r.liters || 0}));
+      trips.forEach(r=>ws3.addRow({
+        shift_date:r.shift_date,
+        shift_name:r.shift_name,
+        equipment_name:r.equipment_name || findEquipmentById(r.equipment_id)?.name || '',
+        linked_exc_name:r.linked_excavator_name || findEquipmentById(r.linked_excavator_id)?.name || '',
+        package_name:r.package_name || packageName(r.package_id) || '',
+        route:[r.from_location||'',r.to_location||''].filter(Boolean).join(' → '),
+        trip_count:r.trip_count || 0
+      }));
+      styleWorksheet(ws3);
 
-      const ws4 = wb.addWorksheet('Ariza');
+      const ws4 = wb.addWorksheet('Yakıt');
       ws4.columns = [
         {header:'Tarih', key:'shift_date', width:14},
         {header:'Vardiya', key:'shift_name', width:14},
-        {header:'Ekipman', key:'equipment_name', width:20},
-        {header:'Sebep', key:'reason', width:24},
+        {header:'Ekipman', key:'equipment_name', width:22},
+        {header:'Yakıt (L)', key:'liters', width:12},
+        {header:'Kaynak/Not', key:'source', width:28},
+      ];
+      fuels.forEach(r=>ws4.addRow({
+        shift_date:r.shift_date, shift_name:r.shift_name,
+        equipment_name:r.equipment_name || findEquipmentById(r.equipment_id)?.name || '',
+        liters:r.liters || 0,
+        source:r.source || ''
+      }));
+      styleWorksheet(ws4);
+
+      const ws5 = wb.addWorksheet('Sayaç');
+      ws5.columns = [
+        {header:'Tarih', key:'shift_date', width:14},
+        {header:'Vardiya', key:'shift_name', width:14},
+        {header:'Ekipman', key:'equipment_name', width:22},
+        {header:'Sayaç Tipi', key:'meter_type', width:16},
+        {header:'Değer', key:'meter_value', width:12},
+      ];
+      meters.forEach(r=>ws5.addRow({
+        shift_date:r.shift_date, shift_name:r.shift_name,
+        equipment_name:r.equipment_name || findEquipmentById(r.equipment_id)?.name || '',
+        meter_type:r.meter_type || '',
+        meter_value:r.meter_value || 0
+      }));
+      styleWorksheet(ws5);
+
+      const ws6 = wb.addWorksheet('Arıza');
+      ws6.columns = [
+        {header:'Tarih', key:'shift_date', width:14},
+        {header:'Vardiya', key:'shift_name', width:14},
+        {header:'Ekipman', key:'equipment_name', width:22},
+        {header:'Sebep', key:'reason', width:28},
+        {header:'Başlangıç', key:'start_at', width:18},
+        {header:'Bitiş', key:'end_at', width:18},
         {header:'Durum', key:'status', width:12},
       ];
-      breakdowns.forEach(r=>ws4.addRow({
+      breakdowns.forEach(r=>ws6.addRow({
         shift_date:r.shift_date, shift_name:r.shift_name,
         equipment_name:r.equipment_name || r.equipment_name_snapshot || findEquipmentById(r.equipment_id)?.name || '',
         reason:r.reason || '',
+        start_at:fmtDate(r.start_at || r.created_at || ''),
+        end_at:fmtDate(r.end_at || ''),
         status:r.status || ''
       }));
+      styleWorksheet(ws6);
 
-      [ws1,ws2,ws3,ws4].forEach(ws=>{
-        ws.getRow(1).font = {bold:true};
-        ws.views = [{state:'frozen', ySplit:1}];
+      const ws7 = wb.addWorksheet('Kiralık');
+      ws7.columns = [
+        {header:'Tarih', key:'shift_date', width:14},
+        {header:'Vardiya', key:'shift_name', width:14},
+        {header:'Ekipman', key:'equipment_name', width:22},
+        {header:'Tedarikçi', key:'vendor_name', width:24},
+        {header:'Başlangıç', key:'start_at', width:18},
+        {header:'Bitiş', key:'end_at', width:18},
+        {header:'Durum', key:'status', width:12},
+      ];
+      rentals.forEach(r=>ws7.addRow({
+        shift_date:r.shift_date, shift_name:r.shift_name,
+        equipment_name:r.equipment_name || r.equipment_name_snapshot || findEquipmentById(r.equipment_id)?.name || '',
+        vendor_name:r.vendor_name || '',
+        start_at:fmtDate(r.start_at || r.created_at || ''),
+        end_at:fmtDate(r.end_at || ''),
+        status:r.status || ''
+      }));
+      styleWorksheet(ws7);
+
+      const equipmentMap = {};
+      summaryRows.forEach(()=>{});
+      productions.forEach(r=>{
+        const name = r.equipment_name || r.equipment_name_snapshot || findEquipmentById(r.equipment_id)?.name || '-';
+        if(!equipmentMap[name]) equipmentMap[name] = {equipment_name:name, trip:0, ton:0, count:0};
+        equipmentMap[name].trip += Number(r.trip_count || 0);
+        equipmentMap[name].ton += Number(r.trip_count || 0) * Number(packageFactorById?.(r.package_id) || 0 || 1);
+        equipmentMap[name].count += 1;
       });
+      const fuelMap = {};
+      fuels.forEach(r=>{
+        const name = r.equipment_name || findEquipmentById(r.equipment_id)?.name || '-';
+        fuelMap[name] = (fuelMap[name] || 0) + Number(r.liters || 0);
+      });
+      const ws8 = wb.addWorksheet('Ekipman Performansı');
+      ws8.columns = [
+        {header:'Ekipman', key:'equipment_name', width:24},
+        {header:'Toplam Sefer', key:'trip', width:14},
+        {header:'Tahmini Tonaj', key:'ton', width:16},
+        {header:'Toplam Yakıt (L)', key:'fuel', width:16},
+        {header:'Kayıt Sayısı', key:'count', width:12},
+      ];
+      Object.values(equipmentMap).sort((a,b)=>b.trip-a.trip).forEach(r=>ws8.addRow({
+        equipment_name:r.equipment_name,
+        trip:r.trip,
+        ton:Math.round(r.ton),
+        fuel:Math.round(fuelMap[r.equipment_name] || 0),
+        count:r.count
+      }));
+      styleWorksheet(ws8);
 
       const buf = await wb.xlsx.writeBuffer();
       downloadBlob(buf, `haftalik_rapor_${startDate}_${endDate}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -6417,31 +6678,151 @@ function renderDeleted(){
       const meters = await fetchRowsForRange(TABLES.METER_LOGS, date, date, shiftName);
       const breakdowns = await fetchRowsForRange(TABLES.BREAKDOWNS, date, date, shiftName);
       const rentals = await fetchRowsForRange(TABLES.RENTALS, date, date, shiftName);
+      const summaryRows = await fetchSummaryRange(date, date);
+      const summary = (summaryRows || []).find(r=>String(r.shift_name||'')===String(shiftName||'')) || {};
 
       const wb = new ExcelJS.Workbook();
-      const ws = wb.addWorksheet('Vardiya Raporu');
-      ws.columns = [
-        {header:'Kategori', key:'category', width:14},
-        {header:'Ekipman', key:'equipment', width:20},
-        {header:'Paket/Rota/Sebep', key:'detail', width:30},
-        {header:'Deger', key:'value', width:14},
-        {header:'Not', key:'note', width:24},
+      wb.creator = 'OpenAI';
+      wb.created = new Date();
+
+      const ws0 = wb.addWorksheet('Kapak');
+      ws0.columns = [{header:'Alan', key:'k', width:28},{header:'Değer', key:'v', width:38}];
+      [
+        ['Rapor Türü','Vardiya Operasyon Raporu'],
+        ['Tarih',date],
+        ['Vardiya',shiftName],
+        ['Toplam Sefer',Math.round(Number(summary.total_trip_count || trips.reduce((a,b)=>a+Number(b.trip_count||0),0)))],
+        ['Tahmini Tonaj',Math.round(Number(summary.estimated_tonnage || 0))],
+        ['Toplam Yakıt (L)',Math.round(Number(summary.total_fuel_liters || fuels.reduce((a,b)=>a+Number(b.liters||0),0)))],
+        ['Aktif Ekipman',Math.round(Number(summary.active_equipment_count || 0))],
+        ['Açık Arıza',breakdowns.filter(r=>!r.deleted_at && isOpenRow(r)).length]
+      ].forEach(([k,v])=>ws0.addRow({k,v}));
+      styleWorksheet(ws0);
+
+      const ws1 = wb.addWorksheet('Vardiya Özeti');
+      ws1.columns = [
+        {header:'Başlık', key:'k', width:28},
+        {header:'Değer', key:'v', width:22},
       ];
-      productions.forEach(r=>ws.addRow({category:'Üretim', equipment:r.equipment_name || r.equipment_name_snapshot || findEquipmentById(r.equipment_id)?.name || '', detail:[r.package_name || r.package_name_snapshot || packageName(r.package_id)||'', [r.from_location||'',r.to_location||''].filter(Boolean).join(' → ')].filter(Boolean).join(' | '), value:r.trip_count || 0, note:r.status || ''}));
-      trips.forEach(r=>ws.addRow({category:'Sefer', equipment:r.equipment_name || findEquipmentById(r.equipment_id)?.name || '', detail:[packageName(r.package_id)||'', [r.from_location||'',r.to_location||''].filter(Boolean).join(' → ')].filter(Boolean).join(' | '), value:r.trip_count || 0, note:''}));
-      fuels.forEach(r=>ws.addRow({category:'Yakıt', equipment:r.equipment_name || findEquipmentById(r.equipment_id)?.name || '', detail:'', value:r.liters || 0, note:r.source || ''}));
-      meters.forEach(r=>ws.addRow({category:'Sayaç', equipment:r.equipment_name || findEquipmentById(r.equipment_id)?.name || '', detail:r.meter_type || '', value:r.meter_value || 0, note:''}));
-      breakdowns.forEach(r=>ws.addRow({category:'Arıza', equipment:r.equipment_name || r.equipment_name_snapshot || findEquipmentById(r.equipment_id)?.name || '', detail:r.reason || '', value:'', note:r.status || ''}));
-      rentals.forEach(r=>ws.addRow({category:'Kiralık', equipment:r.equipment_name || r.equipment_name_snapshot || findEquipmentById(r.equipment_id)?.name || '', detail:r.vendor_name || '', value:'', note:r.status || ''}));
-      ws.getRow(1).font = {bold:true};
-      ws.views = [{state:'frozen', ySplit:1}];
+      [
+        ['Üretim Kaydı', productions.filter(r=>!r.deleted_at).length],
+        ['Sefer Kaydı', trips.filter(r=>!r.deleted_at).length],
+        ['Yakıt Kaydı', fuels.filter(r=>!r.deleted_at).length],
+        ['Sayaç Kaydı', meters.filter(r=>!r.deleted_at).length],
+        ['Arıza Kaydı', breakdowns.filter(r=>!r.deleted_at).length],
+        ['Kiralık Kaydı', rentals.filter(r=>!r.deleted_at).length],
+      ].forEach(([k,v])=>ws1.addRow({k,v}));
+      styleWorksheet(ws1);
+
+      const ws2 = wb.addWorksheet('Üretim');
+      ws2.columns = [
+        {header:'Ekipman', key:'equipment_name', width:24},
+        {header:'Paket', key:'package_name', width:18},
+        {header:'Rota', key:'route', width:28},
+        {header:'Sefer', key:'trip_count', width:10},
+        {header:'Başlangıç', key:'start_at', width:18},
+        {header:'Bitiş', key:'end_at', width:18},
+        {header:'Durum', key:'status', width:12},
+      ];
+      productions.forEach(r=>ws2.addRow({
+        equipment_name:r.equipment_name || r.equipment_name_snapshot || findEquipmentById(r.equipment_id)?.name || '',
+        package_name:r.package_name || r.package_name_snapshot || packageName(r.package_id) || '',
+        route:[r.from_location||'', r.to_location||''].filter(Boolean).join(' → '),
+        trip_count:r.trip_count || 0,
+        start_at:fmtDate(r.start_at || r.created_at || ''),
+        end_at:fmtDate(r.end_at || ''),
+        status:r.status || ''
+      }));
+      styleWorksheet(ws2);
+
+      const ws3 = wb.addWorksheet('Sefer');
+      ws3.columns = [
+        {header:'Kamyon', key:'equipment_name', width:22},
+        {header:'Bağlı Ekskavatör', key:'linked_exc_name', width:22},
+        {header:'Paket', key:'package_name', width:18},
+        {header:'Rota', key:'route', width:28},
+        {header:'Sefer', key:'trip_count', width:10},
+      ];
+      trips.forEach(r=>ws3.addRow({
+        equipment_name:r.equipment_name || findEquipmentById(r.equipment_id)?.name || '',
+        linked_exc_name:r.linked_excavator_name || findEquipmentById(r.linked_excavator_id)?.name || '',
+        package_name:r.package_name || packageName(r.package_id) || '',
+        route:[r.from_location||'',r.to_location||''].filter(Boolean).join(' → '),
+        trip_count:r.trip_count || 0
+      }));
+      styleWorksheet(ws3);
+
+      const ws4 = wb.addWorksheet('Yakıt');
+      ws4.columns = [
+        {header:'Ekipman', key:'equipment_name', width:22},
+        {header:'Yakıt (L)', key:'liters', width:12},
+        {header:'Kaynak/Not', key:'source', width:28},
+        {header:'Saat', key:'recorded_at', width:18},
+      ];
+      fuels.forEach(r=>ws4.addRow({
+        equipment_name:r.equipment_name || findEquipmentById(r.equipment_id)?.name || '',
+        liters:r.liters || 0,
+        source:r.source || '',
+        recorded_at:fmtDate(r.recorded_at || r.created_at || '')
+      }));
+      styleWorksheet(ws4);
+
+      const ws5 = wb.addWorksheet('Sayaç');
+      ws5.columns = [
+        {header:'Ekipman', key:'equipment_name', width:22},
+        {header:'Sayaç Tipi', key:'meter_type', width:16},
+        {header:'Değer', key:'meter_value', width:12},
+        {header:'Saat', key:'recorded_at', width:18},
+      ];
+      meters.forEach(r=>ws5.addRow({
+        equipment_name:r.equipment_name || findEquipmentById(r.equipment_id)?.name || '',
+        meter_type:r.meter_type || '',
+        meter_value:r.meter_value || 0,
+        recorded_at:fmtDate(r.recorded_at || r.created_at || '')
+      }));
+      styleWorksheet(ws5);
+
+      const ws6 = wb.addWorksheet('Arıza');
+      ws6.columns = [
+        {header:'Ekipman', key:'equipment_name', width:22},
+        {header:'Sebep', key:'reason', width:28},
+        {header:'Başlangıç', key:'start_at', width:18},
+        {header:'Bitiş', key:'end_at', width:18},
+        {header:'Durum', key:'status', width:12},
+      ];
+      breakdowns.forEach(r=>ws6.addRow({
+        equipment_name:r.equipment_name || r.equipment_name_snapshot || findEquipmentById(r.equipment_id)?.name || '',
+        reason:r.reason || '',
+        start_at:fmtDate(r.start_at || r.created_at || ''),
+        end_at:fmtDate(r.end_at || ''),
+        status:r.status || ''
+      }));
+      styleWorksheet(ws6);
+
+      const ws7 = wb.addWorksheet('Kiralık');
+      ws7.columns = [
+        {header:'Ekipman', key:'equipment_name', width:22},
+        {header:'Tedarikçi', key:'vendor_name', width:24},
+        {header:'Başlangıç', key:'start_at', width:18},
+        {header:'Bitiş', key:'end_at', width:18},
+        {header:'Durum', key:'status', width:12},
+      ];
+      rentals.forEach(r=>ws7.addRow({
+        equipment_name:r.equipment_name || r.equipment_name_snapshot || findEquipmentById(r.equipment_id)?.name || '',
+        vendor_name:r.vendor_name || '',
+        start_at:fmtDate(r.start_at || r.created_at || ''),
+        end_at:fmtDate(r.end_at || ''),
+        status:r.status || ''
+      }));
+      styleWorksheet(ws7);
+
       const buf = await wb.xlsx.writeBuffer();
       downloadBlob(buf, `vardiya_raporu_${shiftName}_${date}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     }catch(err){
       alert(err.message || err);
     }
   }
-  function downloadBlob(buffer, filename, mime){
+  function downloadBlob  function downloadBlob(buffer, filename, mime){
     const blob = new Blob([buffer], {type:mime});
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -6467,7 +6848,7 @@ function renderDeleted(){
         <div class="report-grid">
           <div class="report-card">
             <h3>Günlük PDF</h3>
-            <span class="muted">Seçilen tarih için vardiya özetlerini ve açık arızaları PDF olarak indirir.</span>
+            <span class="muted">Seçilen tarih için modern, yazdırılabilir günlük rapor açar. Tarayıcıdan PDF olarak kaydedebilirsiniz; Türkçe karakterler daha düzgün çıkar.</span>
             <input id="report_daily_date" type="date" value="${today}" />
             <div class="report-actions" style="margin-top:10px">
               <button onclick="exportDailyPdf()">Günlük PDF İndir</button>
