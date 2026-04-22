@@ -2334,7 +2334,7 @@
   function normalizePayloadForTable(table, payload){
     const dbTable = resolveDbTableName(table);
     const p = { ...(payload || {}) };
-    if(['production_logs','truck_trips','breakdowns','rentals','fuel_logs','meter_logs'].includes(dbTable)){
+    if(['production_logs','breakdowns','rentals','fuel_logs','meter_logs'].includes(dbTable)){
       if(Object.prototype.hasOwnProperty.call(p, 'equipment_name') && !Object.prototype.hasOwnProperty.call(p, 'equipment_name_snapshot')){
         p.equipment_name_snapshot = p.equipment_name;
       }
@@ -2348,6 +2348,14 @@
       if(Object.prototype.hasOwnProperty.call(p, 'linked_excavator_name') && !Object.prototype.hasOwnProperty.call(p, 'linked_excavator_name_snapshot')){
         p.linked_excavator_name_snapshot = p.linked_excavator_name;
       }
+      delete p.linked_excavator_name;
+    }
+    if(dbTable === 'truck_trips'){
+      delete p.equipment_name_snapshot;
+      delete p.package_name_snapshot;
+      delete p.linked_excavator_name_snapshot;
+      delete p.equipment_name;
+      delete p.package_name;
       delete p.linked_excavator_name;
     }
     if(['truck_trips','fuel_logs','meter_logs'].includes(dbTable)){
@@ -3309,7 +3317,6 @@
       const package_id = document.getElementById('m_package_id').value || null;
       const payload = {
         equipment_id,
-        equipment_name_snapshot: eq?.name || '',
         package_id,
         package_name_snapshot: packageName(package_id),
         from_location: document.getElementById('m_from_location').value.trim(),
@@ -3420,19 +3427,19 @@
         if(enteredTrips > 0){
           const tripPayload = {
             equipment_id: prod.equipment_id,
-            equipment_name_snapshot: prod.equipment_name || eq?.name || '',
             trip_count: enteredTrips,
             package_id: prod.package_id || null,
-            package_name_snapshot: prod.package_name || packageName(prod.package_id) || '',
             material_type: prod.material_type || packageMaterialTypeById(prod.package_id) || '',
             from_location: prod.from_location || '',
             to_location: prod.to_location || '',
             linked_excavator_id: prod.linked_excavator_id || null,
-            linked_excavator_name_snapshot: prod.linked_excavator_name || null,
             production_id: prod.id,
             shift_name: getShiftNameForRow(prod) || resolveShiftNameForDateTime(nowIso()) || '',
             created_at: nowIso()
           };
+          delete tripPayload.equipment_name_snapshot;
+          delete tripPayload.package_name_snapshot;
+          delete tripPayload.linked_excavator_name_snapshot;
           const tripRes = await insertWithOptionalColumns(TABLES.TRUCK_TRIPS, tripPayload, ['production_id','shift_name','material_type']);
           if(tripRes.error) throw tripRes.error;
           await updateWithOptionalColumns(TABLES.PRODUCTIONS, { trip_count: productionTripTotal(prod) + enteredTrips }, ['trip_count'], prod.id);
@@ -3582,6 +3589,9 @@
         created_by: state.user?.id || null,
         updated_by: state.user?.id || null
       };
+      delete payload.equipment_name_snapshot;
+      delete payload.package_name_snapshot;
+      delete payload.linked_excavator_name_snapshot;
       const res = await insertWithOptionalColumns(TABLES.TRUCK_TRIPS, payload, ['production_id','shift_name','material_type','shift_date','recorded_at']);
       if(res.error) throw res.error;
       const insertedRow = (res.data && res.data[0]) ? res.data[0] : { ...payload, id:`temp_trip_${Date.now()}` };
@@ -3844,12 +3854,9 @@
         const linkedEq = findEquipmentById(linked_excavator_id);
         payload = {
           equipment_id,
-          equipment_name_snapshot: eq?.name || '',
           package_id,
-          package_name_snapshot: packageName(package_id),
           material_type: packageMaterialTypeById(package_id),
           linked_excavator_id,
-          linked_excavator_name_snapshot: linkedEq?.name || null,
           trip_count: num(document.getElementById('m_edit_trip_count').value),
           from_location: document.getElementById('m_edit_from_location').value.trim(),
           to_location: document.getElementById('m_edit_to_location').value.trim(),
@@ -3901,6 +3908,11 @@
           start_at: document.getElementById('m_edit_start_at').value ? asLocalIsoString(document.getElementById('m_edit_start_at').value) : null,
           end_at: document.getElementById('m_edit_end_at').value ? asLocalIsoString(document.getElementById('m_edit_end_at').value) : null,
         };
+      }
+      if(table === 'truck_trips'){
+        delete payload.equipment_name_snapshot;
+        delete payload.package_name_snapshot;
+        delete payload.linked_excavator_name_snapshot;
       }
       const updateRes = table === 'truck_trips'
         ? await updateWithOptionalColumns(table, payload, ['production_id','shift_name','material_type','shift_date','recorded_at'], row.id)
