@@ -1565,8 +1565,29 @@
       channel: null,
       sessionKey: `${Date.now()}_${Math.random().toString(36).slice(2,10)}`,
       heartbeatTimer: null
-    }
+    },
+    realtimeChannels: []
   };
+
+  const TABLES = {
+    PRODUCTIONS: 'production_logs',
+    BREAKDOWNS: 'breakdowns',
+    RENTALS: 'rentals',
+    FUEL_LOGS: 'fuel_logs',
+    METER_LOGS: 'meter_logs',
+    TRUCK_TRIPS: 'truck_trips',
+    EQUIPMENTS: 'equipments',
+    PACKAGES: 'packages',
+    SHIFT_DEFINITIONS: 'shift_definitions',
+    APP_SETTINGS: 'app_settings',
+    DASHBOARD_SHIFT_SUMMARY: 'v_shift_summary',
+    DASHBOARD_EQUIPMENT_SHIFT_SUMMARY: 'v_equipment_shift_summary',
+    DASHBOARD_PRO_SHIFT_SUMMARY: 'v_dashboard_pro_shift_summary'
+  };
+
+  function resolveDbTableName(name){
+    return String(name || '') === 'productions' ? TABLES.PRODUCTIONS : String(name || '');
+  }
 
   const debugBox = document.getElementById('debugBox');
   const loginStatus = document.getElementById('loginStatus');
@@ -1856,6 +1877,38 @@
     }
   }
 
+  async function teardownRealtimeSubscriptions(){
+    try{
+      const sb = await initClient();
+      for(const ch of (state.realtimeChannels || [])){
+        try{ await sb.removeChannel(ch); }catch(e){}
+      }
+      state.realtimeChannels = [];
+    }catch(e){}
+  }
+
+  async function setupRealtimeSubscriptions(){
+    try{
+      const sb = await initClient();
+      await teardownRealtimeSubscriptions();
+      const watched = [TABLES.PRODUCTIONS, TABLES.BREAKDOWNS, TABLES.RENTALS, TABLES.TRUCK_TRIPS, TABLES.FUEL_LOGS, TABLES.METER_LOGS];
+      watched.forEach((tableName)=>{
+        const channel = sb.channel(`rt-${tableName}-${Date.now()}-${Math.random().toString(36).slice(2,7)}`)
+          .on('postgres_changes', { event: '*', schema: 'public', table: tableName }, async ()=>{
+            try{
+              await refreshData();
+            }catch(err){
+              console.error('realtime refresh error', tableName, err);
+            }
+          })
+          .subscribe();
+        state.realtimeChannels.push(channel);
+      });
+    }catch(err){
+      console.error('setupRealtimeSubscriptions error', err);
+    }
+  }
+
   async function setupOnlinePresence(){
     try{
       const sb = await initClient();
@@ -2011,13 +2064,14 @@
       }
     });
     await setupOnlinePresence();
+    await setupRealtimeSubscriptions();
     updateOnlineUsersCard();
   }
 
   async function safeSelect(table){
     const sb = await initClient();
     try{
-      const res = await withTimeout(sb.from(table).select('*'), 10000, table);
+      const res = await withTimeout(sb.from(resolveDbTableName(table)).select('*'), 10000, table);
       return { data: res.data || [], error: res.error || null };
     }catch(err){
       return { data: [], error: { message: String(err.message || err) } };
@@ -2154,7 +2208,7 @@
           end_time: endedAt,
           updated_at: nowIso()
         };
-        const res = await updateWithOptionalColumns('productions', payload, ['end_at', 'end_time', 'updated_at'], row.id);
+        const res = await updateWithOptionalColumns(TABLES.PRODUCTIONS, payload, ['end_at', 'end_time', 'updated_at'], row.id);
         if(res?.error){
           console.error('production autoclose update error', { id: row.id, error: res.error, bucket, endedAt });
           continue;
@@ -2172,19 +2226,25 @@
   }
 
   async function loadAllSafe(){
-    const tables = ['equipments','packages','productions','breakdowns','rentals','fuel_logs','meter_logs','truck_trips'];
+    const tables = [TABLES.EQUIPMENTS, TABLES.PACKAGES, TABLES.PRODUCTIONS, TABLES.BREAKDOWNS, TABLES.RENTALS, TABLES.FUEL_LOGS, TABLES.METER_LOGS, TABLES.TRUCK_TRIPS];
     const results = {};
     for(const t of tables){
       results[t] = await safeSelect(t);
     }
-    state.equipments = (results.equipments.data || []).map(e=>({ ...e, truck_model_id: e.truck_model_id || (state.equipmentModelMap || {})[String(e.id)] || '' }));
-    state.packages = (results.packages.data || []).map(p=>({ ...p, tonnage_factor: Number.isFinite(Number(p.tonnage_factor)) ? Number(p.tonnage_factor) : Number((state.packageTonnageFactors || {})[String(p.id)] || 1) }));
-    state.productions = results.productions.data;
-    state.breakdowns = results.breakdowns.data;
-    state.rentals = results.rentals.data;
-    state.fuel_logs = results.fuel_logs.data;
-    state.meter_logs = results.meter_logs.data;
-    state.truck_trips = results.truck_trips.data;
+    state.equipments = (results[TABLES.EQUIPMENTS]?.data || []).map(e=>({ ...e, truck_model_id: e.truck_model_id || (state.equipmentModelMap || {})[String(e.id)] || '' }));
+    state.packages = (results[TABLES.PACKAGES]?.data || []).map(p=>({ ...p, tonnage_factor: Number.isFinite(Number(p.tonnage_factor)) ? Number(p.tonnage_factor) : Number((state.packageTonnageFactors || {})[String(p.id)] || 1) }));
+    state.productions = (results[TABLES.PRODUCTIONS]?.data || []).map(r=>({
+      ...r,
+      equipment_name: r.equipment_name || r.equipment_name_snapshot || '',
+      package_name: r.package_name || r.package_name_snapshot || '',
+      linked_excavator_name: r.linked_excavator_name || r.linked_excavator_name_snapshot || '',
+      material_type: r.material_type || packageMaterialTypeById(r.package_id) || ''
+    }));
+    state.breakdowns = (results[TABLES.BREAKDOWNS]?.data || []).map(r=>({ ...r, equipment_name: r.equipment_name || r.equipment_name_snapshot || '' }));
+    state.rentals = (results[TABLES.RENTALS]?.data || []).map(r=>({ ...r, equipment_name: r.equipment_name || r.equipment_name_snapshot || '' }));
+    state.fuel_logs = (results[TABLES.FUEL_LOGS]?.data || []).map(r=>({ ...r, created_at: r.created_at || r.recorded_at || nowIso() }));
+    state.meter_logs = (results[TABLES.METER_LOGS]?.data || []).map(r=>({ ...r, created_at: r.created_at || r.recorded_at || nowIso() }));
+    state.truck_trips = (results[TABLES.TRUCK_TRIPS]?.data || []).map(r=>({ ...r, created_at: r.created_at || r.recorded_at || nowIso() }));
 
     if(!state._autoClosingPreviousShift){
       state._autoClosingPreviousShift = true;
@@ -2193,7 +2253,7 @@
       if(changed) return await loadAllSafe();
     }
 
-    const bad = Object.entries(results).filter(([_,v])=>v.error).map(([k,v])=>({table:k,error:v.error.message}));
+    const bad = Object.entries(results).filter(([_,v])=>v?.error).map(([k,v])=>({table:k,error:v.error.message}));
     document.getElementById('syncStatus').textContent = bad.length ? 'Kısmi yükleme' : 'Tüm tablolar yüklendi';
     document.getElementById('syncStatus').className = bad.length ? 'err' : 'ok';
     if(bad.length) log({stage:'load-partial', bad});
@@ -2273,11 +2333,11 @@
   }
   async function insertWithOptionalColumns(table, payload, optionalCols){
     async function tryInsert(body){
-      let res = await state.sb.from(table).insert([body]).select();
+      let res = await state.sb.from(resolveDbTableName(table)).insert([body]).select();
       if(!res.error) return { ...res, inserted: body };
       const msg = String(res.error?.message || '').toLowerCase();
       if(msg.includes('permission') || msg.includes('select') || msg.includes('returning') || msg.includes('policy')){
-        const bare = await state.sb.from(table).insert([body]);
+        const bare = await state.sb.from(resolveDbTableName(table)).insert([body]);
         if(!bare.error) return { data:[body], error:null, inserted: body };
       }
       return { ...res, inserted: body };
@@ -2296,12 +2356,12 @@
     return res;
   }
   async function updateWithOptionalColumns(table, payload, optionalCols, id){
-    let res = await state.sb.from(table).update(payload).eq('id', id);
+    let res = await state.sb.from(resolveDbTableName(table)).update(payload).eq('id', id);
     if(!res.error) return res;
     if(optionalColumnError(res.error, optionalCols)){
       const cloned = {...payload};
       (optionalCols || []).forEach(k=>delete cloned[k]);
-      res = await state.sb.from(table).update(cloned).eq('id', id);
+      res = await state.sb.from(resolveDbTableName(table)).update(cloned).eq('id', id);
     }
     return res;
   }
@@ -2423,7 +2483,7 @@
           || (currentStart === 0 && (previousLatestValue === null || previousLatestValue === undefined));
         if(!shouldUpdate) continue;
         const payload = { start_meter_value: closingValue, updated_at: nowIso() };
-        const res = await updateWithOptionalColumns('productions', payload, [], row.id);
+        const res = await updateWithOptionalColumns(TABLES.PRODUCTIONS, payload, [], row.id);
         if(res.error) throw res.error;
         row.start_meter_value = closingValue;
         row.updated_at = payload.updated_at;
@@ -3216,17 +3276,21 @@
       const package_id = document.getElementById('m_package_id').value || null;
       const payload = {
         equipment_id,
+        equipment_name_snapshot: eq?.name || '',
         equipment_name: eq?.name || '',
         package_id,
+        package_name_snapshot: packageName(package_id),
         package_name: packageName(package_id),
         material_type: packageMaterialTypeById(package_id),
         from_location: document.getElementById('m_from_location').value.trim(),
         to_location: document.getElementById('m_to_location').value.trim(),
         start_at: nowIso(),
+        shift_name: resolveShiftNameForDateTime(nowIso()) || 'Tanımsız',
+        shift_date: todayStr(),
         start_meter_type: 'saat',
         start_meter_value: document.getElementById('m_start_meter').value === '' ? (preferredStartMeterForProduction(equipment_id, nowIso()).value ?? 0) : num(document.getElementById('m_start_meter').value)
       };
-      const { error } = await state.sb.from('productions').insert(payload);
+      const { error } = await state.sb.from(TABLES.PRODUCTIONS).insert(payload);
       if(error) throw error;
       closeModal();
       await refreshData();
@@ -3247,6 +3311,7 @@
       const package_id = document.getElementById('m_package_id').value || linkedProd?.package_id || null;
       const payload = {
         equipment_id,
+        equipment_name_snapshot: eq?.name || '',
         equipment_name: eq?.name || '',
         package_id,
         package_name: packageName(package_id) || linkedProd?.package_name || '',
@@ -3254,12 +3319,15 @@
         from_location: document.getElementById('m_from_location').value.trim() || linkedProd?.from_location || '',
         to_location: document.getElementById('m_to_location').value.trim() || linkedProd?.to_location || '',
         start_at: nowIso(),
+        shift_name: resolveShiftNameForDateTime(nowIso()) || 'Tanımsız',
+        shift_date: todayStr(),
         start_meter_type: 'km',
         start_meter_value: document.getElementById('m_start_meter').value === '' ? (preferredStartMeterForProduction(equipment_id, nowIso()).value ?? 0) : num(document.getElementById('m_start_meter').value),
         linked_excavator_id: linkedProd?.equipment_id || null,
+        linked_excavator_name_snapshot: linkedProd?.equipment_name || null,
         linked_excavator_name: linkedProd?.equipment_name || null
       };
-      const { error } = await state.sb.from('productions').insert(payload);
+      const { error } = await state.sb.from(TABLES.PRODUCTIONS).insert(payload);
       if(error) throw error;
       closeModal();
       await refreshData();
@@ -3282,17 +3350,20 @@
       const startMeter = inputVal === '' ? (latest ?? 0) : num(inputVal);
       const payload = {
         equipment_id,
+        equipment_name_snapshot: eq?.name || '',
         equipment_name: eq?.name || '',
         from_location: document.getElementById('m_from_location').value.trim(),
         to_location: '',
         start_at: nowIso(),
+        shift_name: resolveShiftNameForDateTime(nowIso()) || 'Tanımsız',
+        shift_date: todayStr(),
         start_meter_type: unit,
         start_meter_value: startMeter
       };
-      let { error } = await state.sb.from('productions').insert(payload);
+      let { error } = await state.sb.from(TABLES.PRODUCTIONS).insert(payload);
       if(error && /küçük olamaz|smaller|less than/i.test(String(error.message || ''))){
         payload.start_meter_value = latest ?? startMeter;
-        const retry = await state.sb.from('productions').insert(payload);
+        const retry = await state.sb.from(TABLES.PRODUCTIONS).insert(payload);
         error = retry.error;
       }
       if(error) throw error;
@@ -3316,7 +3387,7 @@
         end_meter_type: isTruck ? 'km' : 'saat',
         end_meter_value: num(document.getElementById('m_end_meter').value)
       };
-      let { error } = await state.sb.from('productions').update(payload).eq('id', prod.id);
+      let { error } = await state.sb.from(TABLES.PRODUCTIONS).update(payload).eq('id', prod.id);
       if(error) throw error;
       if(isTruck){
         const enteredTrips = num(document.getElementById('m_trip_count').value);
@@ -3336,9 +3407,9 @@
             shift_name: getShiftNameForRow(prod) || resolveShiftNameForDateTime(nowIso()) || '',
             created_at: nowIso()
           };
-          const tripRes = await insertWithOptionalColumns('truck_trips', tripPayload, ['production_id','shift_name','material_type']);
+          const tripRes = await insertWithOptionalColumns(TABLES.TRUCK_TRIPS, tripPayload, ['production_id','shift_name','material_type']);
           if(tripRes.error) throw tripRes.error;
-          await updateWithOptionalColumns('productions', { trip_count: productionTripTotal(prod) + enteredTrips }, ['trip_count'], prod.id);
+          await updateWithOptionalColumns(TABLES.PRODUCTIONS, { trip_count: productionTripTotal(prod) + enteredTrips }, ['trip_count'], prod.id);
         }
       }
       const prodShift = resolveShiftBucketForRow({ ...prod, end_at: endAtIso, end_time: endAtIso, updated_at: endAtIso }) || resolveShiftBucketForRow(prod);
@@ -3362,7 +3433,7 @@
       const start_meter_value = num(document.getElementById('m_break_meter_value').value);
       const openProd = currentOpenProductionForEquipment(equipment_id);
       if(openProd){
-        const prodRes = await state.sb.from('productions').update({
+        const prodRes = await state.sb.from(TABLES.PRODUCTIONS).update({
           end_at: nowIso(),
           end_meter_type: start_meter_type,
           end_meter_value: start_meter_value
@@ -3371,13 +3442,16 @@
       }
       const payload = {
         equipment_id,
+        equipment_name_snapshot: eq?.name || '',
         equipment_name: eq?.name || '',
         reason: document.getElementById('m_reason').value.trim(),
         start_at: nowIso(),
+        shift_name: resolveShiftNameForDateTime(nowIso()) || 'Tanımsız',
+        shift_date: todayStr(),
         start_meter_type,
         start_meter_value
       };
-      const brRes = await state.sb.from('breakdowns').insert(payload);
+      const brRes = await state.sb.from(TABLES.BREAKDOWNS).insert(payload);
       if(brRes.error) throw brRes.error;
       closeModal();
       await refreshData();
@@ -3396,11 +3470,11 @@
         end_meter_type: unit,
         end_meter_value: num(document.getElementById('m_break_end_value').value)
       };
-      let res = await state.sb.from('breakdowns').update(basePayload).eq('id', row.id);
+      let res = await state.sb.from(TABLES.BREAKDOWNS).update(basePayload).eq('id', row.id);
       if(res.error) throw res.error;
       const note = document.getElementById('m_solution_note').value.trim();
       if(note){
-        const noteRes = await state.sb.from('breakdowns').update({ solution_note: note }).eq('id', row.id);
+        const noteRes = await state.sb.from(TABLES.BREAKDOWNS).update({ solution_note: note }).eq('id', row.id);
         if(noteRes.error && !String(noteRes.error.message||'').toLowerCase().includes('solution_note')) throw noteRes.error;
       }
       closeModal();
@@ -3423,9 +3497,11 @@
         equipment_id,
         equipment_name: eq?.name || '-',
         location,
-        start_at: nowIso()
+        start_at: nowIso(),
+        shift_name: resolveShiftNameForDateTime(nowIso()) || 'Tanımsız',
+        shift_date: todayStr()
       };
-      const { error } = await state.sb.from('rentals').insert(payload);
+      const { error } = await state.sb.from(TABLES.RENTALS).insert(payload);
       if(error) throw error;
       closeModal();
       await refreshData();
@@ -3438,7 +3514,7 @@
 
     try{
       const row = state.modal.data;
-      const { error } = await state.sb.from('rentals').update({ end_at: nowIso() }).eq('id', row.id);
+      const { error } = await state.sb.from(TABLES.RENTALS).update({ end_at: nowIso() }).eq('id', row.id);
       if(error) throw error;
       closeModal();
       await refreshData();
@@ -3465,6 +3541,7 @@
       if(tripCount <= 0) throw new Error('Sefer sayısı 0’dan büyük olmalı');
       const payload = {
         equipment_id,
+        equipment_name_snapshot: eq?.name || '',
         equipment_name: eq?.name || '',
         trip_count: tripCount,
         package_id,
@@ -3478,15 +3555,18 @@
         shift_name: selectedShift,
         shift_date: logisticsExplicitShiftDate({ production_id: matchedProduction?.id || production_id || null, shift_name: selectedShift, created_at: eventAt, logistics_shift_date: tripDate }),
         logistics_shift_date: tripDate,
-        created_at: eventAt
+        recorded_at: eventAt,
+        created_at: eventAt,
+        created_by: state.user?.id || null,
+        updated_by: state.user?.id || null
       };
-      const res = await insertWithOptionalColumns('truck_trips', payload, ['production_id','shift_name','material_type','shift_date','logistics_shift_date']);
+      const res = await insertWithOptionalColumns(TABLES.TRUCK_TRIPS, payload, ['production_id','shift_name','material_type','shift_date','logistics_shift_date']);
       if(res.error) throw res.error;
       const insertedRow = (res.data && res.data[0]) ? res.data[0] : { ...payload, id:`temp_trip_${Date.now()}` };
       state.truck_trips = [insertedRow, ...state.truck_trips.filter(r=>String(r.id)!==String(insertedRow.id))];
       if(matchedProduction?.id){
         const nextTripTotal = productionTripTotal(matchedProduction) + (Number(payload.trip_count || 0) || 0);
-        await updateWithOptionalColumns('productions', { trip_count: nextTripTotal }, ['trip_count'], matchedProduction.id);
+        await updateWithOptionalColumns(TABLES.PRODUCTIONS, { trip_count: nextTripTotal }, ['trip_count'], matchedProduction.id);
       }
       closeModal();
       await refreshData();
@@ -3513,6 +3593,7 @@
       if(liters <= 0) throw new Error('Litre 0’dan büyük olmalı');
       const payload = {
         equipment_id,
+        equipment_name_snapshot: eq?.name || '',
         equipment_name: eq?.name || '',
         liters,
         meter_type: autoMeterTypeForEquipment(document.getElementById('m_fuel_equipment_id').value),
@@ -3521,9 +3602,12 @@
         shift_name: selectedShift,
         shift_date: logisticsExplicitShiftDate({ production_id: matchedProduction?.id || production_id || null, shift_name: selectedShift, created_at: eventAt, logistics_shift_date: fuelDate }),
         logistics_shift_date: fuelDate,
-        created_at: eventAt
+        recorded_at: eventAt,
+        created_at: eventAt,
+        created_by: state.user?.id || null,
+        updated_by: state.user?.id || null
       };
-      const res = await insertWithOptionalColumns('fuel_logs', payload, ['production_id','shift_name','shift_date','logistics_shift_date']);
+      const res = await insertWithOptionalColumns(TABLES.FUEL_LOGS, payload, ['production_id','shift_name','shift_date','logistics_shift_date']);
       if(res.error) throw res.error;
       const insertedRow = (res.data && res.data[0]) ? res.data[0] : { ...payload, id:`temp_fuel_${Date.now()}` };
       state.fuel_logs = [insertedRow, ...state.fuel_logs.filter(r=>String(r.id)!==String(insertedRow.id))];
@@ -3550,7 +3634,7 @@
         touched = true;
       }
       if(!touched) return { updated:false };
-      const res = await updateWithOptionalColumns('productions', payload, [], productionId);
+      const res = await updateWithOptionalColumns(TABLES.PRODUCTIONS, payload, [], productionId);
       if(res.error) throw res.error;
       if(Object.prototype.hasOwnProperty.call(payload, 'start_meter_value')) row.start_meter_value = payload.start_meter_value;
       if(Object.prototype.hasOwnProperty.call(payload, 'end_meter_value')) row.end_meter_value = payload.end_meter_value;
@@ -3599,6 +3683,7 @@
       if(!Number.isFinite(Number(endVal))) throw new Error('Sayaç değeri giriniz');
       const payload = {
         equipment_id,
+        equipment_name_snapshot: eq?.name || '',
         equipment_name: eq?.name || '',
         meter_type: autoMeterTypeForEquipment(document.getElementById('m_meter_equipment_id').value),
         meter_value: endVal,
@@ -3609,9 +3694,12 @@
         source: 'manual_correction',
         shift_date: logisticsExplicitShiftDate({ production_id: matchedProduction?.id || production_id || null, shift_name: selectedShift, created_at: eventAt, logistics_shift_date: meterDate }),
         logistics_shift_date: meterDate,
-        created_at: eventAt
+        recorded_at: eventAt,
+        created_at: eventAt,
+        created_by: state.user?.id || null,
+        updated_by: state.user?.id || null
       };
-      const res = await insertWithOptionalColumns('meter_logs', payload, ['source','start_meter_value','end_meter_value','shift_name','production_id','shift_date','logistics_shift_date']);
+      const res = await insertWithOptionalColumns(TABLES.METER_LOGS, payload, ['source','start_meter_value','end_meter_value','shift_name','production_id','shift_date','logistics_shift_date']);
       if(res.error) throw res.error;
       const insertedRow = (res.data && res.data[0]) ? res.data[0] : { ...payload, id:`temp_meter_${Date.now()}` };
       state.meter_logs = [insertedRow, ...state.meter_logs.filter(r=>String(r.id)!==String(insertedRow.id))];
@@ -3632,7 +3720,7 @@
     try{
       const d = state.modal.data;
       const payload = { deleted_at: nowIso(), deleted_by: state.user?.id || null };
-      const { error } = await state.sb.from(d.table).update(payload).eq('id', d.id);
+      const { error } = await state.sb.from(resolveDbTableName(d.table)).update(payload).eq('id', d.id);
       if(error) throw error;
       closeModal();
       await refreshData();
@@ -3642,7 +3730,7 @@
 
   async function restoreDeleted(table, id){
     try{
-      const { error } = await state.sb.from(table).update({ deleted_at:null, deleted_by:null }).eq('id', id);
+      const { error } = await state.sb.from(resolveDbTableName(table)).update({ deleted_at:null, deleted_by:null }).eq('id', id);
       if(error) throw error;
       await refreshData();
       showToast('Kayıt geri getirildi');
@@ -3655,9 +3743,9 @@
 
     try{
       if(!confirm('Tüm silinen kayıtlar kalıcı olarak silinecek. Emin misiniz?')) return;
-      const tables = ['productions','breakdowns','truck_trips','fuel_logs','meter_logs','rentals','equipments','packages'];
+      const tables = [TABLES.PRODUCTIONS, TABLES.BREAKDOWNS, TABLES.TRUCK_TRIPS, TABLES.FUEL_LOGS, TABLES.METER_LOGS, TABLES.RENTALS, TABLES.EQUIPMENTS, TABLES.PACKAGES];
       for(const table of tables){
-        const { error } = await state.sb.from(table).delete().not('deleted_at','is',null);
+        const { error } = await state.sb.from(resolveDbTableName(table)).delete().not('deleted_at','is',null);
         if(error) throw error;
       }
       await refreshData();
@@ -3671,9 +3759,9 @@
     try{
       if(!confirm('30 günden eski silinen kayıtlar kalıcı olarak silinecek. Emin misiniz?')) return;
       const cutoff = new Date(Date.now() - 30*24*60*60*1000).toISOString();
-      const tables = ['productions','breakdowns','truck_trips','fuel_logs','meter_logs','rentals','equipments','packages'];
+      const tables = [TABLES.PRODUCTIONS, TABLES.BREAKDOWNS, TABLES.TRUCK_TRIPS, TABLES.FUEL_LOGS, TABLES.METER_LOGS, TABLES.RENTALS, TABLES.EQUIPMENTS, TABLES.PACKAGES];
       for(const table of tables){
-        const { error } = await state.sb.from(table).delete().not('deleted_at','is',null).lt('deleted_at', cutoff);
+        const { error } = await state.sb.from(resolveDbTableName(table)).delete().not('deleted_at','is',null).lt('deleted_at', cutoff);
         if(error) throw error;
       }
       await refreshData();
@@ -3701,11 +3789,13 @@
         ensureNonNegativeMeterWindow(start_meter_value ?? 0, end_meter_value ?? start_meter_value ?? 0, autoMeterTypeForEquipment(equipment_id), 'Üretim');
         payload = {
           equipment_id,
-          equipment_name: eq?.name || '',
+          equipment_name_snapshot: eq?.name || '',
+        equipment_name: eq?.name || '',
           start_meter_type: row.start_meter_type || autoMeterTypeForEquipment(equipment_id),
           end_meter_type: end_meter_value === null || end_meter_value === undefined || end_meter_value === '' ? row.end_meter_type : (row.end_meter_type || autoMeterTypeForEquipment(equipment_id)),
           package_id,
-          package_name: packageName(package_id),
+          package_name_snapshot: packageName(package_id),
+        package_name: packageName(package_id),
           material_type: packageMaterialTypeById(package_id),
           from_location: document.getElementById('m_edit_from_location').value.trim(),
           to_location: document.getElementById('m_edit_to_location').value.trim(),
@@ -3722,7 +3812,8 @@
         const unit = row.start_meter_type || autoMeterTypeForEquipment(equipment_id);
         payload = {
           equipment_id,
-          equipment_name: eq?.name || '',
+          equipment_name_snapshot: eq?.name || '',
+        equipment_name: eq?.name || '',
           reason: document.getElementById('m_edit_reason').value.trim(),
           start_at: document.getElementById('m_edit_start_at').value ? asLocalIsoString(document.getElementById('m_edit_start_at').value) : null,
           end_at: document.getElementById('m_edit_end_at').value ? asLocalIsoString(document.getElementById('m_edit_end_at').value) : null,
@@ -3739,9 +3830,11 @@
         const linkedEq = findEquipmentById(linked_excavator_id);
         payload = {
           equipment_id,
-          equipment_name: eq?.name || '',
+          equipment_name_snapshot: eq?.name || '',
+        equipment_name: eq?.name || '',
           package_id,
-          package_name: packageName(package_id),
+          package_name_snapshot: packageName(package_id),
+        package_name: packageName(package_id),
           material_type: packageMaterialTypeById(package_id),
           linked_excavator_id,
           linked_excavator_name: linkedEq?.name || null,
@@ -3757,7 +3850,8 @@
         ensureMeterNotBelowLatest(equipment_id, meter_value, { key:`fuel_logs:${row.id}` });
         payload = {
           equipment_id,
-          equipment_name: eq?.name || '',
+          equipment_name_snapshot: eq?.name || '',
+        equipment_name: eq?.name || '',
           meter_type: autoMeterTypeForEquipment(equipment_id),
           liters: num(document.getElementById('m_edit_liters').value),
           meter_value,
@@ -3775,7 +3869,8 @@
         if(Number.isFinite(Number(latestEnd))) ensureMeterNotBelowLatest(equipment_id, latestEnd, { key:`meter_logs:${row.id}` });
         payload = {
           equipment_id,
-          equipment_name: eq?.name || '',
+          equipment_name_snapshot: eq?.name || '',
+        equipment_name: eq?.name || '',
           meter_type: autoMeterTypeForEquipment(equipment_id),
           start_meter_value,
           end_meter_value,
@@ -3791,7 +3886,8 @@
         const eq = findEquipmentById(equipment_id);
         payload = {
           equipment_id,
-          equipment_name: eq?.name || '',
+          equipment_name_snapshot: eq?.name || '',
+        equipment_name: eq?.name || '',
           location: document.getElementById('m_edit_location').value.trim(),
           start_at: document.getElementById('m_edit_start_at').value ? asLocalIsoString(document.getElementById('m_edit_start_at').value) : null,
           end_at: document.getElementById('m_edit_end_at').value ? asLocalIsoString(document.getElementById('m_edit_end_at').value) : null,
@@ -3801,7 +3897,7 @@
         ? await updateWithOptionalColumns(table, payload, ['production_id','shift_name','material_type'], row.id)
         : table === 'meter_logs'
           ? await updateWithOptionalColumns(table, payload, ['production_id','shift_name','shift_date','logistics_shift_date','start_meter_value','end_meter_value'], row.id)
-          : await state.sb.from(table).update(payload).eq('id', row.id);
+          : await state.sb.from(resolveDbTableName(table)).update(payload).eq('id', row.id);
       if(updateRes.error) throw updateRes.error;
       if(table === 'truck_trips' && row.production_id){
         const relatedProd = state.productions.find(p=>String(p.id) === String(row.production_id));
@@ -3809,7 +3905,7 @@
           const currentTotal = productionTripTotal(relatedProd);
           const previousCount = Number(row.trip_count || 0) || 0;
           const nextCount = Number(payload.trip_count || 0) || 0;
-          await updateWithOptionalColumns('productions', { trip_count: Math.max(0, currentTotal - previousCount + nextCount) }, ['trip_count'], row.production_id);
+          await updateWithOptionalColumns(TABLES.PRODUCTIONS, { trip_count: Math.max(0, currentTotal - previousCount + nextCount) }, ['trip_count'], row.production_id);
         }
       }
       if(table === 'meter_logs'){
@@ -3831,7 +3927,7 @@
                 to_location: payload.to_location,
                 linked_excavator_name: payload.equipment_name || row.equipment_name || null
               };
-              const linkedRes = await state.sb.from('productions').update(truckPayload).eq('id', linkedId);
+              const linkedRes = await state.sb.from(TABLES.PRODUCTIONS).update(truckPayload).eq('id', linkedId);
               if(linkedRes.error) throw linkedRes.error;
             }
           }
@@ -4422,11 +4518,20 @@
   async function loadDashboardProSummaryRows(){
     try{
       if(!state?.sb) return [];
-      const { data, error } = await state.sb
-        .from('v_dashboard_pro_shift_summary')
+      let { data, error } = await state.sb
+        .from(TABLES.DASHBOARD_PRO_SHIFT_SUMMARY)
         .select('*')
         .order('shift_date', { ascending: false })
         .limit(40);
+      if(error){
+        const fallback = await state.sb
+          .from(TABLES.DASHBOARD_SHIFT_SUMMARY)
+          .select('*')
+          .order('shift_date', { ascending: false })
+          .limit(40);
+        data = fallback.data;
+        error = fallback.error;
+      }
       if(error) return [];
       return Array.isArray(data) ? data : [];
     }catch(e){
@@ -5227,7 +5332,7 @@
     if(!confirmed) return;
     const ids = rows.map(r=>r.id).filter(Boolean);
     if(!ids.length) return;
-    await state.sb.from(tableName).update({ deleted_at:new Date().toISOString(), deleted_by: state.user?.id || null }).in('id', ids);
+    await state.sb.from(resolveDbTableName(tableName)).update({ deleted_at:new Date().toISOString(), deleted_by: state.user?.id || null }).in('id', ids);
     await refreshData();
     renderRecords();
   }
@@ -5796,7 +5901,7 @@ function renderDeleted(){
   }
 
   async function refreshData(){ await loadAllSafe(); renderAll(); }
-  async function logout(){ try{ await teardownOnlinePresence(); const sb = await initClient(); await sb.auth.signOut(); } catch(e){} location.reload(); }
+  async function logout(){ try{ await teardownRealtimeSubscriptions(); await teardownOnlinePresence(); const sb = await initClient(); await sb.auth.signOut(); } catch(e){} location.reload(); }
 
   document.addEventListener('click', async (e)=>{
     const closeBtn = e.target.closest('[data-close-modal]');
@@ -5880,7 +5985,7 @@ function renderDeleted(){
   }, 60000);
   document.getElementById('logoutBtn').addEventListener('click', logout);
 
-  window.addEventListener('beforeunload', ()=>{ try{ teardownOnlinePresence(); }catch(e){} });
+  window.addEventListener('beforeunload', ()=>{ try{ teardownRealtimeSubscriptions(); teardownOnlinePresence(); }catch(e){} });
   document.addEventListener('visibilitychange', ()=>{
     if(document.visibilityState === 'visible' && state.user){
       try{ updateOnlineUsersCard(); if(state.presence.channel) state.presence.channel.track(getPresencePayload()); }catch(e){}
