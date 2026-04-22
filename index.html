@@ -163,6 +163,44 @@
       .modal-box{padding:16px}
       table{min-width:760px}
     }
+  
+    .pro-hero{background:linear-gradient(135deg,#0f172a 0%,#1d4ed8 55%,#38bdf8 100%);color:#fff;border:none;box-shadow:0 18px 40px rgba(15,23,42,.22)}
+    .pro-hero .muted{color:rgba(255,255,255,.82)}
+    .pro-stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-top:16px}
+    .pro-stat-card{position:relative;overflow:hidden;border-radius:22px;padding:18px;border:1px solid #dbeafe;background:linear-gradient(180deg,#ffffff 0%,#f8fbff 100%);box-shadow:0 12px 28px rgba(15,23,42,.08)}
+    .pro-stat-card::after{content:'';position:absolute;right:-18px;top:-18px;width:74px;height:74px;border-radius:50%;background:rgba(37,99,235,.08)}
+    .pro-stat-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+    .pro-stat-title{font-size:12px;font-weight:800;color:#64748b;letter-spacing:.35px;text-transform:uppercase}
+    .pro-stat-chip{font-size:11px;font-weight:900;padding:5px 8px;border-radius:999px;background:#eff6ff;color:#2563eb;border:1px solid #bfdbfe}
+    .pro-stat-value{font-size:31px;font-weight:900;color:#0f172a;margin-top:10px;line-height:1}
+    .pro-stat-sub{margin-top:10px;font-size:12px;color:#475569;line-height:1.45}
+    .pro-alert-card{padding:14px 15px;border-radius:18px;border:1px solid #e2e8f0;background:linear-gradient(180deg,#fff 0%,#f8fafc 100%);box-shadow:0 8px 18px rgba(15,23,42,.05);margin-bottom:10px}
+    .pro-alert-card.red{border-color:#fecaca;background:linear-gradient(180deg,#fff 0%,#fef2f2 100%)}
+    .pro-alert-card.orange{border-color:#fed7aa;background:linear-gradient(180deg,#fff 0%,#fff7ed 100%)}
+    .pro-alert-head{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:8px}
+    .pro-alert-title{font-size:14px;font-weight:900;color:#0f172a}
+    .pro-alert-text{font-size:13px;color:#475569;line-height:1.45}
+    .pro-summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
+    .pro-mini-card{padding:13px 14px;border-radius:18px;background:linear-gradient(180deg,#ffffff 0%,#f8fafc 100%);border:1px solid #e2e8f0;box-shadow:0 6px 16px rgba(15,23,42,.05)}
+    .pro-mini-label{font-size:11px;font-weight:800;color:#64748b;letter-spacing:.35px;text-transform:uppercase}
+    .pro-mini-value{font-size:24px;font-weight:900;color:#0f172a;margin-top:6px}
+    .pro-mini-sub{font-size:12px;color:#475569;margin-top:6px}
+    .pro-bar-wrap{margin-top:10px}
+    .pro-bar-track{height:9px;border-radius:999px;background:#e2e8f0;overflow:hidden}
+    .pro-bar-fill{height:100%;border-radius:999px;background:linear-gradient(90deg,#2563eb 0%,#38bdf8 100%)}
+    .pro-bar-fill.orange{background:linear-gradient(90deg,#f59e0b 0%,#fb7185 100%)}
+    .pro-bar-fill.green{background:linear-gradient(90deg,#10b981 0%,#34d399 100%)}
+    .pro-item-grid{display:grid;gap:12px}
+    .pro-item-card{border:1px solid #e2e8f0;border-radius:20px;padding:16px;background:linear-gradient(180deg,#fff 0%,#fbfdff 100%);box-shadow:0 10px 24px rgba(15,23,42,.05)}
+    .pro-item-top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap}
+    .pro-item-name{font-size:18px;font-weight:900;color:#0f172a}
+    .pro-item-route{font-size:13px;color:#64748b;margin-top:3px}
+    .pro-item-badges{display:flex;gap:8px;flex-wrap:wrap}
+    .pro-kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-top:14px}
+    .pro-kpi{padding:10px 11px;border-radius:14px;background:#f8fafc;border:1px solid #e2e8f0}
+    .pro-kpi .k-label{font-size:10px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.35px}
+    .pro-kpi .k-value{font-size:20px;font-weight:900;color:#0f172a;margin-top:4px}
+
   </style>
 </head>
 <body>
@@ -4405,10 +4443,10 @@
     const shiftSelectOptions = getDashboardProShiftOptionsForDay(filters.day).map(name=>`<option value="${escapeHtml(name)}" ${String(filters.shift_name||'')===String(name)?'selected':''}>${escapeHtml(name)}</option>`).join('');
     document.getElementById('dashboardPro').innerHTML = `
       <h2 class="section-title">Dashboard Pro</h2>
-      <div class="card" style="margin-bottom:16px">
-        <div style="font-size:18px;font-weight:800">Geçmiş Vardiya Analizi</div>
-        <div class="muted" style="margin-top:6px">Bu ekran yalnızca tamamlanmış vardiyaları analiz eder. Canlı vardiya klasik dashboard'da kalır.</div>
-        <div class="muted" style="margin-top:6px">Rol: ${escapeHtml(roleLabelTr(state.profile?.role))}</div>
+      <div class="card pro-hero" style="margin-bottom:16px">
+        <div style="font-size:24px;font-weight:900">Geçmiş Vardiya Analizi</div>
+        <div class="muted" style="margin-top:8px">Karar odaklı görünüm: vardiya üretimi, ekipman verimi, yakıt davranışı ve kritik uyarılar tek panelde.</div>
+        <div class="muted" style="margin-top:8px">Rol: ${escapeHtml(roleLabelTr(state.profile?.role))}</div>
       </div>
       <div class="card" style="margin-bottom:16px">
         <div class="filter-bar">
@@ -4448,15 +4486,37 @@
           </div>
         </div>
       </div>
-      <div class="grid g4">
-        <div class="stat-card"><div class="stat-label">Toplam Sefer</div><div class="stat" id="proTripsStat">-</div><div class="muted" id="proTripsSub" style="margin-top:10px"></div></div>
-        <div class="stat-card"><div class="stat-label">Toplam Verilen Yakıt</div><div class="stat" id="proFuelStat">-</div><div class="muted" id="proFuelSub" style="margin-top:10px"></div></div>
-        <div class="stat-card"><div class="stat-label">Toplam Tonaj</div><div class="stat" id="proMeterStat">-</div><div class="muted" id="proMeterSub" style="margin-top:10px"></div></div>
-        <div class="stat-card"><div class="stat-label">Kamyon Başına Ort. Sefer</div><div class="stat" id="proAvgTripStat">-</div><div class="muted" id="proAvgTripSub" style="margin-top:10px"></div></div>
-      </div>
-      <div class="grid g4" style="margin-top:16px">
-        <div class="stat-card"><div class="stat-label">Sefer Başına Kamyon Yakıtı</div><div class="stat" id="proFuelPerTripStat">-</div><div class="muted" id="proFuelPerTripSub" style="margin-top:10px"></div></div>
-        <div class="stat-card"><div class="stat-label">Önceki Vardiya Kıyası</div><div class="stat" id="proCompareStat">-</div><div class="muted" id="proCompareSub" style="margin-top:10px"></div></div>
+      <div class="pro-stat-grid">
+        <div class="pro-stat-card">
+          <div class="pro-stat-head"><div class="pro-stat-title">Toplam Sefer</div><div class="pro-stat-chip">Üretim</div></div>
+          <div class="pro-stat-value" id="proTripsStat">-</div>
+          <div class="pro-stat-sub" id="proTripsSub"></div>
+        </div>
+        <div class="pro-stat-card">
+          <div class="pro-stat-head"><div class="pro-stat-title">Toplam Verilen Yakıt</div><div class="pro-stat-chip">Yakıt</div></div>
+          <div class="pro-stat-value" id="proFuelStat">-</div>
+          <div class="pro-stat-sub" id="proFuelSub"></div>
+        </div>
+        <div class="pro-stat-card">
+          <div class="pro-stat-head"><div class="pro-stat-title">Toplam Tonaj</div><div class="pro-stat-chip">Tonaj</div></div>
+          <div class="pro-stat-value" id="proMeterStat">-</div>
+          <div class="pro-stat-sub" id="proMeterSub"></div>
+        </div>
+        <div class="pro-stat-card">
+          <div class="pro-stat-head"><div class="pro-stat-title">Kamyon Başına Ort. Sefer</div><div class="pro-stat-chip">Filo</div></div>
+          <div class="pro-stat-value" id="proAvgTripStat">-</div>
+          <div class="pro-stat-sub" id="proAvgTripSub"></div>
+        </div>
+        <div class="pro-stat-card">
+          <div class="pro-stat-head"><div class="pro-stat-title">Sefer Başına Kamyon Yakıtı</div><div class="pro-stat-chip">Verim</div></div>
+          <div class="pro-stat-value" id="proFuelPerTripStat">-</div>
+          <div class="pro-stat-sub" id="proFuelPerTripSub"></div>
+        </div>
+        <div class="pro-stat-card">
+          <div class="pro-stat-head"><div class="pro-stat-title">Önceki Vardiya Kıyası</div><div class="pro-stat-chip">Trend</div></div>
+          <div class="pro-stat-value" id="proCompareStat">-</div>
+          <div class="pro-stat-sub" id="proCompareSub"></div>
+        </div>
       </div>
       <div class="grid g2" style="margin-top:16px">
         <div class="dashboard-block">
@@ -4744,52 +4804,88 @@
     excItems.forEach(e=>{
       if(fleetExcEff > 0 && (e.efficiency || 0) < fleetExcEff * alertRules.lowExcEfficiencyRatio) alerts.push({level:'orange', title:'Düşük ekskavatör verimi', text:`${e.name}: ${e.efficiency.toFixed(2)} sefer/saat.`});
     });
-    document.getElementById('dashboardProAlertsBody').innerHTML = alerts.length ? alerts.map(a=>`<div class="list-item"><div class="badge-col"><span class="pill ${a.level === 'red' ? 'red' : 'orange'}">${escapeHtml(a.title)}</span></div><div style="margin-top:6px">${escapeHtml(a.text)}</div></div>`).join('') : '<div class="empty">Seçilen filtre için kritik uyarı görünmüyor.</div>';
+    const maxTruckTrips = Math.max(1, ...truckItems.map(x=>Number(x.tripCount || 0) || 0));
+    const maxTruckTonnage = Math.max(1, ...truckItems.map(x=>Number(x.tonnage || 0) || 0));
+    const maxExcTrips = Math.max(1, ...excItems.map(x=>Number(x.tripCount || 0) || 0));
+    const maxExcTonPerHour = Math.max(1, ...excItems.map(x=>Number(x.tonPerHour || 0) || 0));
+
+    document.getElementById('dashboardProAlertsBody').innerHTML = alerts.length ? alerts.map(a=>`<div class="pro-alert-card ${a.level === 'red' ? 'red' : 'orange'}"><div class="pro-alert-head"><div class="pro-alert-title">${escapeHtml(a.title)}</div><span class="pill ${a.level === 'red' ? 'red' : 'orange'}">${a.level === 'red' ? 'Kritik' : 'Dikkat'}</span></div><div class="pro-alert-text">${escapeHtml(a.text)}</div></div>`).join('') : '<div class="empty">Seçilen filtre için kritik uyarı görünmüyor.</div>';
 
     document.getElementById('dashboardProSummaryBody').innerHTML = `
-      <div class="list-item"><b>Seçilen vardiya</b><div class="muted">${escapeHtml(summary.label)} ${sqlCurrent ? '<span class="pill green">SQL özet bağlı</span>' : ''}</div></div>
-      <div class="list-item"><b>Aktif kamyon / ekskavatör</b><div class="muted">${filteredTruckCount} / ${filteredExcCount}</div></div>
-      <div class="list-item"><b>Toplam sefer</b><div class="muted">${filteredTripCount}</div></div>
-      <div class="list-item"><b>Toplam verilen yakıt</b><div class="muted">${filteredFuelLiters.toFixed(0)} L</div></div>
-      <div class="list-item"><b>Toplam tonaj</b><div class="muted">${filteredTonnage.toFixed(1)} ton</div></div>
-      <div class="list-item"><b>Arıza etkisi</b><div class="muted">${formatDurationMinutes(filteredBreakdownMinutes)} • Uzun arıza: ${filteredLongBreakdowns}</div></div>
+      <div class="pro-summary-grid">
+        <div class="pro-mini-card">
+          <div class="pro-mini-label">Seçilen vardiya</div>
+          <div class="pro-mini-value" style="font-size:18px">${escapeHtml(summary.label)}</div>
+          <div class="pro-mini-sub">${sqlCurrent ? 'SQL özet bağlı' : 'Canlı hesaplama'}</div>
+        </div>
+        <div class="pro-mini-card">
+          <div class="pro-mini-label">Aktif ekipman</div>
+          <div class="pro-mini-value">${filteredTruckCount + filteredExcCount}</div>
+          <div class="pro-mini-sub">Kamyon ${filteredTruckCount} • Ekskavatör ${filteredExcCount}</div>
+        </div>
+        <div class="pro-mini-card">
+          <div class="pro-mini-label">Arıza etkisi</div>
+          <div class="pro-mini-value">${formatDurationMinutes(filteredBreakdownMinutes)}</div>
+          <div class="pro-mini-sub">Uzun arıza: ${filteredLongBreakdowns}</div>
+        </div>
+        <div class="pro-mini-card">
+          <div class="pro-mini-label">Karşılaştırma</div>
+          <div class="pro-mini-value" style="font-size:22px">${(sqlPrevious || previousSummary) ? `${compareDelta >= 0 ? '+' : ''}${compareDelta}` : '-'}</div>
+          <div class="pro-mini-sub">${sqlPrevious ? `Önceki: ${Number(sqlPrevious.total_trip_count || 0)} sefer` : (previousSummary ? `Önceki: ${previousSummary.total_trip_count} sefer` : 'Önceki veri yok')}</div>
+        </div>
+      </div>
     `;
 
-    document.getElementById('dashboardProTruckBody').innerHTML = truckItems.length ? truckItems.map(item=>`
-      <div class="op-card">
-        <div class="op-card-head">
-          <div><div class="op-card-title">${escapeHtml(item.name)}</div><div class="op-card-sub">${escapeHtml(item.route || '-')}</div></div>
-          <div class="badge-col"><span class="pill">${escapeHtml(item.zone || '-')}</span><span class="${metricStatusClass(item.tonPerKm, 15, 8, true)}">Ton/KM ${Number(item.tonPerKm || 0).toFixed(2)}</span><span class="${metricStatusClass(item.meterDiff, 25, 35, false)}">Km ${item.meterDiff.toFixed(1)}</span></div>
+    document.getElementById('dashboardProTruckBody').innerHTML = truckItems.length ? `<div class="pro-item-grid">` + truckItems.map(item=>`
+      <div class="pro-item-card">
+        <div class="pro-item-top">
+          <div><div class="pro-item-name">${escapeHtml(item.name)}</div><div class="pro-item-route">${escapeHtml(item.route || '-')}</div></div>
+          <div class="pro-item-badges"><span class="pill">${escapeHtml(item.zone || '-')}</span><span class="${metricStatusClass(item.tonPerKm, 15, 8, true)}">Ton/KM ${(item.tonPerKm || 0).toFixed(2)}</span></div>
         </div>
-        <div class="mini-breakdown">
-          <div class="mini-item"><div class="mini-label">Sefer</div><div class="mini-value">${item.tripCount}</div></div>
-          <div class="mini-item"><div class="mini-label">Yakıt</div><div class="mini-value">${item.fuelLiters.toFixed(0)}</div></div>
-          <div class="mini-item"><div class="mini-label">KM</div><div class="mini-value">${item.meterDiff.toFixed(1)}</div></div>
-          <div class="mini-item"><div class="mini-label">KM/Sefer</div><div class="mini-value">${item.kmPerTrip.toFixed(1)}</div></div>
-          <div class="mini-item"><div class="mini-label">Tonaj</div><div class="mini-value">${item.tonnage.toFixed(0)}</div></div>
-          <div class="mini-item"><div class="mini-label">Ton/Sefer</div><div class="mini-value">${item.tonPerTrip.toFixed(1)}</div></div>
-          <div class="mini-item"><div class="mini-label">Ton/KM</div><div class="mini-value">${(item.tonPerKm || 0).toFixed(2)}</div></div>
+        <div class="pro-kpi-row">
+          <div class="pro-kpi"><div class="k-label">Sefer</div><div class="k-value">${item.tripCount}</div></div>
+          <div class="pro-kpi"><div class="k-label">Yakıt</div><div class="k-value">${item.fuelLiters.toFixed(0)}</div></div>
+          <div class="pro-kpi"><div class="k-label">KM</div><div class="k-value">${item.meterDiff.toFixed(1)}</div></div>
+          <div class="pro-kpi"><div class="k-label">KM/Sefer</div><div class="k-value">${item.kmPerTrip.toFixed(1)}</div></div>
+          <div class="pro-kpi"><div class="k-label">Tonaj</div><div class="k-value">${item.tonnage.toFixed(0)}</div></div>
+          <div class="pro-kpi"><div class="k-label">Ton/Sefer</div><div class="k-value">${item.tonPerTrip.toFixed(1)}</div></div>
         </div>
-        <div class="muted">Paket: <b>${escapeHtml(item.packageName || '-')}</b> • Ekskavatör: <b>${escapeHtml(item.linkedName || '-')}</b></div>
+        <div class="pro-bar-wrap">
+          <div class="muted">Sefer yoğunluğu</div>
+          <div class="pro-bar-track"><div class="pro-bar-fill" style="width:${Math.max(8, Math.min(100, ((item.tripCount || 0) / maxTruckTrips) * 100))}%"></div></div>
+        </div>
+        <div class="pro-bar-wrap">
+          <div class="muted">Tonaj katkısı</div>
+          <div class="pro-bar-track"><div class="pro-bar-fill green" style="width:${Math.max(8, Math.min(100, ((item.tonnage || 0) / maxTruckTonnage) * 100))}%"></div></div>
+        </div>
+        <div class="muted" style="margin-top:10px">Paket: <b>${escapeHtml(item.packageName || '-')}</b> • Ekskavatör: <b>${escapeHtml(item.linkedName || '-')}</b></div>
       </div>
-    `).join('') : '<div class="empty">Filtreye uygun kamyon analizi yok.</div>';
+    `).join('') + `</div>` : '<div class="empty">Filtreye uygun kamyon analizi yok.</div>';
 
-    document.getElementById('dashboardProExcBody').innerHTML = excItems.length ? excItems.map(item=>`
-      <div class="op-card">
-        <div class="op-card-head">
-          <div><div class="op-card-title">${escapeHtml(item.name)}</div><div class="op-card-sub">${escapeHtml(item.route || '-')}</div></div>
-          <div class="badge-col"><span class="pill">${escapeHtml(item.zone || '-')}</span><span class="${metricStatusClass(item.efficiency, 2.5, 1, true)}">Sefer/Saat ${item.efficiency.toFixed(2)}</span></div>
+    document.getElementById('dashboardProExcBody').innerHTML = excItems.length ? `<div class="pro-item-grid">` + excItems.map(item=>`
+      <div class="pro-item-card">
+        <div class="pro-item-top">
+          <div><div class="pro-item-name">${escapeHtml(item.name)}</div><div class="pro-item-route">${escapeHtml(item.route || '-')}</div></div>
+          <div class="pro-item-badges"><span class="pill">${escapeHtml(item.zone || '-')}</span><span class="${metricStatusClass(item.efficiency, 2.5, 1, true)}">Sefer/Saat ${item.efficiency.toFixed(2)}</span></div>
         </div>
-        <div class="mini-breakdown">
-          <div class="mini-item"><div class="mini-label">Sefer</div><div class="mini-value">${item.tripCount}</div></div>
-          <div class="mini-item"><div class="mini-label">Bağlı Kamyon</div><div class="mini-value">${item.linkedTruckCount || 0}</div></div>
-          <div class="mini-item"><div class="mini-label">Tonaj</div><div class="mini-value">${(item.tonnage || 0).toFixed(0)}</div></div>
-          <div class="mini-item"><div class="mini-label">Sayaç Saati</div><div class="mini-value">${(item.workHours || 0).toFixed(1)}</div></div>
-          <div class="mini-item"><div class="mini-label">Ton/Saat</div><div class="mini-value">${(item.tonPerHour || 0).toFixed(1)}</div></div>
+        <div class="pro-kpi-row">
+          <div class="pro-kpi"><div class="k-label">Sefer</div><div class="k-value">${item.tripCount}</div></div>
+          <div class="pro-kpi"><div class="k-label">Bağlı Kamyon</div><div class="k-value">${item.linkedTruckCount || 0}</div></div>
+          <div class="pro-kpi"><div class="k-label">Tonaj</div><div class="k-value">${(item.tonnage || 0).toFixed(0)}</div></div>
+          <div class="pro-kpi"><div class="k-label">Sayaç Saati</div><div class="k-value">${(item.workHours || 0).toFixed(1)}</div></div>
+          <div class="pro-kpi"><div class="k-label">Ton/Saat</div><div class="k-value">${(item.tonPerHour || 0).toFixed(1)}</div></div>
         </div>
-        <div class="muted">Paket: <b>${escapeHtml(item.packageName || '-')}</b></div>
+        <div class="pro-bar-wrap">
+          <div class="muted">Sefer yoğunluğu</div>
+          <div class="pro-bar-track"><div class="pro-bar-fill" style="width:${Math.max(8, Math.min(100, ((item.tripCount || 0) / maxExcTrips) * 100))}%"></div></div>
+        </div>
+        <div class="pro-bar-wrap">
+          <div class="muted">Ton / saat verimi</div>
+          <div class="pro-bar-track"><div class="pro-bar-fill orange" style="width:${Math.max(8, Math.min(100, ((item.tonPerHour || 0) / maxExcTonPerHour) * 100))}%"></div></div>
+        </div>
+        <div class="muted" style="margin-top:10px">Paket: <b>${escapeHtml(item.packageName || '-')}</b></div>
       </div>
-    `).join('') : '<div class="empty">Filtreye uygun ekskavatör analizi yok.</div>';
+    `).join('') + `</div>` : '<div class="empty">Filtreye uygun ekskavatör analizi yok.</div>';
 
     const packageMap = {};
     filteredTrips.forEach(row=>{
@@ -4800,19 +4896,24 @@
       packageMap[packageId].tonnage += getTripRowTonnage(row);
     });
     const packageItems = Object.values(packageMap).sort((a,b)=>(b.tonnage||0)-(a.tonnage||0));
-    document.getElementById('dashboardProPackageBody').innerHTML = packageItems.length ? packageItems.map(item=>`
-      <div class="op-card">
-        <div class="op-card-head">
-          <div><div class="op-card-title">${escapeHtml(item.name)}</div><div class="op-card-sub">Paket faktörü: ${item.factor.toFixed(2)}</div></div>
-          <div class="badge-col"><span class="pill">Tonaj ${item.tonnage.toFixed(1)}</span></div>
+    const maxPackageTonnage = Math.max(1, ...packageItems.map(x=>Number(x.tonnage || 0) || 0));
+    document.getElementById('dashboardProPackageBody').innerHTML = packageItems.length ? `<div class="pro-item-grid">` + packageItems.map(item=>`
+      <div class="pro-item-card">
+        <div class="pro-item-top">
+          <div><div class="pro-item-name">${escapeHtml(item.name)}</div><div class="pro-item-route">Paket faktörü: ${item.factor.toFixed(2)}</div></div>
+          <div class="pro-item-badges"><span class="pill">Tonaj ${item.tonnage.toFixed(1)}</span></div>
         </div>
-        <div class="mini-breakdown">
-          <div class="mini-item"><div class="mini-label">Sefer</div><div class="mini-value">${item.tripCount}</div></div>
-          <div class="mini-item"><div class="mini-label">Tonaj</div><div class="mini-value">${item.tonnage.toFixed(0)}</div></div>
-          <div class="mini-item"><div class="mini-label">Ton/Sefer</div><div class="mini-value">${item.tripCount ? (item.tonnage / item.tripCount).toFixed(1) : '0.0'}</div></div>
+        <div class="pro-kpi-row">
+          <div class="pro-kpi"><div class="k-label">Sefer</div><div class="k-value">${item.tripCount}</div></div>
+          <div class="pro-kpi"><div class="k-label">Tonaj</div><div class="k-value">${item.tonnage.toFixed(0)}</div></div>
+          <div class="pro-kpi"><div class="k-label">Ton/Sefer</div><div class="k-value">${item.tripCount ? (item.tonnage / item.tripCount).toFixed(1) : '0.0'}</div></div>
+        </div>
+        <div class="pro-bar-wrap">
+          <div class="muted">Toplam tonaj katkısı</div>
+          <div class="pro-bar-track"><div class="pro-bar-fill green" style="width:${Math.max(8, Math.min(100, ((item.tonnage || 0) / maxPackageTonnage) * 100))}%"></div></div>
         </div>
       </div>
-    `).join('') : '<div class="empty">Seçilen filtre için paket bazlı tonaj analizi yok.</div>';
+    `).join('') + `</div>` : '<div class="empty">Seçilen filtre için paket bazlı tonaj analizi yok.</div>';
 
     state.lastDashboardProExport = {
       selectedLabel: summary.label,
