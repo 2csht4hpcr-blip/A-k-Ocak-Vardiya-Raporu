@@ -6362,7 +6362,7 @@ function renderDeleted(){
         if(!key) return;
         if(!topEquipment[key]) topEquipment[key] = {name: r.equipment_name || r.equipment_name_snapshot || findEquipmentById(r.equipment_id)?.name || '-', trip:0, ton:0};
         topEquipment[key].trip += Number(r.trip_count || 0);
-        topEquipment[key].ton += Number(r.trip_count || 0) * Number(packageFactorById?.(r.package_id) || 0 || 1);
+        topEquipment[key].ton += Number(r.trip_count || 0) * Number(getPackageTonnageFactor(r.package_id) || 0 || 1);
       });
       const topEquipmentRows = Object.values(topEquipment).sort((a,b)=>b.trip-a.trip).slice(0,8);
 
@@ -6635,7 +6635,7 @@ function renderDeleted(){
         const name = r.equipment_name || r.equipment_name_snapshot || findEquipmentById(r.equipment_id)?.name || '-';
         if(!equipmentMap[name]) equipmentMap[name] = {equipment_name:name, trip:0, ton:0, count:0};
         equipmentMap[name].trip += Number(r.trip_count || 0);
-        equipmentMap[name].ton += Number(r.trip_count || 0) * Number(packageFactorById?.(r.package_id) || 0 || 1);
+        equipmentMap[name].ton += Number(r.trip_count || 0) * Number(getPackageTonnageFactor(r.package_id) || 0 || 1);
         equipmentMap[name].count += 1;
       });
       const fuelMap = {};
