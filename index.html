@@ -1594,6 +1594,8 @@
     shiftConfig: loadShiftConfig(),
     recordFilters: { equipment_type:'', equipment_id:'', package_id:'', shift_name:'', day:'', start_day:'', end_day:'', page_size:'50' },
     recordPages: {},
+    recordsServer: {},
+    recordsLoading: false,
     dashboardProFilters: { day:'', shift_name:'', equipment_type:'', equipment_id:'', sort:'trip_desc' },
     definitionsFilters: { equipment_type:'', package_material:'' },
     truckModels: loadTruckModels(),
@@ -5398,6 +5400,92 @@
     const current = Number((state.recordPages||{})[tableName] || 1) || 1;
     state.recordPages[tableName] = Math.max(1, current + Number(delta||0));
     renderRecords();
+    loadRecordsPageData();
+  }
+
+  function getRecordDbTableName(tableName){
+    const map = {
+      productions: TABLES.PRODUCTIONS,
+      breakdowns: TABLES.BREAKDOWNS,
+      rentals: TABLES.RENTALS,
+      truck_trips: TABLES.TRUCK_TRIPS,
+      fuel_logs: TABLES.FUEL_LOGS,
+      meter_logs: TABLES.METER_LOGS
+    };
+    return resolveDbTableName(map[tableName] || tableName);
+  }
+
+  function normalizeServerRecordRow(tableName, r){
+    const row = { ...(r || {}) };
+    if(tableName === 'productions'){
+      row.equipment_name = row.equipment_name || row.equipment_name_snapshot || (findEquipmentById(row.equipment_id)?.name || '');
+      row.package_name = row.package_name || row.package_name_snapshot || packageName(row.package_id) || '';
+      row.linked_excavator_name = row.linked_excavator_name || row.linked_excavator_name_snapshot || (findEquipmentById(row.linked_excavator_id)?.name || '');
+      row.material_type = row.material_type || packageMaterialTypeById(row.package_id) || '';
+    }else if(tableName === 'breakdowns' || tableName === 'rentals'){
+      row.equipment_name = row.equipment_name || row.equipment_name_snapshot || (findEquipmentById(row.equipment_id)?.name || '');
+    }else if(tableName === 'fuel_logs' || tableName === 'meter_logs'){
+      row.equipment_name = row.equipment_name || (findEquipmentById(row.equipment_id)?.name || '');
+      row.created_at = row.created_at || row.recorded_at || nowIso();
+    }else if(tableName === 'truck_trips'){
+      row.equipment_name = row.equipment_name || (findEquipmentById(row.equipment_id)?.name || '');
+      row.package_name = row.package_name || packageName(row.package_id) || '';
+      row.linked_excavator_name = row.linked_excavator_name || (findEquipmentById(row.linked_excavator_id)?.name || '');
+      row.created_at = row.created_at || row.recorded_at || nowIso();
+    }
+    return row;
+  }
+
+  async function fetchRecordPageData(tableName){
+    ensureRecordFilterDefaults();
+    const f = state.recordFilters || {};
+    const page = getRecordPageState(tableName, Number((state.recordsServer?.[tableName]||{}).totalCount || 0));
+    const from = Math.max(0, page.startIndex);
+    const to = Math.max(from, page.endIndex - 1);
+    let query = state.sb.from(getRecordDbTableName(tableName)).select('*', { count: 'exact' }).is('deleted_at', null);
+    if(f.equipment_id) query = query.eq('equipment_id', f.equipment_id);
+    if(f.package_id && ['productions','truck_trips'].includes(tableName)) query = query.eq('package_id', f.package_id);
+    if(f.shift_name) query = query.eq('shift_name', f.shift_name);
+    if(f.day) query = query.eq('shift_date', f.day);
+    if(!f.day && f.start_day) query = query.gte('shift_date', f.start_day);
+    if(!f.day && f.end_day) query = query.lte('shift_date', f.end_day);
+    if(f.equipment_type){
+      const ids = state.equipments.filter(e=>!e.deleted_at && normalizeFilterValue(e.type || 'Yardımcı Makina') === normalizeFilterValue(f.equipment_type)).map(e=>e.id);
+      if(!ids.length){
+        state.recordsServer[tableName] = { rows: [], totalCount: 0 };
+        return state.recordsServer[tableName];
+      }
+      query = query.in('equipment_id', ids);
+    }
+    const orderColumn = (tableName === 'truck_trips' || tableName === 'fuel_logs' || tableName === 'meter_logs') ? 'recorded_at' : 'start_at';
+    const res = await query.order('shift_date', { ascending: false, nullsFirst: false }).order(orderColumn, { ascending: false, nullsFirst: false }).range(from, to);
+    if(res.error) throw res.error;
+    const rows = (res.data || []).map(r=>normalizeServerRecordRow(tableName, r));
+    const totalCount = Number(res.count || 0);
+    state.recordsServer[tableName] = { rows, totalCount };
+    const normalized = getRecordPageState(tableName, totalCount);
+    if(normalized.current !== page.current){
+      return fetchRecordPageData(tableName);
+    }
+    return state.recordsServer[tableName];
+  }
+
+  async function loadRecordsPageData(){
+    if(!state.sb) return;
+    state.recordsLoading = true;
+    const body = document.getElementById('recordsBody');
+    if(body) body.innerHTML = `<div class="card"><div class="muted">Kayıtlar yükleniyor...</div></div>`;
+    const tables = ['productions','breakdowns','rentals','fuel_logs'];
+    try{
+      await Promise.all(tables.map(t=>fetchRecordPageData(t)));
+    }catch(err){
+      console.error(err);
+      if(body) body.innerHTML = `<div class="card"><div class="notice">Kayıtlar yüklenirken hata oluştu: ${escapeHtml(String(err.message || err))}</div></div>`;
+      return;
+    }finally{
+      state.recordsLoading = false;
+    }
+    if(state.currentPage === 'records') renderRecordsBody();
   }
 
 function applyRecordFilters(rows){
@@ -5510,26 +5598,28 @@ function applyRecordFilters(rows){
     };
     state.recordPages = {};
     renderRecords();
+    loadRecordsPageData();
   }
 
   function resetRecordFilters(){
     state.recordFilters = { equipment_type:'', equipment_id:'', package_id:'', shift_name:'', day:'', page_size:'50', ...getDefaultRecordDateRange() };
     state.recordPages = {};
     renderRecords();
+    loadRecordsPageData();
   }
 
   function renderGroupedRecordSection(title, tableName, rows, cols, colspan){
-    const filtered = applyRecordFilters(rows).slice();
-    const page = getRecordPageState(tableName, filtered.length);
-    const paged = filtered.slice(page.startIndex, page.endIndex);
+    const pageData = state.recordsServer?.[tableName] || { rows: rows || [], totalCount: (rows || []).length };
+    const filtered = pageData.rows || [];
+    const page = getRecordPageState(tableName, Number(pageData.totalCount || filtered.length || 0));
     const groups = { 'Ekskavatör': [], 'Kamyon': [], 'Yardımcı Makina': [] };
-    paged.forEach(r=>{
+    filtered.forEach(r=>{
       const t = equipmentTypeLabelForRow(r);
       if(t === 'Ekskavatör') groups['Ekskavatör'].push(r);
       else if(t === 'Kamyon') groups['Kamyon'].push(r);
       else groups['Yardımcı Makina'].push(r);
     });
-    const totalCount = filtered.length;
+    const totalCount = Number(pageData.totalCount || filtered.length || 0);
     return `
       <div class="card records-section-card">
         <div class="records-section-head">
@@ -5538,7 +5628,7 @@ function applyRecordFilters(rows){
             <span class="records-section-badge">Toplam ${totalCount} kayıt</span>
             <span class="pill">Sayfa ${page.current}/${page.totalPages}</span>
           </div>
-          <button class="danger records-delete-btn" type="button" onclick="bulkDeleteRecordTable('${tableName}')">Tümünü Sil</button>
+          <button class="danger records-delete-btn" type="button" onclick="bulkDeleteRecordTable('${tableName}')">Görünenleri Sil</button>
         </div>
         <div style="padding:16px 18px">
           ${Object.entries(groups).map(([g,items])=>`
@@ -5576,7 +5666,7 @@ function applyRecordFilters(rows){
 
   async function bulkDeleteRecordTable(tableName){
     if(!canAccessDeleted()){ alert('Bu işlem yalnızca yöneticiye açıktır.'); return; }
-    const rows = applyRecordFilters(getRecordRowsForTable(tableName));
+    const rows = (state.recordsServer?.[tableName]?.rows || []).filter(r=>!r.deleted_at);
     if(!rows.length){
       alert('Silinecek kayıt bulunamadı.');
       return;
@@ -5828,6 +5918,7 @@ function applyRecordFilters(rows){
         };
         state.recordPages = {};
         renderRecords();
+        loadRecordsPageData();
       });
       el.dataset.bound = '1';
     });
@@ -5978,21 +6069,13 @@ function applyRecordFilters(rows){
     }
   }
 
-  function renderRecords(){
-    const container = document.getElementById('records');
-    container.innerHTML = `
-      <h2 class="section-title">Kayıtlar</h2>
-      ${renderRecordFilters()}
-      <div id="recordsBody"></div>
-    `;
-
+  function renderRecordsBody(){
     const body = document.getElementById('recordsBody');
-
-    const prodRows = state.productions.filter(r=>!r.deleted_at);
-    const brRows = state.breakdowns.filter(r=>!r.deleted_at);
-    const rentRows = state.rentals.filter(r=>!r.deleted_at);
-    const fuelRows = state.fuel_logs.filter(r=>!r.deleted_at);
-
+    if(!body) return;
+    const prodRows = (state.recordsServer?.productions?.rows || []);
+    const brRows = (state.recordsServer?.breakdowns?.rows || []);
+    const rentRows = (state.recordsServer?.rentals?.rows || []);
+    const fuelRows = (state.recordsServer?.fuel_logs?.rows || []);
     body.innerHTML = `
       <div class="grid g1">
         ${renderGroupedRecordSection('Üretim', 'productions', prodRows, [
@@ -6007,7 +6090,7 @@ function applyRecordFilters(rows){
           {label:'Çalışma', render:r=>`${Number((Number(getEffectiveProductionEndMeter(r) ?? 0) - Number(getEffectiveProductionStartMeter(r) ?? 0))) < 0 ? '⚠️ ' : ''}${escapeHtml(formatMeterValueWithUnit((Number(getEffectiveProductionEndMeter(r) ?? 0) - Number(getEffectiveProductionStartMeter(r) ?? 0)), r.end_meter_type || r.start_meter_type || autoMeterTypeForEquipment(r.equipment_id)))}`},
           {label:'Sefer', render:r=>isTruckEquipment(findEquipmentById(r.equipment_id)) ? String(productionTripTotal(r)) : ''},
           {label:'Yakıt', render:r=>productionFuelTotal(r) > 0 ? `${productionFuelTotal(r).toFixed(0)} L` : ''},
-                    {label:'İşlem', render:r=>actionButtons('productions', r, false, 'records')}
+          {label:'İşlem', render:r=>actionButtons('productions', r, false, 'records')}
         ], 12)}
         ${renderGroupedRecordSection('Arıza', 'breakdowns', brRows, [
           {label:'Ekipman', render:r=>escapeHtml(r.equipment_name)},
@@ -6044,6 +6127,17 @@ function applyRecordFilters(rows){
       </div>
     `;
     attachRecordFilterEvents();
+  }
+
+  function renderRecords(){
+    const container = document.getElementById('records');
+    container.innerHTML = `
+      <h2 class="section-title">Kayıtlar</h2>
+      ${renderRecordFilters()}
+      <div id="recordsBody"><div class="card"><div class="muted">Kayıtlar yükleniyor...</div></div></div>
+    `;
+    attachRecordFilterEvents();
+    loadRecordsPageData();
   }
 
 function renderDeleted(){
