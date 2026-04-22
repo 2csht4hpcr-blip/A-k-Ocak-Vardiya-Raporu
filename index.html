@@ -254,6 +254,7 @@
       <div class="menu-group">
         <div class="menu-title">Yönetim</div>
         <button class="menu-btn" data-page="definitions">Tanımlar</button>
+        <button class="menu-btn" data-page="users">Kullanıcılar</button>
       </div>
     </aside>
 
@@ -284,6 +285,7 @@
       <section id="records" class="page"></section>
       <section id="deleted" class="page"></section>
       <section id="definitions" class="page"></section>
+      <section id="users" class="page"></section>
     </main>
   </div>
 
@@ -1559,6 +1561,9 @@
   function canAccessDeleted(){
     return currentUserRole() === 'manager';
   }
+  function canManageUsers(){
+    return currentUserRole() === 'manager';
+  }
   function applyRolePermissions(){
     const role = currentUserRole();
     document.querySelectorAll('.menu-btn').forEach(btn=>{
@@ -1588,6 +1593,7 @@
     fuel_logs: [],
     meter_logs: [],
     truck_trips: [],
+    userProfiles: [],
     currentPage: 'dashboard',
     recordTab: 'operations',
     modal: { type:null, data:null },
@@ -1622,6 +1628,7 @@
     FUEL_LOGS: 'fuel_logs',
     METER_LOGS: 'meter_logs',
     TRUCK_TRIPS: 'truck_trips',
+    PROFILES: 'profiles',
     EQUIPMENTS: 'equipments',
     PACKAGES: 'packages',
     SHIFT_DEFINITIONS: 'shift_definitions',
@@ -2273,6 +2280,7 @@
 
   async function loadAllSafe(){
     const tables = [TABLES.EQUIPMENTS, TABLES.PACKAGES, TABLES.PRODUCTIONS, TABLES.BREAKDOWNS, TABLES.RENTALS, TABLES.FUEL_LOGS, TABLES.METER_LOGS, TABLES.TRUCK_TRIPS];
+    if(canManageUsers()) tables.push(TABLES.PROFILES);
     const results = {};
     for(const t of tables){
       results[t] = await safeSelect(t);
@@ -2305,6 +2313,7 @@
       linked_excavator_name: r.linked_excavator_name || (findEquipmentById(r.linked_excavator_id)?.name || '') || '',
       created_at: r.created_at || r.recorded_at || nowIso()
     }));
+    state.userProfiles = canManageUsers() ? ((results[TABLES.PROFILES]?.data || []).sort((a,b)=>String(a.full_name || a.email || '').localeCompare(String(b.full_name || b.email || ''), 'tr'))) : [];
 
     if(!state._autoClosingPreviousShift){
       state._autoClosingPreviousShift = true;
@@ -6158,6 +6167,88 @@ function renderDeleted(){
     `;
   }
 
+
+  async function saveUserRoleSettings(userId){
+    if(!canManageUsers()){ alert('Bu alan yalnızca yöneticiye açıktır.'); return; }
+    try{
+      const role = String(document.getElementById(`u_role_${userId}`)?.value || 'guest');
+      const assigned = String(document.getElementById(`u_shifts_${userId}`)?.value || '')
+        .split(',')
+        .map(v=>v.trim())
+        .filter(Boolean);
+      const canViewPast = !!document.getElementById(`u_past_${userId}`)?.checked;
+      const isActive = !!document.getElementById(`u_active_${userId}`)?.checked;
+      const payload = {
+        role,
+        assigned_shift_names: assigned,
+        can_view_past_shifts: canViewPast,
+        is_active: isActive
+      };
+      const sb = await initClient();
+      const res = await sb.from('profiles').update(payload).eq('id', userId);
+      if(res.error) throw res.error;
+      const row = (state.userProfiles || []).find(r=>String(r.id)===String(userId));
+      if(row) Object.assign(row, payload);
+      showToast('Kullanıcı yetkileri güncellendi');
+      renderUsers();
+    }catch(err){
+      alert('Kullanıcı kaydı güncellenemedi: ' + (err.message || err));
+    }
+  }
+
+  function renderUsers(){
+    const el = document.getElementById('users');
+    if(!el) return;
+    if(!canManageUsers()){
+      el.innerHTML = `<div class="card"><h2 class="section-title">Kullanıcılar</h2><div class="notice">Bu alan yalnızca yöneticiye açıktır.</div></div>`;
+      return;
+    }
+    const rows = state.userProfiles || [];
+    const shiftOptionsHint = (state.shiftConfig?.shifts || []).map(s=>s.name).join(', ') || 'Gündüz, Gece';
+    el.innerHTML = `
+      <div class="card">
+        <h2 class="section-title">Kullanıcı Yönetimi</h2>
+        <div class="toolbar">
+          <span class="subtle">Mevcut kullanıcılar listelenir. Güvenli doğrudan kullanıcı oluşturma için ayrı backend gerekir; kullanıcı sisteme ilk kez giriş yaptıktan sonra burada rol ve vardiya atanır.</span>
+          <button class="secondary" onclick="refreshData()">Listeyi Yenile</button>
+        </div>
+        <div class="muted" style="margin-bottom:12px">Vardiyalar virgülle ayrılır. Örnek: <b>Gündüz</b> veya <b>Gece</b>. Tanımlı vardiyalar: ${escapeHtml(shiftOptionsHint)}</div>
+        <div class="table-wrap"><table>
+          <thead>
+            <tr>
+              <th>Ad</th>
+              <th>Kullanıcı</th>
+              <th>Rol</th>
+              <th>Vardiyalar</th>
+              <th>Geçmiş</th>
+              <th>Durum</th>
+              <th>İşlem</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.length ? rows.map(r=>`
+              <tr>
+                <td>${escapeHtml(r.full_name || '-')}</td>
+                <td>${escapeHtml(r.email || r.id || '-')}</td>
+                <td>
+                  <select id="u_role_${r.id}">
+                    <option value="manager" ${normalizeRole(r.role)==='manager' ? 'selected' : ''}>Yönetici</option>
+                    <option value="shift_lead" ${normalizeRole(r.role)==='shift_lead' ? 'selected' : ''}>Vardiya Sorumlusu</option>
+                    <option value="guest" ${normalizeRole(r.role)==='guest' ? 'selected' : ''}>Misafir</option>
+                  </select>
+                </td>
+                <td><input id="u_shifts_${r.id}" value="${escapeHtml((r.assigned_shift_names || []).join(', '))}" placeholder="Gündüz, Gece" /></td>
+                <td style="white-space:nowrap"><label><input id="u_past_${r.id}" type="checkbox" ${r.can_view_past_shifts ? 'checked' : ''} /> Geçmişi görsün</label></td>
+                <td style="white-space:nowrap"><label><input id="u_active_${r.id}" type="checkbox" ${r.is_active !== false ? 'checked' : ''} /> Aktif</label></td>
+                <td><button onclick="saveUserRoleSettings('${r.id}')">Kaydet</button></td>
+              </tr>
+            `).join('') : '<tr><td colspan="7">Henüz kullanıcı bulunamadı.</td></tr>'}
+          </tbody>
+        </table></div>
+      </div>
+    `;
+  }
+
   function renderPageError(id, title, err){
     const el = document.getElementById(id);
     if(el) el.innerHTML = `<div class="card"><h2 class="section-title">${escapeHtml(title)}</h2><div class="notice">Bu sayfa yüklenirken hata oluştu.</div></div>`;
@@ -6169,6 +6260,7 @@ function renderDeleted(){
     try{ renderDashboard(); }catch(err){ renderPageError('dashboard', 'Dashboard', err); }
     try{ renderDashboardPro(); }catch(err){ renderPageError('dashboardPro', 'Dashboard Pro', err); }
     try{ if(canAccessPage('definitions')) renderDefinitions(); else document.getElementById('definitions').innerHTML = `<div class="card"><h2 class="section-title">Tanımlar</h2><div class="notice">Bu alan yalnızca yöneticiye açıktır.</div></div>`; }catch(err){ renderPageError('definitions', 'Tanımlar', err); }
+    try{ if(canManageUsers()) renderUsers(); else { const u=document.getElementById('users'); if(u) u.innerHTML = `<div class="card"><h2 class="section-title">Kullanıcılar</h2><div class="notice">Bu alan yalnızca yöneticiye açıktır.</div></div>`; } }catch(err){ renderPageError('users', 'Kullanıcılar', err); }
     try{
       if(canAccessPage('production')) renderActiveOperationPage({
         id:'production', title:'Üretimde Olanlar', pageType:'production', rows: state.productions,
