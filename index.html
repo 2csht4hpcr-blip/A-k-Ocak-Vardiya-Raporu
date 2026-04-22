@@ -6822,7 +6822,7 @@ function renderDeleted(){
       alert(err.message || err);
     }
   }
-  function downloadBlob  function downloadBlob(buffer, filename, mime){
+  function downloadBlob(buffer, filename, mime){
     const blob = new Blob([buffer], {type:mime});
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
