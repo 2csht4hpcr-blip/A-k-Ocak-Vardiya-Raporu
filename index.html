@@ -2366,6 +2366,7 @@
       delete p.equipment_name;
       delete p.package_name;
       delete p.linked_excavator_name;
+      delete p.material_type;
     }
     if(['breakdowns','rentals'].includes(dbTable)){
       if(Object.prototype.hasOwnProperty.call(p, 'equipment_name') && !Object.prototype.hasOwnProperty.call(p, 'equipment_name_snapshot')){
@@ -3859,7 +3860,6 @@
           end_meter_type: end_meter_value === null || end_meter_value === undefined || end_meter_value === '' ? row.end_meter_type : (row.end_meter_type || autoMeterTypeForEquipment(equipment_id)),
           package_id,
           package_name_snapshot: packageName(package_id),
-          material_type: packageMaterialTypeById(package_id),
           from_location: document.getElementById('m_edit_from_location').value.trim(),
           to_location: document.getElementById('m_edit_to_location').value.trim(),
           linked_excavator_id,
@@ -3899,7 +3899,6 @@
           production_id: document.getElementById('m_edit_production_id')?.value || null,
           shift_name: document.getElementById('m_edit_shift_name')?.value || null,
           shift_date: document.getElementById('m_edit_shift_date')?.value || null,
-          material_type: packageMaterialTypeById(package_id),
           linked_excavator_id,
           trip_count: num(document.getElementById('m_edit_trip_count').value),
           from_location: document.getElementById('m_edit_from_location').value.trim(),
@@ -3966,10 +3965,16 @@
           end_meter_value
         };
       }
+      if(table === 'breakdowns'){
+        delete payload.material_type;
+      }
       if(['truck_trips','fuel_logs','meter_logs'].includes(table)){
         delete payload.equipment_name_snapshot;
         delete payload.package_name_snapshot;
         delete payload.linked_excavator_name_snapshot;
+      }
+      if(table === 'production_logs'){
+        delete payload.material_type;
       }
       const updateRes = table === 'truck_trips'
         ? await updateWithOptionalColumns(table, payload, ['production_id','shift_name','material_type','shift_date','recorded_at'], row.id)
