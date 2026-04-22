@@ -2235,9 +2235,9 @@
     state.packages = (results[TABLES.PACKAGES]?.data || []).map(p=>({ ...p, tonnage_factor: Number.isFinite(Number(p.tonnage_factor)) ? Number(p.tonnage_factor) : Number((state.packageTonnageFactors || {})[String(p.id)] || 1) }));
     state.productions = (results[TABLES.PRODUCTIONS]?.data || []).map(r=>({
       ...r,
-      equipment_name: r.equipment_name || r.equipment_name_snapshot || '',
-      package_name: r.package_name || r.package_name_snapshot || '',
-      linked_excavator_name: r.linked_excavator_name || r.linked_excavator_name_snapshot || '',
+      equipment_name: r.equipment_name || r.equipment_name_snapshot || (findEquipmentById(r.equipment_id)?.name || ''),
+      package_name: r.package_name || r.package_name_snapshot || packageName(r.package_id) || '',
+      linked_excavator_name: r.linked_excavator_name || r.linked_excavator_name_snapshot || (findEquipmentById(r.linked_excavator_id)?.name || ''),
       material_type: r.material_type || packageMaterialTypeById(r.package_id) || ''
     }));
     state.breakdowns = (results[TABLES.BREAKDOWNS]?.data || []).map(r=>({ ...r, equipment_name: r.equipment_name || r.equipment_name_snapshot || '' }));
