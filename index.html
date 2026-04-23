@@ -6289,33 +6289,43 @@ function renderDeleted(){
 <style>
   :root{--bg:#f8fafc;--card:#fff;--line:#e2e8f0;--text:#0f172a;--muted:#475569;--blue:#2563eb;--green:#15803d;--orange:#c2410c;--red:#dc2626}
   *{box-sizing:border-box}
-  body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text)}
-  .wrap{max-width:1100px;margin:0 auto;padding:28px}
-  .hero{background:linear-gradient(135deg,#0f172a 0%,#1d4ed8 100%);color:#fff;border-radius:20px;padding:22px 24px;margin-bottom:18px}
-  .hero h1{margin:0 0 6px;font-size:28px}
+  html,body{width:100%}
+  body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text);line-height:1.42}
+  .wrap{width:100%;max-width:none;margin:0 auto;padding:16px 18px 18px}
+  .hero{background:linear-gradient(135deg,#0f172a 0%,#1d4ed8 100%);color:#fff;border-radius:20px;padding:20px 22px;margin-bottom:14px}
+  .hero h1{margin:0 0 7px;font-size:28px}
   .hero .sub{font-size:14px;opacity:.92}
-  .grid{display:grid;gap:14px}
+  .grid{display:grid;gap:12px}
   .g4{grid-template-columns:repeat(4,minmax(0,1fr))}
   .g2{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px;box-shadow:0 8px 24px rgba(15,23,42,.06)}
-  .kpi .label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;font-weight:700}
-  .kpi .value{font-size:28px;font-weight:900;margin-top:6px}
-  .section-title{font-size:20px;font-weight:900;margin:0 0 12px}
-  table{width:100%;border-collapse:collapse}
-  th,td{padding:10px 8px;border-bottom:1px solid #edf2f7;text-align:left;vertical-align:top;font-size:12px}
-  th{font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);background:#f8fafc}
-  .muted{color:var(--muted)}
-  .badge{display:inline-block;padding:4px 8px;border-radius:999px;font-size:11px;font-weight:700;border:1px solid #dbeafe;background:#eff6ff;color:#1d4ed8}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px 16px 14px;box-shadow:0 8px 24px rgba(15,23,42,.06)}
+  .kpi .label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;font-weight:700}
+  .kpi .value{font-size:27px;font-weight:900;margin-top:8px}
+  .section-title{font-size:19px;font-weight:900;margin:0 0 10px}
+  table{width:100%;border-collapse:collapse;table-layout:fixed}
+  th,td{padding:12px 10px;border-bottom:1px solid #edf2f7;text-align:left;vertical-align:top;font-size:12px;line-height:1.45;word-break:break-word}
+  th{font-size:10px;text-transform:uppercase;letter-spacing:.45px;color:var(--muted);background:#f8fafc}
+  .muted{color:var(--muted);line-height:1.4}
+  .badge{display:inline-block;padding:5px 9px;border-radius:999px;font-size:11px;font-weight:700;border:1px solid #dbeafe;background:#eff6ff;color:#1d4ed8}
   .alert-list{display:grid;gap:10px}
-  .alert{padding:12px 14px;border-radius:14px;border:1px solid #fed7aa;background:#fff7ed}
+  .alert{padding:13px 15px;border-radius:14px;border:1px solid #fed7aa;background:#fff7ed;line-height:1.45}
   .alert.red{border-color:#fecaca;background:#fef2f2}
   .alert.green{border-color:#bbf7d0;background:#f0fdf4}
   .small{font-size:12px}
+  @page{size:A4 portrait;margin:10mm 9mm}
   @media print{
-    body{background:#fff}
-    .wrap{max-width:none;padding:12mm}
-    .card,.hero{box-shadow:none}
-    .hero{background:#1d4ed8 !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    html,body{background:#fff}
+    body{font-size:12px}
+    .wrap{width:100%;max-width:none;padding:0}
+    .card,.hero{box-shadow:none;break-inside:avoid;page-break-inside:avoid}
+    .hero{margin-bottom:10px;background:#1d4ed8 !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .grid{gap:10px}
+    th,td{padding:10px 8px;font-size:11px;line-height:1.35}
+    .section-title{font-size:17px;margin-bottom:8px}
+    .kpi .value{font-size:24px}
+  }
+  @media (max-width: 960px){
+    .g4,.g2{grid-template-columns:1fr}
   }
 </style>
 </head>
@@ -6461,24 +6471,71 @@ function renderDeleted(){
       const equipmentMap = {};
       const ensureEquipment = (id, name, type)=>{
         const key = String(id || name || Math.random());
-        if(!equipmentMap[key]) equipmentMap[key] = {name:name || '-', type:type || '-', trip:0, ton:0};
+        if(!equipmentMap[key]) equipmentMap[key] = {id:key, name:name || '-', type:type || '-', trip:0, ton:0, packages:{}, routes:{}};
         return equipmentMap[key];
       };
+      const addPackageSummary = (item, pkgName, ton)=>{
+        const key = String(pkgName || '-');
+        if(!item.packages[key]) item.packages[key] = { name:key, ton:0 };
+        item.packages[key].ton += Number(ton || 0);
+      };
+      const addRouteSummary = (item, routeLabel, tripCount)=>{
+        const key = String(routeLabel || '-');
+        if(!item.routes[key]) item.routes[key] = { name:key, trip:0 };
+        item.routes[key].trip += Number(tripCount || 0);
+      };
+
       trips.forEach(row=>{
-        const eq = findEquipmentById(row.equipment_id);
-        const type = eq ? (isTruckEquipment(eq) ? 'Kamyon' : isExcavatorEquipment(eq) ? 'Ekskavatör' : 'Yardımcı') : 'Ekipman';
-        const item = ensureEquipment(row.equipment_id, row.equipment_name || eq?.name || '-', type);
-        item.trip += Number(row.trip_count || 0);
-        item.ton += Number(getTripRowTonnage(row) || 0);
+        const tripCount = Number(row.trip_count || 0);
+        const tripTon = Number(getTripRowTonnage(row) || 0);
+        const pkgName = row.package_name || findPackageById(row.package_id)?.name || '-';
+        const routeLabel = `${row.from_location || '-'} → ${row.to_location || '-'}`;
+
+        const truckEq = findEquipmentById(row.equipment_id);
+        const truckName = row.equipment_name || truckEq?.name || '-';
+        const truckItem = ensureEquipment(row.equipment_id || truckName, truckName, 'Kamyon');
+        truckItem.trip += tripCount;
+        truckItem.ton += tripTon;
+        addPackageSummary(truckItem, pkgName, tripTon);
+        addRouteSummary(truckItem, routeLabel, tripCount);
+
+        const excId = row.linked_excavator_id || '';
+        const excEq = findEquipmentById(excId);
+        const excName = row.linked_excavator_name || excEq?.name || '';
+        if(excId || excName){
+          const excItem = ensureEquipment(excId || excName, excName || '-', 'Ekskavatör');
+          excItem.trip += tripCount;
+          excItem.ton += tripTon;
+          addPackageSummary(excItem, pkgName, tripTon);
+          addRouteSummary(excItem, routeLabel, tripCount);
+        }
       });
+
       productions.forEach(row=>{
         const eq = findEquipmentById(row.equipment_id);
-        const type = eq ? (isTruckEquipment(eq) ? 'Kamyon' : isExcavatorEquipment(eq) ? 'Ekskavatör' : 'Yardımcı') : 'Ekipman';
+        if(!eq) return;
+        if(!(isTruckEquipment(eq) || isExcavatorEquipment(eq))) return;
+        const type = isTruckEquipment(eq) ? 'Kamyon' : 'Ekskavatör';
         ensureEquipment(row.equipment_id, row.equipment_name || eq?.name || '-', type);
       });
+
       const equipmentRows = Object.values(equipmentMap)
-        .map(item=>({ ...item, avg_ton: item.trip > 0 ? item.ton / item.trip : 0 }))
+        .map(item=>{
+          const topPackage = Object.values(item.packages || {}).sort((a,b)=>b.ton-a.ton)[0];
+          const topRoute = Object.values(item.routes || {}).sort((a,b)=>b.trip-a.trip)[0];
+          return {
+            ...item,
+            avg_ton: item.trip > 0 ? item.ton / item.trip : 0,
+            top_package: topPackage ? topPackage.name : '-',
+            top_route: topRoute ? topRoute.name : '-'
+          };
+        })
+        .filter(item=>item.trip > 0 || item.ton > 0)
         .sort((a,b)=>b.ton-a.ton);
+      const equipmentTruckRows = equipmentRows.filter(item=>item.type === 'Kamyon');
+      const equipmentExcRows = equipmentRows.filter(item=>item.type === 'Ekskavatör');
+      const leadTruck = equipmentTruckRows[0] || null;
+      const leadExc = equipmentExcRows[0] || null;
 
       const alerts = [];
       if(openBreakdowns.length){
@@ -6510,8 +6567,8 @@ function renderDeleted(){
             <td>${numFmt(row.ton,1)}<div class="muted">Tahmini tonaj</div></td>
             <td>${numFmt(row.fuel,1)} L<div class="muted">Toplam verilen yakıt</div></td>
             <td>
-              <div><b>Kamyon:</b> ${escapeHtml(truckNames.join(', ') || '-')}</div>
-              <div><b>Ekskavatör:</b> ${escapeHtml(excavatorNames.join(', ') || '-')}</div>
+              <div style="margin-bottom:4px"><b>Kamyon:</b> ${escapeHtml(truckNames.join(', ') || '-')}</div>
+              <div style="margin-bottom:4px"><b>Ekskavatör:</b> ${escapeHtml(excavatorNames.join(', ') || '-')}</div>
               ${helperNames.length ? `<div><b>Yardımcı:</b> ${escapeHtml(helperNames.join(', '))}</div>` : ''}
               <div class="muted" style="margin-top:4px"><b>Paketler:</b> ${escapeHtml(packageSummary)}</div>
             </td>
@@ -6527,13 +6584,17 @@ function renderDeleted(){
           <td>${displayedTotals.ton > 0 ? numFmt((row.ton / displayedTotals.ton) * 100, 1) : '0,0'}%</td>
         </tr>`).join('');
 
-      const equipmentRowsHtml = (equipmentRows.length ? equipmentRows : [{name:'Veri yok', type:'-', trip:0, ton:0, avg_ton:0}]).slice(0,12).map(row=>`
+      const equipmentRowsHtml = (equipmentRows.length ? equipmentRows : [{name:'Veri yok', type:'-', trip:0, ton:0, avg_ton:0, top_package:'-', top_route:'-'}]).slice(0,12).map(row=>`
         <tr>
-          <td>${escapeHtml(String(row.name || '-'))}</td>
-          <td>${escapeHtml(String(row.type || '-'))}</td>
+          <td>
+            <div style="font-weight:800">${escapeHtml(String(row.name || '-'))}</div>
+            <div class="muted" style="font-size:11px;margin-top:3px">${escapeHtml(String(row.top_route || '-'))}</div>
+          </td>
+          <td><span class="badge">${escapeHtml(String(row.type || '-'))}</span></td>
           <td>${numFmt(row.trip)}</td>
           <td>${numFmt(row.ton,1)}</td>
           <td>${numFmt(row.avg_ton,1)}</td>
+          <td>${escapeHtml(String(row.top_package || '-'))}</td>
         </tr>`).join('');
 
       const openBreakRowsHtml = openBreakdowns.length ? openBreakdowns.map(row=>`
@@ -6546,11 +6607,11 @@ function renderDeleted(){
         <tr><td colspan="4" class="muted">Açık arıza bulunmuyor.</td></tr>`;
 
       const html = `
-        <div class="hero" style="padding:26px 28px;background:linear-gradient(135deg,#0f172a 0%,#1e40af 58%,#38bdf8 100%);">
-          <div style="display:flex;justify-content:space-between;gap:18px;align-items:flex-start;flex-wrap:wrap">
+        <div class="hero" style="padding:20px 22px;background:linear-gradient(135deg,#0f172a 0%,#1e40af 58%,#38bdf8 100%);">
+          <div style="display:flex;justify-content:space-between;gap:14px;align-items:flex-start;flex-wrap:wrap">
             <div>
               <h1 style="margin:0 0 8px;font-size:30px;letter-spacing:-.3px">Günlük Operasyon Raporu</h1>
-              <div class="sub">Tarih: <b>${escapeHtml(date)}</b></div>
+              <div class="sub">Tarih: <b>${escapeHtml(date)}</b> • Toplantı sunumu için sadeleştirilmiş günlük görünüm</div>
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
               <span class="badge" style="background:rgba(255,255,255,.14);color:#fff;border:1px solid rgba(255,255,255,.22)">Üretim: ${numFmt(productions.length)}</span>
@@ -6560,23 +6621,23 @@ function renderDeleted(){
           </div>
         </div>
 
-        <div class="grid g4" style="margin-bottom:18px">
+        <div class="grid g4" style="margin-bottom:12px">
           <div class="card kpi"><div class="label">Toplam Sefer</div><div class="value">${numFmt(displayedTotals.trip)}</div><div class="muted" style="margin-top:6px">Günlük kayıt toplamı</div></div>
           <div class="card kpi"><div class="label">Tahmini Tonaj</div><div class="value">${numFmt(displayedTotals.ton,1)}</div><div class="muted" style="margin-top:6px">Sefer × kamyon tonajı × paket katsayısı</div></div>
           <div class="card kpi"><div class="label">Toplam Verilen Yakıt</div><div class="value">${numFmt(displayedTotals.fuel,1)} L</div><div class="muted" style="margin-top:6px">Yakıt kayıt toplamı</div></div>
           <div class="card kpi"><div class="label">Açık Arıza</div><div class="value">${numFmt(displayedTotals.openBreakdowns)}</div><div class="muted" style="margin-top:6px">Toplam açık süre ${numFmt(displayedTotals.openBreakMinutes)} dk</div></div>
         </div>
 
-        <div class="grid g2" style="margin-bottom:18px">
-          <div class="card" style="padding:18px 18px 14px">
+        <div class="grid g2" style="margin-bottom:12px">
+          <div class="card" style="padding:16px 16px 14px">
             <h2 class="section-title">Vardiya Özeti</h2>
             <div class="muted" style="margin:-4px 0 12px">Veriler günlük kayıtlar üzerinden doğrulanarak hazırlanmıştır.</div>
             <table>
-              <thead><tr><th>Tarih / Vardiya</th><th>Sefer</th><th>Tahmini Tonaj</th><th>Toplam Verilen Yakıt</th><th>Aktif Ekipman ve Paketler</th></tr></thead>
+              <thead><tr><th style="width:17%">Tarih / Vardiya</th><th style="width:11%">Sefer</th><th style="width:15%">Tahmini Tonaj</th><th style="width:15%">Toplam Verilen Yakıt</th><th style="width:42%">Aktif Ekipman ve Paketler</th></tr></thead>
               <tbody>${shiftRowsHtml}</tbody>
             </table>
           </div>
-          <div class="card" style="padding:18px 18px 14px">
+          <div class="card" style="padding:16px 16px 14px">
             <h2 class="section-title">Akıllı Uyarılar</h2>
             <div class="alert-list">${alerts.map(a=>`<div class="alert ${a.type==='red'?'red':(a.type==='green'?'green':'')}" style="margin-bottom:10px">${escapeHtml(a.text)}</div>`).join('')}</div>
             <div class="card" style="margin-top:14px;background:#f8fafc;border-style:dashed;box-shadow:none">
@@ -6586,15 +6647,15 @@ function renderDeleted(){
           </div>
         </div>
 
-        <div class="grid g2" style="margin-bottom:18px">
-          <div class="card" style="padding:18px 18px 14px">
+        <div class="grid g2" style="margin-bottom:12px">
+          <div class="card" style="padding:16px 16px 14px">
             <h2 class="section-title">Paket Dağılımı ve Taşınan Tonaj</h2>
             <table>
               <thead><tr><th>Paket</th><th>Sefer</th><th>Katsayı</th><th>Tahmini Tonaj</th><th>Pay</th></tr></thead>
               <tbody>${packageRowsHtml}</tbody>
             </table>
           </div>
-          <div class="card" style="padding:18px 18px 14px">
+          <div class="card" style="padding:16px 16px 14px">
             <h2 class="section-title">Açık Arızalar</h2>
             <table>
               <thead><tr><th>Vardiya</th><th>Ekipman</th><th>Sebep</th><th>Süre</th></tr></thead>
@@ -6603,11 +6664,23 @@ function renderDeleted(){
           </div>
         </div>
 
-        <div class="card" style="padding:18px 18px 14px">
+        <div class="card" style="padding:16px 16px 14px">
           <h2 class="section-title">Ekipman Performans Özeti</h2>
-          <div class="muted" style="margin:-4px 0 12px">Veriler gün içindeki sefer ve paket kayıtlarıyla otomatik özetlenmiştir.</div>
+          <div class="muted" style="margin:-4px 0 12px">Performans değerleri yalnızca mevcut sefer kayıtları, bağlı ekskavatör eşleşmeleri ve paket katsayıları üzerinden yeniden doğrulanarak sunulmuştur.</div>
+          <div class="grid g2" style="margin-bottom:12px">
+            <div class="card" style="background:linear-gradient(135deg,#eff6ff 0%,#f8fbff 100%);border-color:#dbeafe;box-shadow:none">
+              <div class="small muted" style="text-transform:uppercase;letter-spacing:.35px;font-weight:700">Öne Çıkan Kamyon</div>
+              <div style="font-size:22px;font-weight:900;margin-top:6px">${leadTruck ? escapeHtml(String(leadTruck.name || '-')) : 'Veri yok'}</div>
+              <div class="muted" style="margin-top:6px">${leadTruck ? `${numFmt(leadTruck.ton,1)} ton • ${numFmt(leadTruck.trip)} sefer • Baskın paket: ${escapeHtml(String(leadTruck.top_package || '-'))}` : 'Kamyon sefer kaydı bulunamadı.'}</div>
+            </div>
+            <div class="card" style="background:linear-gradient(135deg,#f0fdf4 0%,#f7fff9 100%);border-color:#bbf7d0;box-shadow:none">
+              <div class="small muted" style="text-transform:uppercase;letter-spacing:.35px;font-weight:700">Öne Çıkan Ekskavatör</div>
+              <div style="font-size:22px;font-weight:900;margin-top:6px">${leadExc ? escapeHtml(String(leadExc.name || '-')) : 'Veri yok'}</div>
+              <div class="muted" style="margin-top:6px">${leadExc ? `${numFmt(leadExc.ton,1)} ton • ${numFmt(leadExc.trip)} sefer • Baskın paket: ${escapeHtml(String(leadExc.top_package || '-'))}` : 'Bağlı ekskavatör verisi bulunan sefer kaydı yok.'}</div>
+            </div>
+          </div>
           <table>
-            <thead><tr><th>Ekipman</th><th>Tip</th><th>Sefer</th><th>Tahmini Tonaj</th><th>Ort. Ton / Sefer</th></tr></thead>
+            <thead><tr><th style="width:30%">Ekipman</th><th style="width:14%">Tip</th><th style="width:10%">Sefer</th><th style="width:16%">Tahmini Tonaj</th><th style="width:14%">Ort. Ton / Sefer</th><th style="width:16%">Baskın Paket</th></tr></thead>
             <tbody>${equipmentRowsHtml}</tbody>
           </table>
         </div>
