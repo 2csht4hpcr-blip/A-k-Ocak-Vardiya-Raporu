@@ -6254,6 +6254,182 @@ function renderDeleted(){
     if(res.error) throw res.error;
     return res.data || [];
   }
+  function getShiftReportLocalRowsByTable(table){
+    if(table === TABLES.PRODUCTIONS) return state.productions || [];
+    if(table === TABLES.TRUCK_TRIPS) return state.truck_trips || [];
+    if(table === TABLES.FUEL_LOGS) return state.fuel_logs || [];
+    if(table === TABLES.METER_LOGS) return state.meter_logs || [];
+    if(table === TABLES.BREAKDOWNS) return state.breakdowns || [];
+    if(table === TABLES.RENTALS) return state.rentals || [];
+    return [];
+  }
+  function getShiftReportLinkedProduction(row){
+    try{
+      if(!row?.production_id) return null;
+      return getProductionRowById(row.production_id) || null;
+    }catch(e){
+      return null;
+    }
+  }
+  function getShiftReportRowDate(row){
+    try{
+      const direct = String(row?.shift_date || row?.logistics_shift_date || '').trim();
+      if(direct) return direct;
+      const linkedProd = getShiftReportLinkedProduction(row);
+      const linkedBucket = linkedProd ? resolveShiftBucketForRow(linkedProd) : null;
+      if(linkedBucket?.shift_date) return String(linkedBucket.shift_date);
+      const ownBucket = resolveShiftBucketForRow(row);
+      if(ownBucket?.shift_date) return String(ownBucket.shift_date);
+      return String(row?.recorded_at || row?.start_at || row?.start_time || row?.created_at || '').slice(0,10);
+    }catch(e){
+      return '';
+    }
+  }
+  function getShiftReportRowShiftName(row){
+    try{
+      const direct = String(row?.shift_name || '').trim();
+      if(direct) return direct;
+      const linkedProd = getShiftReportLinkedProduction(row);
+      const linkedShift = linkedProd ? String(getShiftNameForRow(linkedProd) || '').trim() : '';
+      if(linkedShift) return linkedShift;
+      return String(getShiftNameForRow(row) || '').trim();
+    }catch(e){
+      return '';
+    }
+  }
+  function rowMatchesShiftReport(row, date, shiftName){
+    if(!row || row.deleted_at) return false;
+    return String(getShiftReportRowDate(row) || '') === String(date || '') && String(getShiftReportRowShiftName(row) || '') === String(shiftName || '');
+  }
+  function filterLocalRowsForShiftReport(table, date, shiftName){
+    return getShiftReportLocalRowsByTable(table).filter(r=>rowMatchesShiftReport(r, date, shiftName));
+  }
+  async function fetchRowsForShiftReport(table, date, shiftName){
+    const remoteRows = await fetchRowsForRange(table, date, date, shiftName);
+    const localRows = filterLocalRowsForShiftReport(table, date, shiftName);
+    const merged = [];
+    const seen = new Set();
+    [...(remoteRows || []), ...(localRows || [])].forEach(r=>{
+      const key = String(r?.id || `${table}_${getShiftReportRowDate(r)}_${getShiftReportRowShiftName(r)}_${r?.equipment_id || ''}_${r?.production_id || ''}_${r?.created_at || ''}`);
+      if(seen.has(key)) return;
+      seen.add(key);
+      merged.push(r);
+    });
+    return merged;
+  }
+  function ensureWorksheetHasData(ws, emptyText){
+    if(ws.rowCount < 2){
+      const row = ws.addRow([emptyText || 'Kayıt bulunamadı']);
+      ws.mergeCells(row.number, 1, row.number, Math.max(1, ws.columnCount || 1));
+      row.getCell(1).alignment = {vertical:'middle', horizontal:'left', wrapText:true};
+      row.getCell(1).font = {italic:true, color:{argb:'475569'}};
+      row.getCell(1).fill = {type:'pattern', pattern:'solid', fgColor:{argb:'F8FAFC'}};
+    }
+  }
+  function buildShiftReportTruckRows(trips){
+    const map = new Map();
+    (trips || []).filter(r=>!r?.deleted_at).forEach(r=>{
+      const key = String(r.equipment_id || r.equipment_name || r.id || '');
+      if(!key) return;
+      if(!map.has(key)){
+        map.set(key, {
+          'Kamyon': r.equipment_name || findEquipmentById(r.equipment_id)?.name || '-',
+          'Bağlı Ekskavatör': r.linked_excavator_name || findEquipmentById(r.linked_excavator_id)?.name || '-',
+          'Toplam Sefer': 0,
+          'Tahmini Tonaj': 0,
+          'Paketler': new Set(),
+          'Rotalar': new Set()
+        });
+      }
+      const item = map.get(key);
+      item['Toplam Sefer'] += Number(r.trip_count || 0);
+      item['Tahmini Tonaj'] += Number(getTripRowTonnage(r) || 0);
+      if(r.package_name || packageName(r.package_id)) item['Paketler'].add(r.package_name || packageName(r.package_id));
+      const route = [r.from_location || '', r.to_location || ''].filter(Boolean).join(' → ');
+      if(route) item['Rotalar'].add(route);
+    });
+    return Array.from(map.values()).map(item=>({
+      'Kamyon': item['Kamyon'],
+      'Bağlı Ekskavatör': item['Bağlı Ekskavatör'],
+      'Toplam Sefer': Math.round(item['Toplam Sefer']),
+      'Tahmini Tonaj': round1(item['Tahmini Tonaj']),
+      'Ort. Ton/Sefer': item['Toplam Sefer'] > 0 ? round1(item['Tahmini Tonaj'] / item['Toplam Sefer']) : 0,
+      'Paketler': Array.from(item['Paketler']).join(', '),
+      'Rotalar': Array.from(item['Rotalar']).join(' | ')
+    })).sort((a,b)=>Number(b['Tahmini Tonaj'] || 0) - Number(a['Tahmini Tonaj'] || 0));
+  }
+  function buildShiftReportExcavatorRows(productions, trips){
+    const tripMap = new Map();
+    (trips || []).filter(r=>!r?.deleted_at).forEach(r=>{
+      const key = String(r.linked_excavator_id || '');
+      if(!key) return;
+      if(!tripMap.has(key)) tripMap.set(key, { trip:0, ton:0, trucks:new Set(), packages:new Set() });
+      const item = tripMap.get(key);
+      item.trip += Number(r.trip_count || 0);
+      item.ton += Number(getTripRowTonnage(r) || 0);
+      if(r.equipment_name || findEquipmentById(r.equipment_id)?.name) item.trucks.add(r.equipment_name || findEquipmentById(r.equipment_id)?.name);
+      if(r.package_name || packageName(r.package_id)) item.packages.add(r.package_name || packageName(r.package_id));
+    });
+    const rows = [];
+    (productions || []).filter(r=>!r?.deleted_at && isExcavatorEquipment(findEquipmentById(r.equipment_id))).forEach(r=>{
+      const key = String(r.equipment_id || r.id || '');
+      const stats = tripMap.get(key) || { trip:0, ton:0, trucks:new Set(), packages:new Set() };
+      rows.push({
+        'Ekskavatör': r.equipment_name || findEquipmentById(r.equipment_id)?.name || '-',
+        'Toplam Sefer': Math.round(stats.trip || 0),
+        'Tahmini Tonaj': round1(stats.ton || 0),
+        'Bağlı Kamyonlar': Array.from(stats.trucks).join(', '),
+        'Paketler': Array.from(stats.packages).join(', ')
+      });
+    });
+    return rows.sort((a,b)=>Number(b['Tahmini Tonaj'] || 0) - Number(a['Tahmini Tonaj'] || 0));
+  }
+  function buildShiftReportPackageRows(trips){
+    const map = new Map();
+    (trips || []).filter(r=>!r?.deleted_at).forEach(r=>{
+      const key = String(r.package_id || r.package_name || r.id || '');
+      if(!key) return;
+      if(!map.has(key)){
+        map.set(key, { 'Paket': r.package_name || packageName(r.package_id) || '-', 'Toplam Sefer': 0, 'Tahmini Tonaj': 0, routes:new Set() });
+      }
+      const item = map.get(key);
+      item['Toplam Sefer'] += Number(r.trip_count || 0);
+      item['Tahmini Tonaj'] += Number(getTripRowTonnage(r) || 0);
+      const route = [r.from_location || '', r.to_location || ''].filter(Boolean).join(' → ');
+      if(route) item.routes.add(route);
+    });
+    return Array.from(map.values()).map(item=>({
+      'Paket': item['Paket'],
+      'Toplam Sefer': Math.round(item['Toplam Sefer']),
+      'Tahmini Tonaj': round1(item['Tahmini Tonaj']),
+      'Ort. Ton/Sefer': item['Toplam Sefer'] > 0 ? round1(item['Tahmini Tonaj'] / item['Toplam Sefer']) : 0,
+      'Rotalar': Array.from(item.routes).join(' | ')
+    })).sort((a,b)=>Number(b['Tahmini Tonaj'] || 0) - Number(a['Tahmini Tonaj'] || 0));
+  }
+  function buildShiftReportSummaryFromRows(date, shiftName, productions, trips, fuels, meters, breakdowns, rentals){
+    const activeEquipment = new Set();
+    [...(productions || []), ...(trips || []), ...(fuels || []), ...(meters || []), ...(breakdowns || []), ...(rentals || [])].forEach(r=>{
+      if(r?.deleted_at) return;
+      const eqId = String(r.equipment_id || '');
+      if(eqId) activeEquipment.add(eqId);
+    });
+    const totalMeterDiff = (meters || []).filter(r=>!r?.deleted_at).reduce((acc, r)=>{
+      if(Number.isFinite(Number(r.meter_diff))) return acc + Number(r.meter_diff);
+      const startVal = Number(r.start_meter_value ?? r.start_value ?? 0);
+      const endVal = Number(r.end_meter_value ?? r.end_value ?? r.meter_value ?? 0);
+      if(Number.isFinite(startVal) && Number.isFinite(endVal) && endVal >= startVal) return acc + (endVal - startVal);
+      return acc;
+    }, 0);
+    return {
+      shift_date: date,
+      shift_name: shiftName,
+      total_trip_count: (trips || []).filter(r=>!r?.deleted_at).reduce((acc, r)=>acc + Number(r.trip_count || 0), 0),
+      estimated_tonnage: (trips || []).filter(r=>!r?.deleted_at).reduce((acc, r)=>acc + Number(getTripRowTonnage(r) || 0), 0),
+      total_fuel_liters: (fuels || []).filter(r=>!r?.deleted_at).reduce((acc, r)=>acc + Number(r.liters || 0), 0),
+      active_equipment_count: activeEquipment.size,
+      total_meter_diff: totalMeterDiff
+    };
+  }
   function shiftSummaryTotals(rows){
     return (rows || []).reduce((acc, r)=>{
       acc.trip += Number(r.total_trip_count || 0);
@@ -6290,13 +6466,12 @@ function renderDeleted(){
   :root{--bg:#f8fafc;--card:#fff;--line:#e2e8f0;--text:#0f172a;--muted:#475569;--blue:#2563eb;--green:#15803d;--orange:#c2410c;--red:#dc2626}
   *{box-sizing:border-box}
   body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text)}
-  .wrap{width:100%;max-width:none;margin:0 auto;padding:18px}
+  .wrap{max-width:1100px;margin:0 auto;padding:28px}
   .hero{background:linear-gradient(135deg,#0f172a 0%,#1d4ed8 100%);color:#fff;border-radius:20px;padding:22px 24px;margin-bottom:18px}
   .hero h1{margin:0 0 6px;font-size:28px}
   .hero .sub{font-size:14px;opacity:.92}
   .grid{display:grid;gap:14px}
   .g4{grid-template-columns:repeat(4,minmax(0,1fr))}
-  .g3{grid-template-columns:repeat(3,minmax(0,1fr))}
   .g2{grid-template-columns:repeat(2,minmax(0,1fr))}
   .card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px;box-shadow:0 8px 24px rgba(15,23,42,.06)}
   .kpi .label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;font-weight:700}
@@ -6312,17 +6487,9 @@ function renderDeleted(){
   .alert.red{border-color:#fecaca;background:#fef2f2}
   .alert.green{border-color:#bbf7d0;background:#f0fdf4}
   .small{font-size:12px}
-  .summary-table th,.summary-table td{font-size:11px;padding:9px 7px}
-  .summary-sub{display:grid;gap:6px;margin-top:10px;padding:10px 12px;border:1px solid #e2e8f0;border-radius:14px;background:#f8fafc}
-  .summary-sub-row{font-size:12px;line-height:1.45}
-  .package-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
-  .package-item{border:1px solid #e2e8f0;border-radius:16px;padding:12px;background:#fff}
-  .package-item .name{font-weight:800;font-size:14px}
-  .package-item .meta{margin-top:8px;font-size:12px;color:var(--muted);display:grid;gap:4px}
-  .empty-note{padding:12px 14px;border:1px dashed #cbd5e1;border-radius:14px;color:var(--muted);background:#fff}
   @media print{
     body{background:#fff}
-    .wrap{max-width:none;padding:8mm}
+    .wrap{max-width:none;padding:12mm}
     .card,.hero{box-shadow:none}
     .hero{background:#1d4ed8 !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   }
@@ -6356,244 +6523,110 @@ function renderDeleted(){
     if(currentUserRole() !== 'manager'){ alert('Bu rapor yalnızca yöneticiye açıktır.'); return; }
     try{
       const date = document.getElementById('report_daily_date')?.value || todayStr();
+      const summaryRows = await fetchSummaryRange(date, date);
       const productions = (await fetchRowsForRange(TABLES.PRODUCTIONS, date, date)).filter(r=>!r.deleted_at);
       const trips = (await fetchRowsForRange(TABLES.TRUCK_TRIPS, date, date)).filter(r=>!r.deleted_at);
       const fuels = (await fetchRowsForRange(TABLES.FUEL_LOGS, date, date)).filter(r=>!r.deleted_at);
       const breakdowns = (await fetchRowsForRange(TABLES.BREAKDOWNS, date, date)).filter(r=>!r.deleted_at);
       const rentals = (await fetchRowsForRange(TABLES.RENTALS, date, date)).filter(r=>!r.deleted_at);
-      const alertRules = normalizeAlertRules(state.alertRules || DEFAULT_ALERT_RULES);
+      const totals = shiftSummaryTotals(summaryRows);
 
-      const totals = {
-        trip: trips.reduce((s,row)=>s + (Number(row.trip_count || 0) || 0), 0),
-        ton: trips.reduce((s,row)=>s + getTripRowTonnage(row), 0),
-        fuel: fuels.reduce((s,row)=>s + (Number(row.liters || 0) || 0), 0)
-      };
       const openBreakdowns = breakdowns.filter(r=>isOpenRow(r));
-
-      const shiftMap = {};
-      const ensureShift = (shiftName)=>{
-        const key = String(shiftName || '-');
-        if(!shiftMap[key]) shiftMap[key] = { shift_name:key, trips:[], fuels:[], productions:[], breakdowns:[], trucks:new Set(), excavators:new Set(), packages:{} };
-        return shiftMap[key];
-      };
-      trips.forEach(r=>{
-        const shiftName = String(r.shift_name || getShiftNameForRow(r) || '-');
-        const bucket = ensureShift(shiftName);
-        bucket.trips.push(r);
-        if(r.equipment_id) bucket.trucks.add(String(r.equipment_id));
-        if(r.linked_excavator_id) bucket.excavators.add(String(r.linked_excavator_id));
-        const packageId = String(r.package_id || '');
-        const packageNameLabel = r.package_name || packageName(r.package_id) || '-';
-        if(!bucket.packages[packageId || packageNameLabel]) bucket.packages[packageId || packageNameLabel] = { name:packageNameLabel, trip:0, ton:0 };
-        bucket.packages[packageId || packageNameLabel].trip += Number(r.trip_count || 0) || 0;
-        bucket.packages[packageId || packageNameLabel].ton += getTripRowTonnage(r);
-      });
-      fuels.forEach(r=>{
-        const shiftName = String(r.shift_name || getShiftNameForRow(r) || '-');
-        const bucket = ensureShift(shiftName);
-        bucket.fuels.push(r);
-      });
+      const topEquipment = {};
       productions.forEach(r=>{
-        const shiftName = String(r.shift_name || getShiftNameForRow(r) || '-');
-        const bucket = ensureShift(shiftName);
-        bucket.productions.push(r);
-        const eq = findEquipmentById(r.equipment_id);
-        if(isTruckEquipment(eq)) bucket.trucks.add(String(r.equipment_id || ''));
-        if(isExcavatorEquipment(eq)) bucket.excavators.add(String(r.equipment_id || ''));
+        const key = String(r.equipment_id || '');
+        if(!key) return;
+        if(!topEquipment[key]) topEquipment[key] = {name: r.equipment_name || r.equipment_name_snapshot || findEquipmentById(r.equipment_id)?.name || '-', trip:0, ton:0};
+        topEquipment[key].trip += Number(r.trip_count || 0);
+        topEquipment[key].ton += Number(r.trip_count || 0) * Number(getPackageTonnageFactor(r.package_id) || 0 || 1);
       });
-      breakdowns.forEach(r=>{
-        const shiftName = String(r.shift_name || getShiftNameForRow(r) || '-');
-        const bucket = ensureShift(shiftName);
-        bucket.breakdowns.push(r);
-      });
-
-      const shiftRows = Object.values(shiftMap).map(bucket=>{
-        const tripCount = bucket.trips.reduce((s,row)=>s + (Number(row.trip_count || 0) || 0), 0);
-        const tonnage = bucket.trips.reduce((s,row)=>s + getTripRowTonnage(row), 0);
-        const fuelLiters = bucket.fuels.reduce((s,row)=>s + (Number(row.liters || 0) || 0), 0);
-        const truckNames = Array.from(bucket.trucks).map(id=>findEquipmentById(id)?.name).filter(Boolean);
-        const excNames = Array.from(bucket.excavators).map(id=>findEquipmentById(id)?.name).filter(Boolean);
-        const packageSummary = Object.values(bucket.packages).sort((a,b)=>(b.ton||0)-(a.ton||0));
-        const breakdownMinutes = bucket.breakdowns.reduce((s,r)=>s + minutesBetweenSafe(r.start_at || r.created_at, r.end_at || null), 0);
-        return {
-          shift_name: bucket.shift_name,
-          total_trip_count: tripCount,
-          estimated_tonnage: tonnage,
-          total_fuel_liters: fuelLiters,
-          truck_names: truckNames,
-          excavator_names: excNames,
-          package_summary: packageSummary,
-          breakdown_minutes: breakdownMinutes,
-          active_truck_count: truckNames.length,
-          active_exc_count: excNames.length
-        };
-      }).sort((a,b)=>String(a.shift_name).localeCompare(String(b.shift_name),'tr'));
-
-      const avgTrips = shiftRows.length ? shiftRows.reduce((s,r)=>s + r.total_trip_count, 0) / shiftRows.length : 0;
-      const avgFuel = shiftRows.length ? shiftRows.reduce((s,r)=>s + r.total_fuel_liters, 0) / shiftRows.length : 0;
-      const truckRows = [];
-      const truckIds = Array.from(new Set(trips.map(r=>String(r.equipment_id || '')).filter(Boolean)));
-      truckIds.forEach(id=>{
-        const eq = findEquipmentById(id) || {};
-        const tripRows = trips.filter(r=>String(r.equipment_id || '') === id);
-        const tripCount = tripRows.reduce((s,row)=>s + (Number(row.trip_count || 0) || 0), 0);
-        const tonnage = tripRows.reduce((s,row)=>s + getTripRowTonnage(row), 0);
-        if(tripCount || tonnage){
-          truckRows.push({
-            name:eq.name || tripRows[0]?.equipment_name || '-',
-            type:'Kamyon',
-            trip:tripCount,
-            ton:tonnage,
-            avg: tripCount ? tonnage / tripCount : 0
-          });
-        }
-      });
-      const excIds = Array.from(new Set(trips.map(r=>String(r.linked_excavator_id || '')).filter(Boolean)));
-      excIds.forEach(id=>{
-        const eq = findEquipmentById(id) || {};
-        const tripRows = trips.filter(r=>String(r.linked_excavator_id || '') === id);
-        const tripCount = tripRows.reduce((s,row)=>s + (Number(row.trip_count || 0) || 0), 0);
-        const tonnage = tripRows.reduce((s,row)=>s + getTripRowTonnage(row), 0);
-        if(tripCount || tonnage){
-          truckRows.push({
-            name:eq.name || tripRows[0]?.linked_excavator_name || '-',
-            type:'Ekskavatör',
-            trip:tripCount,
-            ton:tonnage,
-            avg: tripCount ? tonnage / tripCount : 0
-          });
-        }
-      });
-      const equipmentRows = truckRows.sort((a,b)=>(b.ton||0)-(a.ton||0));
-
-      const packageRows = {};
-      trips.forEach(r=>{
-        const packageId = String(r.package_id || '');
-        const key = packageId || String(r.package_name || packageName(r.package_id) || '-');
-        if(!packageRows[key]) packageRows[key] = { name:r.package_name || packageName(r.package_id) || '-', trip:0, ton:0, factor:getPackageTonnageFactor(r.package_id) };
-        packageRows[key].trip += Number(r.trip_count || 0) || 0;
-        packageRows[key].ton += getTripRowTonnage(r);
-      });
-      const packageItems = Object.values(packageRows).sort((a,b)=>(b.ton||0)-(a.ton||0));
+      const topEquipmentRows = Object.values(topEquipment).sort((a,b)=>b.trip-a.trip).slice(0,8);
 
       const alerts = [];
-      if(avgTrips > 0){
-        shiftRows.forEach(r=>{
-          if(r.total_trip_count < avgTrips * alertRules.lowProductionRatio) alerts.push({type:'red', text:`${r.shift_name}: düşük üretim. Sefer ${r.total_trip_count}, gün ortalaması ${avgTrips.toFixed(1)}.`});
-        });
-      }
-      if(avgFuel > 0){
-        shiftRows.forEach(r=>{
-          if(r.total_fuel_liters > avgFuel * alertRules.highFuelRatio) alerts.push({type:'orange', text:`${r.shift_name}: verilen yakıt yüksek. ${r.total_fuel_liters.toFixed(0)} L.`});
-        });
-      }
-      const totalBreakdownMinutes = breakdowns.reduce((s,r)=>s + minutesBetweenSafe(r.start_at || r.created_at, r.end_at || null), 0);
       if(openBreakdowns.length) alerts.push({type:'red', text:`Açık arıza sayısı ${openBreakdowns.length}. Kritik ekipmanları kontrol edin.`});
-      if(totalBreakdownMinutes >= alertRules.longBreakdownMinutes) alerts.push({type:'red', text:`Toplam arıza süresi ${formatDurationMinutes(totalBreakdownMinutes)}.`});
-      const fleetAvgKmPerTrip = truckIds.length ? truckIds.map(id=>{
-        const itemTrips = trips.filter(r=>String(r.equipment_id||'')===id);
-        const meterWindow = shiftEquipmentMeterWindow(id, shiftRows[0]?.shift_name || '', date);
-        const meterDiff = meterWindow ? Math.max(0, Number(meterWindow.end || 0) - Number(meterWindow.start || 0)) : 0;
-        const tripCount = itemTrips.reduce((s,row)=>s + (Number(row.trip_count||0)||0), 0);
-        return tripCount ? meterDiff / tripCount : 0;
-      }).filter(v=>v>0).reduce((a,b)=>a+b,0) / Math.max(1, truckIds.length) : 0;
-      truckIds.forEach(id=>{
-        const eq = findEquipmentById(id) || {};
-        const itemTrips = trips.filter(r=>String(r.equipment_id||'')===id);
-        const tripCount = itemTrips.reduce((s,row)=>s + (Number(row.trip_count||0)||0), 0);
-        const meterWindow = shiftEquipmentMeterWindow(id, shiftRows[0]?.shift_name || '', date);
-        const meterDiff = meterWindow ? Math.max(0, Number(meterWindow.end || 0) - Number(meterWindow.start || 0)) : 0;
-        const kmPerTrip = tripCount ? meterDiff / tripCount : 0;
-        if(meterDiff > alertRules.abnormalKmThreshold && tripCount < alertRules.abnormalKmTripLimit) alerts.push({type:'red', text:`${eq.name || '-'}: anormal km farkı ${meterDiff.toFixed(1)} km, ${tripCount} sefer.`});
-        else if(fleetAvgKmPerTrip > 0 && kmPerTrip > fleetAvgKmPerTrip * alertRules.kmPerTripRatio) alerts.push({type:'orange', text:`${eq.name || '-'}: km / sefer sapması ${kmPerTrip.toFixed(1)}.`});
-      });
+      if(Number(totals.fuel || 0) > 0 && Number(totals.trip || 0) === 0) alerts.push({type:'red', text:'Yakıt kaydı var ancak toplam sefer 0 görünüyor.'});
+      if(Number(totals.trip || 0) > 0 && Number(totals.fuel || 0) / Math.max(Number(totals.trip || 0),1) > 50) alerts.push({type:'orange', text:'Sefer başına yakıt tüketimi yüksek görünüyor.'});
       if(!alerts.length) alerts.push({type:'green', text:'Bugün için kritik uyarı görünmüyor.'});
 
       const html = `
         <div class="hero">
           <h1>Günlük Operasyon Raporu</h1>
-          <div class="sub">Tarih: <b>${escapeHtml(date)}</b></div>
+          <div class="sub">Tarih: <b>${escapeHtml(date)}</b> • Maden Takip v40</div>
         </div>
 
         <div class="grid g4" style="margin-bottom:16px">
           <div class="card kpi"><div class="label">Toplam Sefer</div><div class="value">${numFmt(totals.trip)}</div></div>
           <div class="card kpi"><div class="label">Tahmini Tonaj</div><div class="value">${numFmt(totals.ton)}</div></div>
-          <div class="card kpi"><div class="label">Toplam Verilen Yakıt</div><div class="value">${numFmt(totals.fuel)} L</div></div>
+          <div class="card kpi"><div class="label">Toplam Yakıt</div><div class="value">${numFmt(totals.fuel)} L</div></div>
           <div class="card kpi"><div class="label">Açık Arıza</div><div class="value">${numFmt(openBreakdowns.length)}</div></div>
         </div>
 
-        <div class="card" style="margin-bottom:16px">
-          <h2 class="section-title">Vardiya Özeti</h2>
-          <table class="summary-table">
-            <thead><tr><th>Vardiya</th><th>Sefer</th><th>Tahmini Tonaj</th><th>Toplam Verilen Yakıt</th></tr></thead>
-            <tbody>
-              ${(shiftRows.length ? shiftRows : [{shift_name:'-',total_trip_count:0,estimated_tonnage:0,total_fuel_liters:0,truck_names:[],excavator_names:[],package_summary:[],active_truck_count:0,active_exc_count:0}]).map(r=>`
-                <tr>
-                  <td>${escapeHtml(String(r.shift_name || ''))}</td>
-                  <td>${numFmt(r.total_trip_count)}</td>
-                  <td>${numFmt(r.estimated_tonnage)}</td>
-                  <td>${numFmt(r.total_fuel_liters)} L</td>
-                </tr>
-                <tr>
-                  <td colspan="4" style="padding-top:0;border-bottom:1px solid #edf2f7">
-                    <div class="summary-sub">
-                      <div class="summary-sub-row"><b>Kamyonlar:</b> ${escapeHtml(r.truck_names.length ? r.truck_names.join(', ') : 'Yok')}</div>
-                      <div class="summary-sub-row"><b>Ekskavatörler:</b> ${escapeHtml(r.excavator_names.length ? r.excavator_names.join(', ') : 'Yok')}</div>
-                      <div class="summary-sub-row"><b>Paketler:</b> ${escapeHtml(r.package_summary.length ? r.package_summary.map(p=>`${p.name} (${numFmt(p.ton)} ton)`).join(' • ') : 'Yok')}</div>
-                    </div>
-                  </td>
-                </tr>`).join('')}
-            </tbody>
-          </table>
-        </div>
-
-        <div class="grid g2" style="margin-bottom:16px">
+        <div class="grid g2">
+          <div class="card">
+            <h2 class="section-title">Vardiya Özeti</h2>
+            <table>
+              <thead><tr><th>Tarih</th><th>Vardiya</th><th>Sefer</th><th>Tonaj</th><th>Yakıt</th><th>Aktif Ekipman</th></tr></thead>
+              <tbody>
+                ${(summaryRows.length ? summaryRows : [{shift_date:date, shift_name:'-', total_trip_count:0, estimated_tonnage:0, total_fuel_liters:0, active_equipment_count:0}]).map(r=>`
+                  <tr>
+                    <td>${escapeHtml(String(r.shift_date || ''))}</td>
+                    <td>${escapeHtml(String(r.shift_name || ''))}</td>
+                    <td>${numFmt(r.total_trip_count)}</td>
+                    <td>${numFmt(r.estimated_tonnage)}</td>
+                    <td>${numFmt(r.total_fuel_liters)}</td>
+                    <td>${numFmt(r.active_equipment_count)}</td>
+                  </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>
           <div class="card">
             <h2 class="section-title">Akıllı Uyarılar</h2>
             <div class="alert-list">
               ${alerts.map(a=>`<div class="alert ${a.type==='red'?'red':(a.type==='green'?'green':'')}">${escapeHtml(a.text)}</div>`).join('')}
             </div>
           </div>
-          <div class="card">
-            <h2 class="section-title">Paket Dağılımı</h2>
-            ${packageItems.length ? `<div class="package-grid">` + packageItems.map(p=>`
-              <div class="package-item">
-                <div class="name">${escapeHtml(p.name)}</div>
-                <div class="meta">
-                  <div>Sefer: <b>${numFmt(p.trip)}</b></div>
-                  <div>Taşınan tonaj: <b>${numFmt(p.ton)} ton</b></div>
-                  <div>Paket katsayısı: <b>${numFmt(p.factor,2)}</b></div>
-                </div>
-              </div>`).join('') + `</div>` : '<div class="empty-note">Paket verisi bulunmuyor.</div>'}
-          </div>
         </div>
 
-        <div class="card" style="margin-bottom:16px">
+        <div class="card" style="margin-top:16px">
           <h2 class="section-title">Ekipman Performans Özeti</h2>
           <table>
-            <thead><tr><th>Ekipman</th><th>Tip</th><th>Sefer</th><th>Tahmini Tonaj</th><th>Ort. Ton/Sefer</th></tr></thead>
+            <thead><tr><th>Ekipman</th><th>Sefer</th><th>Tahmini Tonaj</th></tr></thead>
             <tbody>
-              ${(equipmentRows.length ? equipmentRows : [{name:'Veri yok',type:'-',trip:0,ton:0,avg:0}]).map(r=>`
-                <tr><td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.type)}</td><td>${numFmt(r.trip)}</td><td>${numFmt(r.ton)}</td><td>${numFmt(r.avg,1)}</td></tr>
+              ${(topEquipmentRows.length ? topEquipmentRows : [{name:'Veri yok',trip:0,ton:0}]).map(r=>`
+                <tr><td>${escapeHtml(r.name)}</td><td>${numFmt(r.trip)}</td><td>${numFmt(r.ton)}</td></tr>
               `).join('')}
             </tbody>
           </table>
         </div>
 
-        <div class="card">
-          <h2 class="section-title">Açık Arızalar</h2>
-          ${openBreakdowns.length ? `<table>
-            <thead><tr><th>Vardiya</th><th>Ekipman</th><th>Sebep</th><th>Süre</th></tr></thead>
-            <tbody>
-              ${openBreakdowns.map(r=>`
-                <tr>
-                  <td>${escapeHtml(String(r.shift_name || '-'))}</td>
-                  <td>${escapeHtml(String(r.equipment_name || r.equipment_name_snapshot || findEquipmentById(r.equipment_id)?.name || '-'))}</td>
-                  <td>${escapeHtml(String(r.reason || '-'))}</td>
-                  <td>${numFmt(minutesBetweenSafe(r.start_at || r.created_at, r.end_at || null))} dk</td>
-                </tr>`).join('')}
-            </tbody>
-          </table>` : '<div class="empty-note">Açık arıza bulunmuyor.</div>'}
+        <div class="grid g2" style="margin-top:16px">
+          <div class="card">
+            <h2 class="section-title">Açık Arızalar</h2>
+            <table>
+              <thead><tr><th>Vardiya</th><th>Ekipman</th><th>Sebep</th><th>Süre</th></tr></thead>
+              <tbody>
+                ${(openBreakdowns.length ? openBreakdowns : [{shift_name:'-',equipment_name:'Açık arıza yok',reason:'-',start_at:''}]).map(r=>`
+                  <tr>
+                    <td>${escapeHtml(String(r.shift_name || '-'))}</td>
+                    <td>${escapeHtml(String(r.equipment_name || r.equipment_name_snapshot || findEquipmentById(r.equipment_id)?.name || '-'))}</td>
+                    <td>${escapeHtml(String(r.reason || '-'))}</td>
+                    <td>${numFmt(minutesBetweenSafe(r.start_at || r.created_at, r.end_at || null))} dk</td>
+                  </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>
+          <div class="card">
+            <h2 class="section-title">Kayıt Özeti</h2>
+            <table>
+              <tbody>
+                <tr><th>Üretim Kaydı</th><td>${numFmt(productions.length)}</td></tr>
+                <tr><th>Sefer Kaydı</th><td>${numFmt(trips.length)}</td></tr>
+                <tr><th>Yakıt Kaydı</th><td>${numFmt(fuels.length)}</td></tr>
+                <tr><th>Kiralık Kaydı</th><td>${numFmt(rentals.length)}</td></tr>
+                <tr><th>Arıza Kaydı</th><td>${numFmt(breakdowns.length)}</td></tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       `;
       openPrintableReportHtml(`Gunluk Rapor ${date}`, html);
@@ -6815,14 +6848,18 @@ function renderDeleted(){
       const date = document.getElementById('report_shift_date')?.value || todayStr();
       const shiftName = document.getElementById('report_shift_name')?.value || '';
       if(!shiftName) throw new Error('Vardiya seçiniz');
-      const productions = await fetchRowsForRange(TABLES.PRODUCTIONS, date, date, shiftName);
-      const trips = await fetchRowsForRange(TABLES.TRUCK_TRIPS, date, date, shiftName);
-      const fuels = await fetchRowsForRange(TABLES.FUEL_LOGS, date, date, shiftName);
-      const meters = await fetchRowsForRange(TABLES.METER_LOGS, date, date, shiftName);
-      const breakdowns = await fetchRowsForRange(TABLES.BREAKDOWNS, date, date, shiftName);
-      const rentals = await fetchRowsForRange(TABLES.RENTALS, date, date, shiftName);
+      const productions = (await fetchRowsForShiftReport(TABLES.PRODUCTIONS, date, shiftName)).filter(r=>!r.deleted_at);
+      const trips = (await fetchRowsForShiftReport(TABLES.TRUCK_TRIPS, date, shiftName)).filter(r=>!r.deleted_at);
+      const fuels = (await fetchRowsForShiftReport(TABLES.FUEL_LOGS, date, shiftName)).filter(r=>!r.deleted_at);
+      const meters = (await fetchRowsForShiftReport(TABLES.METER_LOGS, date, shiftName)).filter(r=>!r.deleted_at);
+      const breakdowns = (await fetchRowsForShiftReport(TABLES.BREAKDOWNS, date, shiftName)).filter(r=>!r.deleted_at);
+      const rentals = (await fetchRowsForShiftReport(TABLES.RENTALS, date, shiftName)).filter(r=>!r.deleted_at);
       const summaryRows = await fetchSummaryRange(date, date);
-      const summary = (summaryRows || []).find(r=>String(r.shift_name||'')===String(shiftName||'')) || {};
+      const fallbackSummary = buildShiftReportSummaryFromRows(date, shiftName, productions, trips, fuels, meters, breakdowns, rentals);
+      const summary = (summaryRows || []).find(r=>String(r.shift_name||'')===String(shiftName||'')) || fallbackSummary;
+      const truckRows = buildShiftReportTruckRows(trips);
+      const excavatorRows = buildShiftReportExcavatorRows(productions, trips);
+      const packageRows = buildShiftReportPackageRows(trips);
 
       const wb = new ExcelJS.Workbook();
       wb.creator = 'OpenAI';
@@ -6834,12 +6871,13 @@ function renderDeleted(){
         ['Rapor Türü','Vardiya Operasyon Raporu'],
         ['Tarih',date],
         ['Vardiya',shiftName],
-        ['Toplam Sefer',Math.round(Number(summary.total_trip_count || trips.reduce((a,b)=>a+Number(b.trip_count||0),0)))],
-        ['Tahmini Tonaj',Math.round(Number(summary.estimated_tonnage || 0))],
-        ['Toplam Yakıt (L)',Math.round(Number(summary.total_fuel_liters || fuels.reduce((a,b)=>a+Number(b.liters||0),0)))],
-        ['Aktif Ekipman',Math.round(Number(summary.active_equipment_count || 0))],
-        ['Açık Arıza',breakdowns.filter(r=>!r.deleted_at && isOpenRow(r)).length]
+        ['Toplam Sefer',Math.round(Number(summary.total_trip_count || fallbackSummary.total_trip_count || 0))],
+        ['Tahmini Tonaj',Math.round(Number(summary.estimated_tonnage || fallbackSummary.estimated_tonnage || 0))],
+        ['Toplam Yakıt (L)',Math.round(Number(summary.total_fuel_liters || fallbackSummary.total_fuel_liters || 0))],
+        ['Aktif Ekipman',Math.round(Number(summary.active_equipment_count || fallbackSummary.active_equipment_count || 0))],
+        ['Açık Arıza',breakdowns.filter(r=>isOpenRow(r)).length]
       ].forEach(([k,v])=>ws0.addRow({k,v}));
+      ensureWorksheetHasData(ws0, 'Kapak bilgisi oluşturulamadı');
       styleWorksheet(ws0);
 
       const ws1 = wb.addWorksheet('Vardiya Özeti');
@@ -6848,13 +6886,17 @@ function renderDeleted(){
         {header:'Değer', key:'v', width:22},
       ];
       [
-        ['Üretim Kaydı', productions.filter(r=>!r.deleted_at).length],
-        ['Sefer Kaydı', trips.filter(r=>!r.deleted_at).length],
-        ['Yakıt Kaydı', fuels.filter(r=>!r.deleted_at).length],
-        ['Sayaç Kaydı', meters.filter(r=>!r.deleted_at).length],
-        ['Arıza Kaydı', breakdowns.filter(r=>!r.deleted_at).length],
-        ['Kiralık Kaydı', rentals.filter(r=>!r.deleted_at).length],
+        ['Üretim Kaydı', productions.length],
+        ['Sefer Kaydı', trips.length],
+        ['Yakıt Kaydı', fuels.length],
+        ['Sayaç Kaydı', meters.length],
+        ['Arıza Kaydı', breakdowns.length],
+        ['Kiralık Kaydı', rentals.length],
+        ['Kamyon Analizi Satırı', truckRows.length],
+        ['Ekskavatör Analizi Satırı', excavatorRows.length],
+        ['Paket Analizi Satırı', packageRows.length],
       ].forEach(([k,v])=>ws1.addRow({k,v}));
+      ensureWorksheetHasData(ws1, 'Seçilen vardiya için özet veri bulunamadı');
       styleWorksheet(ws1);
 
       const ws2 = wb.addWorksheet('Üretim');
@@ -6871,11 +6913,12 @@ function renderDeleted(){
         equipment_name:r.equipment_name || r.equipment_name_snapshot || findEquipmentById(r.equipment_id)?.name || '',
         package_name:r.package_name || r.package_name_snapshot || packageName(r.package_id) || '',
         route:[r.from_location||'', r.to_location||''].filter(Boolean).join(' → '),
-        trip_count:r.trip_count || 0,
+        trip_count:r.trip_count || productionTripTotal(r) || 0,
         start_at:fmtDate(r.start_at || r.created_at || ''),
         end_at:fmtDate(r.end_at || ''),
         status:r.status || ''
       }));
+      ensureWorksheetHasData(ws2, 'Bu vardiyada üretim kaydı bulunamadı');
       styleWorksheet(ws2);
 
       const ws3 = wb.addWorksheet('Sefer');
@@ -6885,14 +6928,17 @@ function renderDeleted(){
         {header:'Paket', key:'package_name', width:18},
         {header:'Rota', key:'route', width:28},
         {header:'Sefer', key:'trip_count', width:10},
+        {header:'Tahmini Tonaj', key:'estimated_tonnage', width:14},
       ];
       trips.forEach(r=>ws3.addRow({
         equipment_name:r.equipment_name || findEquipmentById(r.equipment_id)?.name || '',
         linked_exc_name:r.linked_excavator_name || findEquipmentById(r.linked_excavator_id)?.name || '',
         package_name:r.package_name || packageName(r.package_id) || '',
         route:[r.from_location||'',r.to_location||''].filter(Boolean).join(' → '),
-        trip_count:r.trip_count || 0
+        trip_count:r.trip_count || 0,
+        estimated_tonnage:round1(getTripRowTonnage(r))
       }));
+      ensureWorksheetHasData(ws3, 'Bu vardiyada sefer kaydı bulunamadı');
       styleWorksheet(ws3);
 
       const ws4 = wb.addWorksheet('Yakıt');
@@ -6905,24 +6951,34 @@ function renderDeleted(){
       fuels.forEach(r=>ws4.addRow({
         equipment_name:r.equipment_name || findEquipmentById(r.equipment_id)?.name || '',
         liters:r.liters || 0,
-        source:r.source || '',
+        source:r.source || r.note || '',
         recorded_at:fmtDate(r.recorded_at || r.created_at || '')
       }));
+      ensureWorksheetHasData(ws4, 'Bu vardiyada yakıt kaydı bulunamadı');
       styleWorksheet(ws4);
 
       const ws5 = wb.addWorksheet('Sayaç');
       ws5.columns = [
         {header:'Ekipman', key:'equipment_name', width:22},
         {header:'Sayaç Tipi', key:'meter_type', width:16},
-        {header:'Değer', key:'meter_value', width:12},
+        {header:'Başlangıç', key:'start_value', width:12},
+        {header:'Bitiş/Değer', key:'meter_value', width:12},
+        {header:'Fark', key:'meter_diff', width:12},
         {header:'Saat', key:'recorded_at', width:18},
       ];
-      meters.forEach(r=>ws5.addRow({
-        equipment_name:r.equipment_name || findEquipmentById(r.equipment_id)?.name || '',
-        meter_type:r.meter_type || '',
-        meter_value:r.meter_value || 0,
-        recorded_at:fmtDate(r.recorded_at || r.created_at || '')
-      }));
+      meters.forEach(r=>{
+        const startVal = Number(r.start_meter_value ?? r.start_value ?? 0);
+        const endVal = Number(r.end_meter_value ?? r.end_value ?? r.meter_value ?? 0);
+        ws5.addRow({
+          equipment_name:r.equipment_name || findEquipmentById(r.equipment_id)?.name || '',
+          meter_type:r.meter_type || autoMeterTypeForEquipment(r.equipment_id) || '',
+          start_value:Number.isFinite(startVal) && startVal > 0 ? startVal : '',
+          meter_value:Number.isFinite(endVal) && endVal > 0 ? endVal : (r.meter_value || ''),
+          meter_diff:Number.isFinite(Number(r.meter_diff)) ? Number(r.meter_diff) : (Number.isFinite(startVal) && Number.isFinite(endVal) && endVal >= startVal ? round1(endVal - startVal) : ''),
+          recorded_at:fmtDate(r.recorded_at || r.created_at || '')
+        });
+      });
+      ensureWorksheetHasData(ws5, 'Bu vardiyada sayaç kaydı bulunamadı');
       styleWorksheet(ws5);
 
       const ws6 = wb.addWorksheet('Arıza');
@@ -6940,6 +6996,7 @@ function renderDeleted(){
         end_at:fmtDate(r.end_at || ''),
         status:r.status || ''
       }));
+      ensureWorksheetHasData(ws6, 'Bu vardiyada arıza kaydı bulunamadı');
       styleWorksheet(ws6);
 
       const ws7 = wb.addWorksheet('Kiralık');
@@ -6957,7 +7014,46 @@ function renderDeleted(){
         end_at:fmtDate(r.end_at || ''),
         status:r.status || ''
       }));
+      ensureWorksheetHasData(ws7, 'Bu vardiyada kiralık kaydı bulunamadı');
       styleWorksheet(ws7);
+
+      const ws8 = wb.addWorksheet('Kamyon Analizi');
+      ws8.columns = [
+        {header:'Kamyon', key:'Kamyon', width:22},
+        {header:'Bağlı Ekskavatör', key:'Bağlı Ekskavatör', width:22},
+        {header:'Toplam Sefer', key:'Toplam Sefer', width:14},
+        {header:'Tahmini Tonaj', key:'Tahmini Tonaj', width:14},
+        {header:'Ort. Ton/Sefer', key:'Ort. Ton/Sefer', width:14},
+        {header:'Paketler', key:'Paketler', width:28},
+        {header:'Rotalar', key:'Rotalar', width:34},
+      ];
+      truckRows.forEach(r=>ws8.addRow(r));
+      ensureWorksheetHasData(ws8, 'Bu vardiyada kamyon analiz verisi bulunamadı');
+      styleWorksheet(ws8);
+
+      const ws9 = wb.addWorksheet('Ekskavatör Analizi');
+      ws9.columns = [
+        {header:'Ekskavatör', key:'Ekskavatör', width:22},
+        {header:'Toplam Sefer', key:'Toplam Sefer', width:14},
+        {header:'Tahmini Tonaj', key:'Tahmini Tonaj', width:14},
+        {header:'Bağlı Kamyonlar', key:'Bağlı Kamyonlar', width:30},
+        {header:'Paketler', key:'Paketler', width:28},
+      ];
+      excavatorRows.forEach(r=>ws9.addRow(r));
+      ensureWorksheetHasData(ws9, 'Bu vardiyada ekskavatör analiz verisi bulunamadı');
+      styleWorksheet(ws9);
+
+      const ws10 = wb.addWorksheet('Paket Analizi');
+      ws10.columns = [
+        {header:'Paket', key:'Paket', width:22},
+        {header:'Toplam Sefer', key:'Toplam Sefer', width:14},
+        {header:'Tahmini Tonaj', key:'Tahmini Tonaj', width:14},
+        {header:'Ort. Ton/Sefer', key:'Ort. Ton/Sefer', width:14},
+        {header:'Rotalar', key:'Rotalar', width:34},
+      ];
+      packageRows.forEach(r=>ws10.addRow(r));
+      ensureWorksheetHasData(ws10, 'Bu vardiyada paket analiz verisi bulunamadı');
+      styleWorksheet(ws10);
 
       const buf = await wb.xlsx.writeBuffer();
       downloadBlob(buf, `vardiya_raporu_${shiftName}_${date}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
