@@ -2129,8 +2129,8 @@
     if(onlineCard) onlineCard.title = `${onlineLabel} • ${roleLabel}`;
 
     await loadAllSafe();
-    renderAll();
     applyRolePermissions();
+    renderAll();
     showPage(state.currentPage || 'dashboard');
     requestAnimationFrame(() => {
       try{
@@ -2319,8 +2319,8 @@
       linked_excavator_name: r.linked_excavator_name || r.linked_excavator_name_snapshot || (findEquipmentById(r.linked_excavator_id)?.name || ''),
       material_type: r.material_type || packageMaterialTypeById(r.package_id) || ''
     }));
-    state.breakdowns = (results[TABLES.BREAKDOWNS]?.data || []).map(r=>({ ...r, equipment_name: r.equipment_name || r.equipment_name_snapshot || '' }));
-    state.rentals = (results[TABLES.RENTALS]?.data || []).map(r=>({ ...r, equipment_name: r.equipment_name || r.equipment_name_snapshot || '' }));
+    state.breakdowns = (results[TABLES.BREAKDOWNS]?.data || []).map(r=>({ ...r, equipment_name: r.equipment_name || r.equipment_name_snapshot || (findEquipmentById(r.equipment_id)?.name || '') }));
+    state.rentals = (results[TABLES.RENTALS]?.data || []).map(r=>({ ...r, equipment_name: r.equipment_name || r.equipment_name_snapshot || (findEquipmentById(r.equipment_id)?.name || ''), location: r.location || r.from_location || '' }));
     state.fuel_logs = (results[TABLES.FUEL_LOGS]?.data || []).map(r=>({
       ...r,
       equipment_name: r.equipment_name || (findEquipmentById(r.equipment_id)?.name || '') || '',
@@ -5457,6 +5457,7 @@
       row.material_type = row.material_type || packageMaterialTypeById(row.package_id) || '';
     }else if(tableName === 'breakdowns' || tableName === 'rentals'){
       row.equipment_name = row.equipment_name || row.equipment_name_snapshot || (findEquipmentById(row.equipment_id)?.name || '');
+      row.location = row.location || row.from_location || '';
     }else if(tableName === 'fuel_logs' || tableName === 'meter_logs'){
       row.equipment_name = row.equipment_name || (findEquipmentById(row.equipment_id)?.name || '');
       row.created_at = row.created_at || row.recorded_at || nowIso();
@@ -5898,7 +5899,7 @@ function applyRecordFilters(rows){
             <div class="op-card">
               <div class="op-card-head">
                 <div>
-                  <div class="op-card-title">${escapeHtml(r.equipment_name || '-')}</div>
+                  <div class="op-card-title">${escapeHtml(r.equipment_name || r.equipment_name_snapshot || findEquipmentById(r.equipment_id)?.name || '-')}</div>
                   <div class="op-card-sub">${cols.map(c=>`${c.label}: ${escapeHtml(c.render(r))}`).join(' • ')}${getShiftNameForRow(r) ? ` • Vardiya: ${escapeHtml(getShiftNameForRow(r))}` : ''}</div>
                 </div>
                 <div class="op-card-actions">${actionButtons(tableName, r, allowEnd)}</div>
@@ -7208,7 +7209,7 @@ function renderUsers(){
       if(canAccessPage('rental')) renderActiveOperationPage({
         id:'rental', title:'Kiralıktakiler', pageType:'rental', rows: state.rentals,
         cols:[
-          {label:'Bölge', render:r=>r.location || ''},
+          {label:'Bölge', render:r=>r.location || r.from_location || ''},
           {label:'Başlangıç', render:r=>fmtDate(r.start_at || r.start_time)}
         ], tableName:'rentals'
       });
@@ -7355,7 +7356,7 @@ function renderUsers(){
       try{ updateOnlineUsersCard(); if(state.presence.channel) state.presence.channel.track(getPresencePayload()); }catch(e){}
     }
   });
-  document.querySelectorAll('.menu-btn').forEach(btn=>{ btn.addEventListener('click', ()=>showPage(btn.dataset.page)); });
+  document.querySelectorAll('.menu-btn').forEach(btn=>{ btn.addEventListener('click', ()=>{ try{ renderAll(); }catch(e){} showPage(btn.dataset.page); }); });
   document.getElementById('email').addEventListener('keydown', e=>{ if(e.key==='Enter') login(); });
   document.getElementById('password').addEventListener('keydown', e=>{ if(e.key==='Enter') login(); });
 
