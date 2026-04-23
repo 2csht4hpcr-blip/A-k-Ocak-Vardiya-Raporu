@@ -1606,22 +1606,6 @@
   }
   const SUPABASE_URL = "https://bskvsbqpkjoycgurgzxq.supabase.co";
   const SUPABASE_KEY = "sb_publishable_XkM3U1Y2oFI305rfmoB3BQ_rvf1xc9O";
-  let bootstrapPromise = null;
-  let authListenerBound = false;
-
-  function showLoginView(){
-    try{
-      document.getElementById('loginView')?.classList.remove('hidden');
-      document.getElementById('appView')?.classList.add('hidden');
-    }catch(e){}
-  }
-  function showAppView(){
-    try{
-      document.getElementById('loginView')?.classList.add('hidden');
-      document.getElementById('appView')?.classList.remove('hidden');
-    }catch(e){}
-  }
-
   const state = {
     sb: null,
     user: null,
@@ -1912,36 +1896,7 @@
     await loadSupabaseScript();
     if(!state.sb){
       const { createClient } = window.supabase;
-      state.sb = createClient(SUPABASE_URL, SUPABASE_KEY, {
-        auth: {
-          persistSession: true,
-          autoRefreshToken: true,
-          detectSessionInUrl: true
-        }
-      });
-    }
-    if(!authListenerBound && state.sb?.auth?.onAuthStateChange){
-      authListenerBound = true;
-      state.sb.auth.onAuthStateChange(async (event, session) => {
-        try{
-          if(session?.user){
-            state.user = session.user;
-            if(!bootstrapPromise){
-              bootstrapPromise = bootstrap().finally(()=>{ bootstrapPromise = null; });
-            }
-            await bootstrapPromise;
-          }else if(event === 'SIGNED_OUT'){
-            state.user = null;
-            state.profile = null;
-            await teardownRealtimeSubscriptions();
-            await teardownOnlinePresence();
-            showLoginView();
-            setStatus('Çıkış yapıldı');
-          }
-        }catch(err){
-          console.error('auth state change error', err);
-        }
-      });
+      state.sb = createClient(SUPABASE_URL, SUPABASE_KEY);
     }
     return state.sb;
   }
@@ -2130,15 +2085,11 @@
         setStatus(res.error.message, true);
         return;
       }
-      state.user = res.data?.user || res.data?.session?.user || state.user;
-      if(!bootstrapPromise){
-        bootstrapPromise = bootstrap().finally(()=>{ bootstrapPromise = null; });
-      }
-      await bootstrapPromise;
+      await bootstrap();
       setStatus('Giriş başarılı');
     }catch(err){
       log({stage:'login-catch', message:String(err.message||err)});
-      setStatus(String(err.message || err || 'Giriş başarısız'), true);
+      setStatus('Giriş başarısız', true);
     }
   }
 
@@ -2148,7 +2099,6 @@
     const session = sessionRes?.data?.session || null;
     if(!session?.user) throw new Error('Oturum bulunamadı');
     state.user = session.user;
-    showAppView();
 
     let profile = null;
     try{
@@ -2169,7 +2119,8 @@
     await loadPackageTonnageFactorsRemote();
     await loadAlertRulesRemote();
 
-    showAppView();
+    document.getElementById('loginView').classList.add('hidden');
+    document.getElementById('appView').classList.remove('hidden');
     document.getElementById('userName').textContent = '1';
     document.getElementById('userRole').textContent = roleLabelTr(state.profile?.role);
     const onlineLabel = state.profile.full_name || state.user.email || 'Kullanıcı';
@@ -6327,7 +6278,7 @@ function renderDeleted(){
     }catch(e){ return 0; }
   }
   function openPrintableReportHtml(title, bodyHtml){
-    const win = window.open('', '_blank', 'width=1100,height=900');
+    const win = window.open('', '_blank', 'width=1200,height=960');
     if(!win){ alert('Rapor penceresi açılamadı. Tarayıcı popup engelliyor olabilir.'); return; }
     win.document.write(`<!DOCTYPE html>
 <html lang="tr">
@@ -6336,35 +6287,56 @@ function renderDeleted(){
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>${title}</title>
 <style>
-  :root{--bg:#f8fafc;--card:#fff;--line:#e2e8f0;--text:#0f172a;--muted:#475569;--blue:#2563eb;--green:#15803d;--orange:#c2410c;--red:#dc2626}
+  :root{--bg:#f5f7fb;--card:#fff;--line:#dbe3ef;--text:#0f172a;--muted:#475569;--blue:#1d4ed8;--blue-dark:#0f2b72;--green:#15803d;--orange:#ea580c;--red:#dc2626;--soft:#eef4ff}
   *{box-sizing:border-box}
   body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text)}
-  .wrap{max-width:1100px;margin:0 auto;padding:28px}
-  .hero{background:linear-gradient(135deg,#0f172a 0%,#1d4ed8 100%);color:#fff;border-radius:20px;padding:22px 24px;margin-bottom:18px}
-  .hero h1{margin:0 0 6px;font-size:28px}
-  .hero .sub{font-size:14px;opacity:.92}
+  .wrap{max-width:1180px;margin:0 auto;padding:28px}
+  .hero{display:flex;justify-content:space-between;align-items:flex-start;gap:18px;background:linear-gradient(135deg,var(--blue-dark) 0%,var(--blue) 100%);color:#fff;border-radius:22px;padding:24px 26px;margin-bottom:18px}
+  .hero h1{margin:0;font-size:28px;letter-spacing:.2px}
+  .hero .sub{font-size:14px;opacity:.95;margin-top:10px}
+  .hero-date{min-width:160px;text-align:right;font-weight:800;font-size:15px;line-height:1.4}
   .grid{display:grid;gap:14px}
   .g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .g3{grid-template-columns:2.1fr 1fr 1fr}
   .g2{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px;box-shadow:0 8px 24px rgba(15,23,42,.06)}
-  .kpi .label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;font-weight:700}
-  .kpi .value{font-size:28px;font-weight:900;margin-top:6px}
-  .section-title{font-size:20px;font-weight:900;margin:0 0 12px}
+  .g2wide{grid-template-columns:2.2fr 1fr}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px;box-shadow:0 8px 24px rgba(15,23,42,.05)}
+  .kpi{display:flex;flex-direction:column;justify-content:center;min-height:108px}
+  .kpi .label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;font-weight:800}
+  .kpi .value{font-size:28px;font-weight:900;margin-top:8px}
+  .kpi .subline{margin-top:6px;color:var(--muted);font-size:12px}
+  .section-title{font-size:18px;font-weight:900;margin:0 0 14px}
   table{width:100%;border-collapse:collapse}
-  th,td{padding:10px 8px;border-bottom:1px solid #edf2f7;text-align:left;vertical-align:top;font-size:12px}
-  th{font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);background:#f8fafc}
+  th,td{padding:10px 8px;border-bottom:1px solid #edf2f7;text-align:left;vertical-align:top;font-size:12px;line-height:1.45}
+  th{font-size:11px;text-transform:uppercase;letter-spacing:.35px;color:var(--muted);background:#f8fafc;font-weight:800}
+  tfoot td{font-weight:900;background:#f5f9ff}
   .muted{color:var(--muted)}
-  .badge{display:inline-block;padding:4px 8px;border-radius:999px;font-size:11px;font-weight:700;border:1px solid #dbeafe;background:#eff6ff;color:#1d4ed8}
+  .big-note{padding:12px 14px;border-radius:14px;border:1px solid #dbeafe;background:#f8fbff;color:#1e3a8a}
   .alert-list{display:grid;gap:10px}
   .alert{padding:12px 14px;border-radius:14px;border:1px solid #fed7aa;background:#fff7ed}
   .alert.red{border-color:#fecaca;background:#fef2f2}
   .alert.green{border-color:#bbf7d0;background:#f0fdf4}
-  .small{font-size:12px}
+  .alert .a-title{font-weight:900;margin-bottom:4px}
+  .stats-list{display:grid;gap:10px}
+  .mini-stat{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:11px 12px;border-radius:14px;background:#fbfdff;border:1px solid #e2e8f0}
+  .mini-stat b{font-size:22px}
+  .score{display:inline-flex;align-items:center;justify-content:center;min-width:38px;height:32px;border-radius:12px;background:#eff6ff;color:#1d4ed8;font-weight:900}
+  .bars{display:grid;gap:12px}
+  .bar-row .head{display:flex;justify-content:space-between;gap:12px;font-size:12px;font-weight:700;margin-bottom:6px}
+  .track{height:10px;border-radius:999px;background:#e2e8f0;overflow:hidden}
+  .fill{height:100%;border-radius:999px;background:linear-gradient(90deg,#3b82f6,#1d4ed8)}
+  .fill.green{background:linear-gradient(90deg,#22c55e,#15803d)}
+  .fill.orange{background:linear-gradient(90deg,#fb923c,#ea580c)}
+  .split{display:grid;grid-template-columns:1.15fr .85fr;gap:14px}
+  .pill{display:inline-block;padding:4px 8px;border-radius:999px;background:#eff6ff;color:#1d4ed8;font-size:11px;font-weight:800}
+  .empty-ok{padding:14px;border-radius:14px;border:1px solid #bbf7d0;background:#f0fdf4;color:#166534;font-weight:700}
+  .footer{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;color:#64748b;font-size:12px;margin-top:16px;padding:8px 4px}
   @media print{
     body{background:#fff}
-    .wrap{max-width:none;padding:12mm}
+    .wrap{max-width:none;padding:10mm}
     .card,.hero{box-shadow:none}
     .hero{background:#1d4ed8 !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .alert,.mini-stat,.empty-ok,.track,.fill,.score,.pill{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }
   }
 </style>
 </head>
@@ -6396,111 +6368,233 @@ function renderDeleted(){
     if(currentUserRole() !== 'manager'){ alert('Bu rapor yalnızca yöneticiye açıktır.'); return; }
     try{
       const date = document.getElementById('report_daily_date')?.value || todayStr();
-      const summaryRows = await fetchSummaryRange(date, date);
       const productions = (await fetchRowsForRange(TABLES.PRODUCTIONS, date, date)).filter(r=>!r.deleted_at);
       const trips = (await fetchRowsForRange(TABLES.TRUCK_TRIPS, date, date)).filter(r=>!r.deleted_at);
       const fuels = (await fetchRowsForRange(TABLES.FUEL_LOGS, date, date)).filter(r=>!r.deleted_at);
       const breakdowns = (await fetchRowsForRange(TABLES.BREAKDOWNS, date, date)).filter(r=>!r.deleted_at);
       const rentals = (await fetchRowsForRange(TABLES.RENTALS, date, date)).filter(r=>!r.deleted_at);
-      const totals = shiftSummaryTotals(summaryRows);
 
+      const allShiftNames = Array.from(new Set([
+        ...trips.map(r=>String(r.shift_name || '').trim()),
+        ...fuels.map(r=>String(r.shift_name || '').trim()),
+        ...productions.map(r=>String(r.shift_name || '').trim()),
+        ...breakdowns.map(r=>String(r.shift_name || '').trim()),
+        ...rentals.map(r=>String(r.shift_name || '').trim())
+      ].filter(Boolean)));
+      const configShiftOrder = (state.shiftConfig?.shifts || []).map(s=>String(s.name || '').trim()).filter(Boolean);
+      const shiftNames = [...configShiftOrder.filter(n=>allShiftNames.includes(n)), ...allShiftNames.filter(n=>!configShiftOrder.includes(n))];
+
+      const totalTripCount = trips.reduce((s,row)=>s + (Number(row.trip_count || 0) || 0), 0);
+      const totalTonnage = trips.reduce((s,row)=>s + getTripRowTonnage(row), 0);
+      const totalFuelLiters = fuels.reduce((s,row)=>s + (Number(row.liters || 0) || 0), 0);
       const openBreakdowns = breakdowns.filter(r=>isOpenRow(r));
-      const topEquipment = {};
-      productions.forEach(r=>{
-        const key = String(r.equipment_id || '');
-        if(!key) return;
-        if(!topEquipment[key]) topEquipment[key] = {name: r.equipment_name || r.equipment_name_snapshot || findEquipmentById(r.equipment_id)?.name || '-', trip:0, ton:0};
-        topEquipment[key].trip += Number(r.trip_count || 0);
-        topEquipment[key].ton += Number(r.trip_count || 0) * Number(getPackageTonnageFactor(r.package_id) || 0 || 1);
-      });
-      const topEquipmentRows = Object.values(topEquipment).sort((a,b)=>b.trip-a.trip).slice(0,8);
 
+      const shiftRows = (shiftNames.length ? shiftNames : ['-']).map(shiftName=>{
+        const shiftTrips = trips.filter(r=>String(r.shift_name || '').trim() === String(shiftName || '').trim());
+        const shiftFuels = fuels.filter(r=>String(r.shift_name || '').trim() === String(shiftName || '').trim());
+        const shiftProductions = productions.filter(r=>String(r.shift_name || '').trim() === String(shiftName || '').trim());
+        const tripCount = shiftTrips.reduce((s,row)=>s + (Number(row.trip_count || 0) || 0), 0);
+        const tonnage = shiftTrips.reduce((s,row)=>s + getTripRowTonnage(row), 0);
+        const fuel = shiftFuels.reduce((s,row)=>s + (Number(row.liters || 0) || 0), 0);
+        const truckIds = new Set(shiftTrips.map(r=>String(r.equipment_id || '')).filter(Boolean));
+        const excIds = new Set(shiftTrips.map(r=>String(r.linked_excavator_id || '')).filter(Boolean));
+        shiftProductions.forEach(r=>{
+          const eq = findEquipmentById(r.equipment_id);
+          if(isTruckEquipment(eq)) truckIds.add(String(r.equipment_id || ''));
+          if(isExcavatorEquipment(eq)) excIds.add(String(r.equipment_id || ''));
+        });
+        const packages = {};
+        shiftTrips.forEach(r=>{
+          const key = String(r.package_id || r.package_name || '');
+          if(!packages[key]) packages[key] = { name: r.package_name || packageName(r.package_id) || '-', tonnage: 0, trips: 0 };
+          packages[key].tonnage += getTripRowTonnage(r);
+          packages[key].trips += Number(r.trip_count || 0) || 0;
+        });
+        return {
+          date,
+          shift_name: shiftName,
+          tripCount,
+          tonnage,
+          fuel,
+          truckCount: Array.from(truckIds).filter(Boolean).length,
+          excavatorCount: Array.from(excIds).filter(Boolean).length,
+          packages: Object.values(packages).sort((a,b)=>(b.tonnage||0)-(a.tonnage||0))
+        };
+      }).filter(r=>r.shift_name !== '-' || shiftNames.length === 0);
+
+      const dashboardBuckets = getCompletedShiftBuckets ? getCompletedShiftBuckets() : [];
+      const alertRules = { ...DEFAULT_ALERT_RULES, ...(state.alertRules || {}) };
       const alerts = [];
-      if(openBreakdowns.length) alerts.push({type:'red', text:`Açık arıza sayısı ${openBreakdowns.length}. Kritik ekipmanları kontrol edin.`});
-      if(Number(totals.fuel || 0) > 0 && Number(totals.trip || 0) === 0) alerts.push({type:'red', text:'Yakıt kaydı var ancak toplam sefer 0 görünüyor.'});
-      if(Number(totals.trip || 0) > 0 && Number(totals.fuel || 0) / Math.max(Number(totals.trip || 0),1) > 50) alerts.push({type:'orange', text:'Sefer başına yakıt tüketimi yüksek görünüyor.'});
-      if(!alerts.length) alerts.push({type:'green', text:'Bugün için kritik uyarı görünmüyor.'});
+      shiftRows.forEach(sr=>{
+        const bucket = dashboardBuckets.find(b=>String(b.shift_date || '') === String(date) && String(b.shift_name || '') === String(sr.shift_name || ''));
+        const summary = buildShiftSummary(sr.shift_name, date);
+        const previous = bucket ? dashboardBuckets.filter(b=>b.shift_key !== bucket.shift_key).find(b=>b.endMs < bucket.endMs) : null;
+        const recent = bucket ? dashboardBuckets.filter(b=>b.endMs <= bucket.endMs && b.shift_key !== bucket.shift_key).slice(0,3).map(b=>buildShiftSummary(b.shift_name, b.shift_date)) : [];
+        const avg3Trips = averageOf(recent, 'total_trip_count');
+        const avg3Fuel = averageOf(recent, 'total_fuel_liters');
+        const fleetAvgKmPerTrip = summary.truck_analysis.length ? summary.truck_analysis.reduce((s,x)=>s + (x.kmPerTrip || 0), 0) / summary.truck_analysis.length : 0;
+        const fleetExcEff = summary.excavator_analysis.length ? summary.excavator_analysis.reduce((s,x)=>s + (x.efficiency || 0), 0) / summary.excavator_analysis.length : 0;
+        if(avg3Trips > 0 && summary.total_trip_count < avg3Trips * alertRules.lowProductionRatio){ alerts.push({level:'red', title:`${sr.shift_name}: Düşük üretim`, text:`Sefer ${summary.total_trip_count}, son 3 vardiya ortalaması ${avg3Trips.toFixed(1)}.`}); }
+        if(avg3Fuel > 0 && summary.total_fuel_liters > avg3Fuel * alertRules.highFuelRatio){ alerts.push({level:'orange', title:`${sr.shift_name}: Yakıt yükselmiş`, text:`Yakıt ${summary.total_fuel_liters.toFixed(0)} L, son 3 vardiya ortalaması ${avg3Fuel.toFixed(0)} L.`}); }
+        if(summary.total_breakdown_minutes >= alertRules.longBreakdownMinutes || summary.long_breakdown_count > 0){ alerts.push({level:'red', title:`${sr.shift_name}: Uzun arıza`, text:`Toplam arıza süresi ${formatDurationMinutes(summary.total_breakdown_minutes)}.`}); }
+        summary.truck_analysis.forEach(t=>{
+          if((t.meterDiff || 0) > alertRules.abnormalKmThreshold && (t.tripCount || 0) < alertRules.abnormalKmTripLimit) alerts.push({level:'red', title:`${sr.shift_name}: Anormal km farkı`, text:`${t.name}: ${t.meterDiff.toFixed(1)} km, ${t.tripCount} sefer.`});
+          else if(fleetAvgKmPerTrip > 0 && (t.kmPerTrip || 0) > fleetAvgKmPerTrip * alertRules.kmPerTripRatio) alerts.push({level:'orange', title:`${sr.shift_name}: Km / sefer sapması`, text:`${t.name}: sefer başına ${t.kmPerTrip.toFixed(1)} km.`});
+        });
+        summary.excavator_analysis.forEach(e=>{
+          if(fleetExcEff > 0 && (e.efficiency || 0) < fleetExcEff * alertRules.lowExcEfficiencyRatio) alerts.push({level:'orange', title:`${sr.shift_name}: Düşük ekskavatör verimi`, text:`${e.name}: ${e.efficiency.toFixed(2)} sefer/saat.`});
+        });
+      });
+      const dedupAlerts = [];
+      const seenAlert = new Set();
+      alerts.forEach(a=>{
+        const key = `${a.title}|${a.text}`;
+        if(seenAlert.has(key)) return;
+        seenAlert.add(key);
+        dedupAlerts.push(a);
+      });
+
+      const equipmentMap = {};
+      shiftRows.forEach(sr=>{
+        const summary = buildShiftSummary(sr.shift_name, date);
+        [...(summary.excavator_analysis || []), ...(summary.truck_analysis || [])].forEach(item=>{
+          const key = String(item.id || item.name || '');
+          if(!key) return;
+          if(!equipmentMap[key]){
+            equipmentMap[key] = {
+              name: item.name || '-', type: item.type === 'truck' ? 'Kamyon' : 'Ekskavatör', tripCount:0, tonnage:0, workHours:0, fuelLiters:0, efficiencySum:0, efficiencyCount:0
+            };
+          }
+          equipmentMap[key].tripCount += Number(item.tripCount || 0) || 0;
+          equipmentMap[key].tonnage += Number(item.tonnage || 0) || 0;
+          equipmentMap[key].workHours += Number(item.workHours || 0) || 0;
+          equipmentMap[key].fuelLiters += Number(item.fuelLiters || 0) || 0;
+          equipmentMap[key].efficiencySum += Number(item.efficiency || 0) || 0;
+          equipmentMap[key].efficiencyCount += 1;
+        });
+      });
+      const equipmentRows = Object.values(equipmentMap).map(r=>{
+        const tonPerTrip = r.tripCount ? (r.tonnage / r.tripCount) : 0;
+        const fuelPerTon = r.tonnage ? (r.fuelLiters / r.tonnage) : 0;
+        const util = r.workHours ? Math.min(100, (r.workHours / Math.max(1, shiftRows.length * 12)) * 100) : 0;
+        const effScore = Math.max(0, Math.min(100, Math.round((tonPerTrip * 3.5) + ((r.efficiencySum / Math.max(1, r.efficiencyCount)) * 12) + (util * 0.25) - (fuelPerTon * 40))));
+        return { ...r, tonPerTrip, fuelPerTon, utilization: util, score: effScore };
+      }).sort((a,b)=>(b.tonnage||0)-(a.tonnage||0));
+
+      const packageMap = {};
+      trips.forEach(r=>{
+        const key = String(r.package_id || r.package_name || '');
+        if(!packageMap[key]) packageMap[key] = { name: r.package_name || packageName(r.package_id) || '-', tripCount:0, tonnage:0 };
+        packageMap[key].tripCount += Number(r.trip_count || 0) || 0;
+        packageMap[key].tonnage += getTripRowTonnage(r);
+      });
+      const packageRows = Object.values(packageMap).sort((a,b)=>(b.tonnage||0)-(a.tonnage||0));
+      const maxPackageTon = Math.max(1, ...packageRows.map(r=>Number(r.tonnage || 0) || 0));
+
+      const truckCountTotal = new Set(trips.map(r=>String(r.equipment_id || '')).filter(Boolean)).size;
+      const excCountTotal = new Set(trips.map(r=>String(r.linked_excavator_id || '')).filter(Boolean)).size;
+      const truckFuel = fuels.reduce((s,row)=>{
+        const eq = findEquipmentById(row.equipment_id);
+        return s + (isTruckEquipment(eq) ? (Number(row.liters || 0) || 0) : 0);
+      }, 0);
+      const avgFuelPerTon = totalTonnage ? (truckFuel / totalTonnage) : 0;
+      const avgScore = equipmentRows.length ? Math.round(equipmentRows.reduce((s,r)=>s + (r.score || 0), 0) / equipmentRows.length) : 0;
+      const avgTonPerHour = equipmentRows.filter(r=>r.type === 'Ekskavatör').reduce((s,r)=>s + (r.workHours ? r.tonnage / Math.max(r.workHours,1) : 0), 0) / Math.max(1, equipmentRows.filter(r=>r.type === 'Ekskavatör').length || 1);
 
       const html = `
         <div class="hero">
-          <h1>Günlük Operasyon Raporu</h1>
-          <div class="sub">Tarih: <b>${escapeHtml(date)}</b> • Maden Takip v40</div>
+          <div>
+            <h1>Günlük Operasyon Raporu</h1>
+            <div class="sub">Tarih: <b>${escapeHtml(date)}</b></div>
+          </div>
+          <div class="hero-date">Rapor Tarihi<br><span style="font-size:28px">${escapeHtml(date.split('-').reverse().join('.'))}</span></div>
         </div>
 
         <div class="grid g4" style="margin-bottom:16px">
-          <div class="card kpi"><div class="label">Toplam Sefer</div><div class="value">${numFmt(totals.trip)}</div></div>
-          <div class="card kpi"><div class="label">Tahmini Tonaj</div><div class="value">${numFmt(totals.ton)}</div></div>
-          <div class="card kpi"><div class="label">Toplam Yakıt</div><div class="value">${numFmt(totals.fuel)} L</div></div>
-          <div class="card kpi"><div class="label">Açık Arıza</div><div class="value">${numFmt(openBreakdowns.length)}</div></div>
+          <div class="card kpi"><div class="label">Toplam Sefer</div><div class="value">${numFmt(totalTripCount)}</div><div class="subline">Sefer</div></div>
+          <div class="card kpi"><div class="label">Tahmini Tonaj</div><div class="value">${numFmt(totalTonnage,2)} TON</div><div class="subline">Sefer × Kamyon Tonajı × Paket Katsayısı</div></div>
+          <div class="card kpi"><div class="label">Toplam Verilen Yakıt</div><div class="value">${numFmt(totalFuelLiters)} L</div><div class="subline">Gün içindeki tüm yakıt kayıtları</div></div>
+          <div class="card kpi"><div class="label">Açık Arıza</div><div class="value">${numFmt(openBreakdowns.length)}</div><div class="subline">Aktif arıza adedi</div></div>
         </div>
 
-        <div class="grid g2">
+        <div class="grid g2wide" style="margin-bottom:16px">
           <div class="card">
             <h2 class="section-title">Vardiya Özeti</h2>
             <table>
-              <thead><tr><th>Tarih</th><th>Vardiya</th><th>Sefer</th><th>Tonaj</th><th>Yakıt</th><th>Aktif Ekipman</th></tr></thead>
+              <thead><tr><th>Tarih</th><th>Vardiya</th><th>Sefer</th><th>Kamyonlar</th><th>Paketler</th><th>Tahmini Tonaj (Ton)</th><th>Verilen Yakıt (L)</th><th>Aktif Ekipman</th></tr></thead>
               <tbody>
-                ${(summaryRows.length ? summaryRows : [{shift_date:date, shift_name:'-', total_trip_count:0, estimated_tonnage:0, total_fuel_liters:0, active_equipment_count:0}]).map(r=>`
+                ${shiftRows.length ? shiftRows.map(r=>`
                   <tr>
-                    <td>${escapeHtml(String(r.shift_date || ''))}</td>
-                    <td>${escapeHtml(String(r.shift_name || ''))}</td>
-                    <td>${numFmt(r.total_trip_count)}</td>
-                    <td>${numFmt(r.estimated_tonnage)}</td>
-                    <td>${numFmt(r.total_fuel_liters)}</td>
-                    <td>${numFmt(r.active_equipment_count)}</td>
-                  </tr>`).join('')}
+                    <td>${escapeHtml(r.date)}</td>
+                    <td>${escapeHtml(r.shift_name || '-')}</td>
+                    <td>${numFmt(r.tripCount)}</td>
+                    <td>${escapeHtml(trips.filter(t=>String(t.shift_name||'')===String(r.shift_name||'')).map(t=>t.equipment_name || findEquipmentById(t.equipment_id)?.name || '-').filter(Boolean).filter((v,i,a)=>a.indexOf(v)===i).join(', ') || '-')}</td>
+                    <td>${r.packages.length ? r.packages.map(p=>`${escapeHtml(p.name)}: ${numFmt(p.tonnage,1)} ton`).join('<br>') : '-'}</td>
+                    <td>${numFmt(r.tonnage,2)}</td>
+                    <td>${numFmt(r.fuel)}</td>
+                    <td>${r.excavatorCount} Ekskavatör<br>${r.truckCount} Kamyon</td>
+                  </tr>`).join('') : `<tr><td>${escapeHtml(date)}</td><td>-</td><td>0</td><td>-</td><td>-</td><td>0</td><td>0</td><td>0</td></tr>`}
               </tbody>
+              <tfoot><tr><td colspan="2">Toplam</td><td>${numFmt(totalTripCount)}</td><td>-</td><td>${packageRows.map(p=>`${escapeHtml(p.name)}: ${numFmt(p.tonnage,1)} ton`).join('<br>') || '-'}</td><td>${numFmt(totalTonnage,2)}</td><td>${numFmt(totalFuelLiters)}</td><td>${excCountTotal} Ekskavatör<br>${truckCountTotal} Kamyon</td></tr></tfoot>
             </table>
           </div>
           <div class="card">
             <h2 class="section-title">Akıllı Uyarılar</h2>
             <div class="alert-list">
-              ${alerts.map(a=>`<div class="alert ${a.type==='red'?'red':(a.type==='green'?'green':'')}">${escapeHtml(a.text)}</div>`).join('')}
+              ${dedupAlerts.length ? dedupAlerts.slice(0,8).map(a=>`<div class="alert ${a.level==='red'?'red':(a.level==='green'?'green':'')}"><div class="a-title">${escapeHtml(a.title)}</div><div>${escapeHtml(a.text)}</div></div>`).join('') : `<div class="alert green"><div class="a-title">Uyarı bulunmuyor</div><div>Dashboard Pro kurallarına göre tetiklenen kritik uyarı görünmüyor.</div></div>`}
             </div>
           </div>
         </div>
 
-        <div class="card" style="margin-top:16px">
-          <h2 class="section-title">Ekipman Performans Özeti</h2>
-          <table>
-            <thead><tr><th>Ekipman</th><th>Sefer</th><th>Tahmini Tonaj</th></tr></thead>
-            <tbody>
-              ${(topEquipmentRows.length ? topEquipmentRows : [{name:'Veri yok',trip:0,ton:0}]).map(r=>`
-                <tr><td>${escapeHtml(r.name)}</td><td>${numFmt(r.trip)}</td><td>${numFmt(r.ton)}</td></tr>
-              `).join('')}
-            </tbody>
-          </table>
+        <div class="grid g2wide" style="margin-bottom:16px">
+          <div class="card">
+            <h2 class="section-title">Ekipman Performans Özeti</h2>
+            <table>
+              <thead><tr><th>Ekipman</th><th>Tip</th><th>Sefer</th><th>Tahmini Tonaj (Ton)</th><th>Ort. Tonaj / Sefer</th><th>Çalışma Süresi</th><th>Kullanım Oranı</th><th>Yakıt Tüketimi (L)</th><th>Yakıt / Ton</th><th>Verimlilik Skoru</th></tr></thead>
+              <tbody>
+                ${equipmentRows.length ? equipmentRows.map(r=>`<tr><td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.type)}</td><td>${numFmt(r.tripCount)}</td><td>${numFmt(r.tonnage,2)}</td><td>${numFmt(r.tonPerTrip,2)}</td><td>${formatDurationMinutes(Math.round((r.workHours || 0) * 60))}</td><td>%${numFmt(r.utilization,0)}</td><td>${r.type==='Kamyon'?numFmt(r.fuelLiters,0):'-'}</td><td>${r.type==='Kamyon'?numFmt(r.fuelPerTon,2):'-'}</td><td><span class="score">${numFmt(r.score)}</span></td></tr>`).join('') : '<tr><td colspan="10">Veri bulunamadı.</td></tr>'}
+              </tbody>
+              <tfoot><tr><td>Toplam / Ortalama</td><td>-</td><td>${numFmt(equipmentRows.reduce((s,r)=>s+(r.tripCount||0),0))}</td><td>${numFmt(equipmentRows.reduce((s,r)=>s+(r.tonnage||0),0),2)}</td><td>${numFmt(equipmentRows.reduce((s,r)=>s+(r.tonPerTrip||0),0) / Math.max(1,equipmentRows.length),2)}</td><td>-</td><td>-</td><td>${numFmt(equipmentRows.reduce((s,r)=>s+(r.fuelLiters||0),0),0)}</td><td>${numFmt(avgFuelPerTon,2)}</td><td><span class="score">${numFmt(avgScore)}</span></td></tr></tfoot>
+            </table>
+          </div>
+          <div class="card">
+            <h2 class="section-title">Dashboard Pro Analizi</h2>
+            <div class="stats-list">
+              <div class="mini-stat"><span>Genel Verimlilik Skoru</span><b>${numFmt(avgScore)}</b></div>
+              <div class="mini-stat"><span>Yakıt Verimliliği (L/Ton)</span><b>${numFmt(avgFuelPerTon,2)}</b></div>
+              <div class="mini-stat"><span>Kamyon Başına Ort. Sefer</span><b>${numFmt(truckCountTotal ? totalTripCount / truckCountTotal : 0,2)}</b></div>
+              <div class="mini-stat"><span>Tonaj / Saat (Ekskavatör Ort.)</span><b>${numFmt(avgTonPerHour,2)}</b></div>
+              <div class="mini-stat"><span>Toplam Arıza Süresi</span><b>${formatDurationMinutes(breakdowns.filter(r=>!isOpenRow(r)).reduce((s,r)=>s + minutesBetweenSafe(r.start_at || r.created_at, r.end_at || r.updated_at),0))}</b></div>
+            </div>
+          </div>
         </div>
 
-        <div class="grid g2" style="margin-top:16px">
-          <div class="card">
-            <h2 class="section-title">Açık Arızalar</h2>
-            <table>
-              <thead><tr><th>Vardiya</th><th>Ekipman</th><th>Sebep</th><th>Süre</th></tr></thead>
-              <tbody>
-                ${(openBreakdowns.length ? openBreakdowns : [{shift_name:'-',equipment_name:'Açık arıza yok',reason:'-',start_at:''}]).map(r=>`
-                  <tr>
-                    <td>${escapeHtml(String(r.shift_name || '-'))}</td>
-                    <td>${escapeHtml(String(r.equipment_name || r.equipment_name_snapshot || findEquipmentById(r.equipment_id)?.name || '-'))}</td>
-                    <td>${escapeHtml(String(r.reason || '-'))}</td>
-                    <td>${numFmt(minutesBetweenSafe(r.start_at || r.created_at, r.end_at || null))} dk</td>
-                  </tr>`).join('')}
-              </tbody>
-            </table>
-          </div>
-          <div class="card">
-            <h2 class="section-title">Kayıt Özeti</h2>
-            <table>
-              <tbody>
-                <tr><th>Üretim Kaydı</th><td>${numFmt(productions.length)}</td></tr>
-                <tr><th>Sefer Kaydı</th><td>${numFmt(trips.length)}</td></tr>
-                <tr><th>Yakıt Kaydı</th><td>${numFmt(fuels.length)}</td></tr>
-                <tr><th>Kiralık Kaydı</th><td>${numFmt(rentals.length)}</td></tr>
-                <tr><th>Arıza Kaydı</th><td>${numFmt(breakdowns.length)}</td></tr>
-              </tbody>
-            </table>
+        <div class="card" style="margin-bottom:16px">
+          <h2 class="section-title">Paket Dağılımı ve Taşınan Tonaj</h2>
+          <div class="split">
+            <div>
+              <table>
+                <thead><tr><th>Paket Adı</th><th>Sefer (Adet)</th><th>Taşınan Tonaj (Ton)</th><th>Tonaj (%)</th></tr></thead>
+                <tbody>
+                  ${packageRows.length ? packageRows.map(r=>`<tr><td>${escapeHtml(r.name)}</td><td>${numFmt(r.tripCount)}</td><td>${numFmt(r.tonnage,2)}</td><td>${numFmt(totalTonnage ? (r.tonnage / totalTonnage) * 100 : 0,1)}%</td></tr>`).join('') : '<tr><td colspan="4">Veri bulunamadı.</td></tr>'}
+                </tbody>
+                <tfoot><tr><td>Toplam</td><td>${numFmt(totalTripCount)}</td><td>${numFmt(totalTonnage,2)}</td><td>100%</td></tr></tfoot>
+              </table>
+            </div>
+            <div>
+              <div class="bars">
+                ${packageRows.length ? packageRows.map((r,idx)=>`<div class="bar-row"><div class="head"><span>${escapeHtml(r.name)}</span><span>${numFmt(r.tonnage,2)} ton</span></div><div class="track"><div class="fill ${idx % 2 ? 'green' : 'orange'}" style="width:${Math.max(8, Math.min(100, ((r.tonnage || 0) / maxPackageTon) * 100))}%"></div></div></div>`).join('') : '<div class="big-note">Paket tonaj verisi bulunamadı.</div>'}
+              </div>
+            </div>
           </div>
         </div>
+
+        <div class="card">
+          <h2 class="section-title">Açık Arızalar</h2>
+          ${openBreakdowns.length ? `<table><thead><tr><th>Vardiya</th><th>Ekipman</th><th>Arıza Tipi</th><th>Sebep</th><th>Başlangıç</th><th>Süre</th><th>Durum</th></tr></thead><tbody>${openBreakdowns.map(r=>`<tr><td>${escapeHtml(String(r.shift_name || '-'))}</td><td>${escapeHtml(String(r.equipment_name || r.equipment_name_snapshot || findEquipmentById(r.equipment_id)?.name || '-'))}</td><td>${escapeHtml(String(r.breakdown_type || r.type || '-'))}</td><td>${escapeHtml(String(r.reason || '-'))}</td><td>${escapeHtml(fmtDate(r.start_at || r.start_time || r.created_at || ''))}</td><td>${formatDurationMinutes(minutesBetweenSafe(r.start_at || r.created_at, null))}</td><td>Açık</td></tr>`).join('')}</tbody></table>` : `<div class="empty-ok">Açık arıza bulunmuyor.</div>`}
+        </div>
+
+        <div class="footer"><div>Rapor saati: ${escapeHtml(fmtDate(new Date().toISOString()))}</div><div>Veriler Maden Takip sisteminden otomatik alınmıştır.</div><div>Bu rapor otomatik olarak oluşturulmuştur.</div></div>
       `;
       openPrintableReportHtml(`Gunluk Rapor ${date}`, html);
     }catch(err){
@@ -7081,21 +7175,7 @@ function renderUsers(){
   }
 
   async function refreshData(){ await loadAllSafe(); renderAll(); }
-  async function logout(){
-    try{
-      await teardownRealtimeSubscriptions();
-      await teardownOnlinePresence();
-      const sb = await initClient();
-      await sb.auth.signOut();
-      state.user = null;
-      state.profile = null;
-      showLoginView();
-      setStatus('Çıkış yapıldı');
-    }catch(e){
-      console.error('logout error', e);
-      showLoginView();
-    }
-  }
+  async function logout(){ try{ await teardownRealtimeSubscriptions(); await teardownOnlinePresence(); const sb = await initClient(); await sb.auth.signOut(); } catch(e){} location.reload(); }
 
   document.addEventListener('click', async (e)=>{
     const closeBtn = e.target.closest('[data-close-modal]');
@@ -7197,16 +7277,11 @@ function renderUsers(){
       const sess = await withTimeout(sb.auth.getSession(), 8000, 'Auto session');
       if(sess?.data?.session?.user){
         setStatus('Mevcut oturum bulundu');
-        if(!bootstrapPromise){
-          bootstrapPromise = bootstrap().finally(()=>{ bootstrapPromise = null; });
-        }
-        await bootstrapPromise;
+        await bootstrap();
       } else {
-        showLoginView();
         log({stage:'page-ready', session:false});
       }
     }catch(err){
-      showLoginView();
       log({stage:'auto-session-catch', message:String(err.message||err)});
     }
   })();
