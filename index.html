@@ -1373,16 +1373,29 @@
     const meters = rowsForShiftBucket(state.meter_logs, shiftName, shiftDate);
 
     const closedProductions = productions.filter(r=>(r.end_at || r.end_time));
+    const truckProductionsAll = productions.filter(r=>isTruckEquipment(findEquipmentById(r.equipment_id)));
+    const excavatorProductionsAll = productions.filter(r=>isExcavatorEquipment(findEquipmentById(r.equipment_id)));
+    const truckProductions = closedProductions.filter(r=>isTruckEquipment(findEquipmentById(r.equipment_id)));
+    const excavatorProductions = closedProductions.filter(r=>isExcavatorEquipment(findEquipmentById(r.equipment_id)));
+
     const totalTripCount = sumField(trips, r=>r.trip_count);
     const totalTonnage = sumField(trips, r=>getTripRowTonnage(r));
     const totalFuelLiters = sumField(fuels, r=>r.liters);
     const totalWorkHours = closedProductions.reduce((s,r)=>s + productionDurationHours(r), 0);
-    const truckProductions = closedProductions.filter(r=>isTruckEquipment(findEquipmentById(r.equipment_id)));
-    const excavatorProductions = closedProductions.filter(r=>isExcavatorEquipment(findEquipmentById(r.equipment_id)));
     const totalKm = truckProductions.reduce((s,r)=>s + productionMeterDiff(r), 0);
     const totalEngineHours = excavatorProductions.reduce((s,r)=>s + productionMeterDiff(r), 0);
-    const activeTruckCount = Math.max(uniqueCount(trips, r=>r.equipment_id), uniqueCount(truckProductions, r=>r.equipment_id));
-    const activeExcavatorCount = Math.max(uniqueCount(excavatorProductions, r=>r.equipment_id), uniqueCount(trips, r=>r.linked_excavator_id));
+    const activeTruckCount = Math.max(
+      uniqueCount(trips, r=>r.equipment_id),
+      uniqueCount(truckProductionsAll, r=>r.equipment_id),
+      uniqueCount(fuels.filter(r=>isTruckEquipment(findEquipmentById(r.equipment_id))), r=>r.equipment_id),
+      uniqueCount(meters.filter(r=>isTruckEquipment(findEquipmentById(r.equipment_id))), r=>r.equipment_id)
+    );
+    const activeExcavatorCount = Math.max(
+      uniqueCount(excavatorProductionsAll, r=>r.equipment_id),
+      uniqueCount(trips, r=>r.linked_excavator_id),
+      uniqueCount(fuels.filter(r=>isExcavatorEquipment(findEquipmentById(r.equipment_id))), r=>r.equipment_id),
+      uniqueCount(meters.filter(r=>isExcavatorEquipment(findEquipmentById(r.equipment_id))), r=>r.equipment_id)
+    );
     const avgTripPerTruck = activeTruckCount ? (totalTripCount / activeTruckCount) : 0;
     const avgFuelPerTrip = totalTripCount ? (totalFuelLiters / totalTripCount) : 0;
     const tripPerWorkHour = totalWorkHours ? (totalTripCount / totalWorkHours) : 0;
@@ -1401,43 +1414,48 @@
     }).length;
 
     const tripsByTruck = {};
-    trips.forEach(r=>{
-      const id = String(r.equipment_id || '');
-      if(!id) return;
-      tripsByTruck[id] = (tripsByTruck[id] || 0) + (Number(r.trip_count || 0) || 0);
-    });
     const fuelsByEquipment = {};
+    const tripsByExc = {};
+    const tonnageByExc = {};
+    const linkedExcByTruck = {};
+    const tripMetaByTruck = {};
+    const prodMetaByTruck = {};
+    const prodMetaByExc = {};
+
+    trips.forEach(r=>{
+      const truckId = String(r.equipment_id || '');
+      const excId = String(r.linked_excavator_id || '');
+      if(truckId){
+        tripsByTruck[truckId] = (tripsByTruck[truckId] || 0) + (Number(r.trip_count || 0) || 0);
+        if(!tripMetaByTruck[truckId]) tripMetaByTruck[truckId] = r;
+        if(excId && !linkedExcByTruck[truckId]) linkedExcByTruck[truckId] = excId;
+      }
+      if(excId){
+        tripsByExc[excId] = (tripsByExc[excId] || 0) + (Number(r.trip_count || 0) || 0);
+        tonnageByExc[excId] = (tonnageByExc[excId] || 0) + getTripRowTonnage(r);
+      }
+    });
     fuels.forEach(r=>{
       const id = String(r.equipment_id || '');
       if(!id) return;
       fuelsByEquipment[id] = (fuelsByEquipment[id] || 0) + (Number(r.liters || 0) || 0);
     });
-    const tripsByExc = {};
-    const tonnageByExc = {};
-    trips.forEach(r=>{
-      const id = String(r.linked_excavator_id || '');
-      if(!id) return;
-      tripsByExc[id] = (tripsByExc[id] || 0) + (Number(r.trip_count || 0) || 0);
-      tonnageByExc[id] = (tonnageByExc[id] || 0) + getTripRowTonnage(r);
-    });
-
-    const truckProductionMap = {};
-    truckProductions.forEach(r=>{
+    truckProductionsAll.forEach(r=>{
       const id = String(r.equipment_id || '');
-      if(!id || truckProductionMap[id]) return;
-      truckProductionMap[id] = r;
+      if(!id || prodMetaByTruck[id]) return;
+      prodMetaByTruck[id] = r;
+      if(r.linked_excavator_id && !linkedExcByTruck[id]) linkedExcByTruck[id] = String(r.linked_excavator_id || '');
     });
-    const excavatorProductionMap = {};
-    productions.filter(r=>isExcavatorEquipment(findEquipmentById(r.equipment_id))).forEach(r=>{
+    excavatorProductionsAll.forEach(r=>{
       const id = String(r.equipment_id || '');
-      if(!id || excavatorProductionMap[id]) return;
-      excavatorProductionMap[id] = r;
+      if(!id || prodMetaByExc[id]) return;
+      prodMetaByExc[id] = r;
     });
     trips.forEach(r=>{
       const id = String(r.linked_excavator_id || '');
-      if(!id || excavatorProductionMap[id]) return;
+      if(!id || prodMetaByExc[id]) return;
       const eq = findEquipmentById(id) || {};
-      excavatorProductionMap[id] = {
+      prodMetaByExc[id] = {
         equipment_id: id,
         equipment_name: eq.name || r.linked_excavator_name || '-',
         from_location: r.from_location || '',
@@ -1447,28 +1465,41 @@
       };
     });
 
-    const truckAnalysis = Array.from(new Set([...trips.map(r=>String(r.equipment_id||'')), ...truckProductions.map(r=>String(r.equipment_id||'')), ...fuels.filter(r=>isTruckEquipment(findEquipmentById(r.equipment_id))).map(r=>String(r.equipment_id||'')), ...meters.filter(r=>isTruckEquipment(findEquipmentById(r.equipment_id))).map(r=>String(r.equipment_id||''))])).filter(Boolean).map(id=>{
-      const prod = truckProductionMap[id] || {};
+    const truckIds = Array.from(new Set([
+      ...trips.map(r=>String(r.equipment_id || '')),
+      ...truckProductionsAll.map(r=>String(r.equipment_id || '')),
+      ...fuels.filter(r=>isTruckEquipment(findEquipmentById(r.equipment_id))).map(r=>String(r.equipment_id || '')),
+      ...meters.filter(r=>isTruckEquipment(findEquipmentById(r.equipment_id))).map(r=>String(r.equipment_id || ''))
+    ].filter(Boolean)));
+    const truckAnalysis = truckIds.map(id=>{
       const eq = findEquipmentById(id) || {};
+      const prod = prodMetaByTruck[id] || {};
+      const tripMeta = tripMetaByTruck[id] || {};
+      const linkedExcId = String(linkedExcByTruck[id] || tripMeta.linked_excavator_id || prod.linked_excavator_id || '');
+      const linkedExcName = linkedExcId ? (findEquipmentById(linkedExcId)?.name || tripMeta.linked_excavator_name || prod.linked_excavator_name || '-') : '-';
       const tripCount = tripsByTruck[id] || 0;
       const meterWindow = shiftEquipmentMeterWindow(id, shiftName, shiftDate);
-      const productionRowsForTruck = truckProductions.filter(r=>String(r.equipment_id||'') === id);
+      const productionRowsForTruck = truckProductions.filter(r=>String(r.equipment_id || '') === id);
       const productionMeterDiff = productionRowsForTruck.reduce((s,r)=>s + Math.max(0, Number(getEffectiveProductionEndMeter(r) || 0) - Number(getEffectiveProductionStartMeter(r) || 0)), 0);
       const meterWindowDiff = meterWindow ? Math.max(0, Number(meterWindow.end || 0) - Number(meterWindow.start || 0)) : 0;
       const kmDiff = productionMeterDiff > 0 ? productionMeterDiff : meterWindowDiff;
-      const workHours = kmDiff;
+      const durationHours = productionRowsForTruck.reduce((s,r)=>s + productionDurationHours(r), 0);
       const fuelLiters = fuelsByEquipment[id] || 0;
-      const tonnage = trips.filter(r=>String(r.equipment_id||'') === id).reduce((s,r)=>s + getTripRowTonnage(r), 0);
+      const tonnage = trips.filter(r=>String(r.equipment_id || '') === id).reduce((s,r)=>s + getTripRowTonnage(r), 0);
+      const routeFrom = tripMeta.from_location || prod.from_location || '';
+      const routeTo = tripMeta.to_location || prod.to_location || '';
+      const packageLabel = tripMeta.package_name || prod.package_name || packageName(tripMeta.package_id || prod.package_id) || '-';
+      const workHours = durationHours > 0 ? durationHours : 0;
       const tonPerKm = kmDiff ? (tonnage / kmDiff) : 0;
       return {
         type:'truck',
         id,
-        name:eq.name || prod.equipment_name || prod.equipment_name_snapshot || prod.linked_excavator_name || '-',
-        zone:prod.to_location || prod.from_location || '',
-        route:`${prod.from_location || '-'} → ${prod.to_location || '-'}`,
-        packageName:prod.package_name || packageName(prod.package_id) || '-',
-        linkedName:prod.linked_excavator_name || (findEquipmentById(prod.linked_excavator_id)?.name || '-'),
-        linkedExcavatorId:String(prod.linked_excavator_id || trips.find(t=>String(t.equipment_id||'')===id)?.linked_excavator_id || ''),
+        name:eq.name || prod.equipment_name || tripMeta.equipment_name || '-',
+        zone:routeTo || routeFrom || '',
+        route:`${routeFrom || '-'} → ${routeTo || '-'}`,
+        packageName:packageLabel,
+        linkedName:linkedExcName,
+        linkedExcavatorId:linkedExcId,
         tripCount,
         fuelLiters,
         tonnage,
@@ -1483,30 +1514,33 @@
     });
 
     const excavatorIds = Array.from(new Set([
-      ...excavatorProductions.map(r=>String(r.equipment_id || '')),
+      ...excavatorProductionsAll.map(r=>String(r.equipment_id || '')),
       ...trips.map(r=>String(r.linked_excavator_id || '')),
       ...fuels.filter(r=>isExcavatorEquipment(findEquipmentById(r.equipment_id))).map(r=>String(r.equipment_id || '')),
       ...meters.filter(r=>isExcavatorEquipment(findEquipmentById(r.equipment_id))).map(r=>String(r.equipment_id || ''))
     ].filter(Boolean)));
     const excavatorAnalysis = excavatorIds.map(id=>{
-      const prodRows = excavatorProductions.filter(r=>String(r.equipment_id||'') === id);
-      const tripRowsForExc = trips.filter(t=>String(t.linked_excavator_id||'') === id);
-      const prod = excavatorProductionMap[id] || prodRows[0] || tripRowsForExc[0] || {};
+      const prodRowsAll = excavatorProductionsAll.filter(r=>String(r.equipment_id || '') === id);
+      const prodRowsClosed = excavatorProductions.filter(r=>String(r.equipment_id || '') === id);
+      const tripRowsForExc = trips.filter(t=>String(t.linked_excavator_id || '') === id);
+      const prod = prodMetaByExc[id] || prodRowsAll[0] || tripRowsForExc[0] || {};
       const eq = findEquipmentById(id) || {};
       const meterWindow = shiftEquipmentMeterWindow(id, shiftName, shiftDate);
-      const productionMeterDiff = prodRows.reduce((s,r)=>s + Math.max(0, Number(getEffectiveProductionEndMeter(r) || 0) - Number(getEffectiveProductionStartMeter(r) || 0)), 0);
+      const productionMeterDiff = prodRowsClosed.reduce((s,r)=>s + Math.max(0, Number(getEffectiveProductionEndMeter(r) || 0) - Number(getEffectiveProductionStartMeter(r) || 0)), 0);
       const meterWindowDiff = meterWindow ? Math.max(0, Number(meterWindow.end || 0) - Number(meterWindow.start || 0)) : 0;
-      const workHours = productionMeterDiff > 0 ? productionMeterDiff : meterWindowDiff;
+      const workHours = prodRowsClosed.reduce((s,r)=>s + productionDurationHours(r), 0) || (productionMeterDiff > 0 ? productionMeterDiff : meterWindowDiff);
       const tripCount = tripsByExc[id] || 0;
       const tonnage = tonnageByExc[id] || 0;
+      const routeFrom = prod.from_location || tripRowsForExc[0]?.from_location || '';
+      const routeTo = prod.to_location || tripRowsForExc[0]?.to_location || '';
       return {
         type:'excavator',
         id,
         name:eq.name || prod.equipment_name || prod.equipment_name_snapshot || prod.linked_excavator_name || '-',
-        zone:prod.from_location || prod.to_location || '',
-        route:`${prod.from_location || '-'} → ${prod.to_location || '-'}`,
-        packageName:prod.package_name || packageName(prod.package_id) || '-',
-        linkedTruckCount: uniqueCount(trips.filter(t=>String(t.linked_excavator_id||'') === id), r=>r.equipment_id),
+        zone:routeFrom || routeTo || '',
+        route:`${routeFrom || '-'} → ${routeTo || '-'}`,
+        packageName:prod.package_name || packageName(prod.package_id) || tripRowsForExc[0]?.package_name || packageName(tripRowsForExc[0]?.package_id) || '-',
+        linkedTruckCount: uniqueCount(tripRowsForExc, r=>r.equipment_id),
         tripCount,
         fuelLiters:fuelsByEquipment[id] || 0,
         tonnage,
@@ -1547,7 +1581,6 @@
       excavator_analysis:excavatorAnalysis
     };
   }
-
   function normalizeRole(role){
     const raw = String(role || '').trim().toLowerCase();
     if(['manager','admin','yonetici','yönetici'].includes(raw)) return 'manager';
@@ -1610,6 +1643,9 @@
     sb: null,
     user: null,
     profile: null,
+    authBootstrapPromise: null,
+    authReady: false,
+    authListener: null,
     equipments: [],
     packages: [],
     productions: [],
@@ -1896,7 +1932,40 @@
     await loadSupabaseScript();
     if(!state.sb){
       const { createClient } = window.supabase;
-      state.sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+      state.sb = createClient(SUPABASE_URL, SUPABASE_KEY, {
+        auth: {
+          persistSession: true,
+          autoRefreshToken: true,
+          detectSessionInUrl: true,
+          storageKey: 'maden_takip_auth'
+        }
+      });
+    }
+    if(!state.authListener && state.sb?.auth?.onAuthStateChange){
+      const reg = state.sb.auth.onAuthStateChange(async (event, session)=>{
+        try{
+          const hasUser = !!session?.user;
+          log({ stage:'auth-change', event, session: hasUser });
+          if(event === 'SIGNED_OUT' || !hasUser){
+            state.user = null;
+            state.profile = null;
+            state.authBootstrapPromise = null;
+            state.authReady = true;
+            await teardownRealtimeSubscriptions();
+            await teardownOnlinePresence();
+            document.getElementById('appView')?.classList.add('hidden');
+            document.getElementById('loginView')?.classList.remove('hidden');
+            setStatus('Oturum kapatıldı');
+            return;
+          }
+          if((event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') && !state.user){
+            await bootstrap(true);
+          }
+        }catch(err){
+          console.error('auth change error', err);
+        }
+      });
+      state.authListener = reg?.data?.subscription || reg?.subscription || true;
     }
     return state.sb;
   }
@@ -2093,7 +2162,9 @@
     }
   }
 
-  async function bootstrap(){
+  async function bootstrap(force=false){
+    if(state.authBootstrapPromise && !force) return state.authBootstrapPromise;
+    state.authBootstrapPromise = (async ()=>{
     const sb = await initClient();
     const sessionRes = await withTimeout(sb.auth.getSession(), 10000, 'Session');
     const session = sessionRes?.data?.session || null;
@@ -2144,6 +2215,14 @@
     await setupOnlinePresence();
     await setupRealtimeSubscriptions();
     updateOnlineUsersCard();
+    state.authReady = true;
+    return true;
+    })();
+    try{
+      return await state.authBootstrapPromise;
+    }finally{
+      state.authBootstrapPromise = null;
+    }
   }
 
   async function safeSelect(table){
@@ -6278,7 +6357,7 @@ function renderDeleted(){
     }catch(e){ return 0; }
   }
   function openPrintableReportHtml(title, bodyHtml){
-    const win = window.open('', '_blank', 'width=1100,height=900');
+    const win = window.open('', '_blank', 'width=1180,height=920');
     if(!win){ alert('Rapor penceresi açılamadı. Tarayıcı popup engelliyor olabilir.'); return; }
     win.document.write(`<!DOCTYPE html>
 <html lang="tr">
@@ -6290,12 +6369,19 @@ function renderDeleted(){
   :root{--bg:#f8fafc;--card:#fff;--line:#e2e8f0;--text:#0f172a;--muted:#475569;--blue:#2563eb;--green:#15803d;--orange:#c2410c;--red:#dc2626}
   *{box-sizing:border-box}
   body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text)}
-  .wrap{max-width:1100px;margin:0 auto;padding:28px}
+  .wrap{max-width:1180px;margin:0 auto;padding:24px}
+  .page{background:#fff;border:1px solid var(--line);border-radius:24px;padding:24px;box-shadow:0 10px 28px rgba(15,23,42,.08);margin-bottom:20px;page-break-after:always}
+  .page:last-child{page-break-after:auto}
   .hero{background:linear-gradient(135deg,#0f172a 0%,#1d4ed8 100%);color:#fff;border-radius:20px;padding:22px 24px;margin-bottom:18px}
   .hero h1{margin:0 0 6px;font-size:28px}
   .hero .sub{font-size:14px;opacity:.92}
+  .page-head{display:flex;justify-content:space-between;gap:14px;align-items:flex-start;flex-wrap:wrap;margin-bottom:14px}
+  .page-title{font-size:24px;font-weight:900;margin:0}
+  .page-sub{font-size:13px;color:var(--muted);margin-top:4px}
+  .print-badge{display:inline-flex;align-items:center;padding:6px 10px;border-radius:999px;background:#eff6ff;border:1px solid #bfdbfe;color:#1d4ed8;font-size:11px;font-weight:800}
   .grid{display:grid;gap:14px}
   .g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .g3{grid-template-columns:repeat(3,minmax(0,1fr))}
   .g2{grid-template-columns:repeat(2,minmax(0,1fr))}
   .card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px;box-shadow:0 8px 24px rgba(15,23,42,.06)}
   .kpi .label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;font-weight:700}
@@ -6304,6 +6390,7 @@ function renderDeleted(){
   table{width:100%;border-collapse:collapse}
   th,td{padding:10px 8px;border-bottom:1px solid #edf2f7;text-align:left;vertical-align:top;font-size:12px}
   th{font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);background:#f8fafc}
+  tr:nth-child(even) td{background:#fcfdff}
   .muted{color:var(--muted)}
   .badge{display:inline-block;padding:4px 8px;border-radius:999px;font-size:11px;font-weight:700;border:1px solid #dbeafe;background:#eff6ff;color:#1d4ed8}
   .alert-list{display:grid;gap:10px}
@@ -6311,17 +6398,29 @@ function renderDeleted(){
   .alert.red{border-color:#fecaca;background:#fef2f2}
   .alert.green{border-color:#bbf7d0;background:#f0fdf4}
   .small{font-size:12px}
+  .summary-list{display:grid;gap:8px}
+  .summary-line{display:flex;justify-content:space-between;gap:12px;padding:10px 12px;border-radius:14px;background:#f8fafc;border:1px solid #e2e8f0}
+  .summary-line strong{font-size:13px}
+  .summary-line span{font-size:13px;color:var(--muted)}
+  @media(max-width:900px){
+    .g4,.g3,.g2{grid-template-columns:1fr}
+    .wrap{padding:14px}
+    .page{padding:16px}
+  }
   @media print{
     body{background:#fff}
-    .wrap{max-width:none;padding:12mm}
+    .wrap{max-width:none;padding:0}
+    .page{box-shadow:none;border:none;border-radius:0;padding:10mm 8mm;margin:0}
     .card,.hero{box-shadow:none}
     .hero{background:#1d4ed8 !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    th{background:#f8fafc !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    tr:nth-child(even) td{background:#fcfdff !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   }
 </style>
 </head>
 <body>
 <div class="wrap">${bodyHtml}</div>
-<script>setTimeout(()=>window.print(),300);<\/script>
+<script>setTimeout(()=>window.print(),350);</script>
 </body>
 </html>`);
     win.document.close();
@@ -6343,6 +6442,59 @@ function renderDeleted(){
     });
   }
 
+
+  function reportPage(title, subtitle, innerHtml, badgeText){
+    return `
+      <section class="page">
+        <div class="page-head">
+          <div>
+            <h2 class="page-title">${escapeHtml(title || '')}</h2>
+            <div class="page-sub">${escapeHtml(subtitle || '')}</div>
+          </div>
+          ${badgeText ? `<div class="print-badge">${escapeHtml(badgeText)}</div>` : ''}
+        </div>
+        ${innerHtml}
+      </section>
+    `;
+  }
+  function toHtmlTable(headers, rows){
+    const th = (headers || []).map(h=>`<th>${escapeHtml(h)}</th>`).join('');
+    const bodyRows = (rows || []).length ? rows : [['Veri yok']];
+    const tdRows = bodyRows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('');
+    return `<table><thead><tr>${th}</tr></thead><tbody>${tdRows}</tbody></table>`;
+  }
+  function summarizeDailyData(summaryRows, productions, trips, fuels, breakdowns, rentals){
+    const totals = shiftSummaryTotals(summaryRows);
+    const openBreakdowns = (breakdowns || []).filter(r=>isOpenRow(r));
+    const equipmentMap = {};
+    (productions || []).forEach(r=>{
+      const key = String(r.equipment_id || r.equipment_name || '');
+      if(!key) return;
+      if(!equipmentMap[key]){
+        equipmentMap[key] = {
+          name: r.equipment_name || r.equipment_name_snapshot || findEquipmentById(r.equipment_id)?.name || '-',
+          trip: 0, ton: 0, fuel: 0, packageName: r.package_name || packageName(r.package_id) || '-'
+        };
+      }
+      equipmentMap[key].trip += Number(r.trip_count || 0);
+      equipmentMap[key].ton += Number(r.trip_count || 0) * Number(getPackageTonnageFactor(r.package_id) || 1);
+    });
+    (fuels || []).forEach(r=>{
+      const prodKey = String(r.equipment_id || r.equipment_name || '');
+      const name = r.equipment_name || findEquipmentById(r.equipment_id)?.name || '-';
+      const hit = Object.values(equipmentMap).find(x=>x.name === name);
+      if(hit) hit.fuel += Number(r.liters || 0);
+    });
+    const topEquipmentRows = Object.values(equipmentMap).sort((a,b)=>b.ton-a.ton || b.trip-a.trip).slice(0,12);
+    const alerts = [];
+    if(openBreakdowns.length) alerts.push({type:'red', text:`Açık arıza sayısı ${openBreakdowns.length}. Kritik ekipmanları kontrol edin.`});
+    if(Number(totals.fuel || 0) > 0 && Number(totals.trip || 0) === 0) alerts.push({type:'red', text:'Yakıt kaydı var ancak toplam sefer 0 görünüyor.'});
+    if(Number(totals.trip || 0) > 0 && Number(totals.fuel || 0) / Math.max(Number(totals.trip || 0),1) > 50) alerts.push({type:'orange', text:'Sefer başına yakıt tüketimi yüksek görünüyor.'});
+    if((productions || []).length === 0 && (trips || []).length === 0 && (fuels || []).length === 0) alerts.push({type:'orange', text:'Seçilen tarih için operasyon kaydı çok sınırlı görünüyor.'});
+    if(!alerts.length) alerts.push({type:'green', text:'Bu dönem için kritik uyarı görünmüyor.'});
+    return { totals, openBreakdowns, topEquipmentRows, alerts };
+  }
+
   async function exportDailyPdf(){
     if(currentUserRole() !== 'manager'){ alert('Bu rapor yalnızca yöneticiye açıktır.'); return; }
     try{
@@ -6351,108 +6503,127 @@ function renderDeleted(){
       const productions = (await fetchRowsForRange(TABLES.PRODUCTIONS, date, date)).filter(r=>!r.deleted_at);
       const trips = (await fetchRowsForRange(TABLES.TRUCK_TRIPS, date, date)).filter(r=>!r.deleted_at);
       const fuels = (await fetchRowsForRange(TABLES.FUEL_LOGS, date, date)).filter(r=>!r.deleted_at);
+      const meters = (await fetchRowsForRange(TABLES.METER_LOGS, date, date)).filter(r=>!r.deleted_at);
       const breakdowns = (await fetchRowsForRange(TABLES.BREAKDOWNS, date, date)).filter(r=>!r.deleted_at);
       const rentals = (await fetchRowsForRange(TABLES.RENTALS, date, date)).filter(r=>!r.deleted_at);
-      const totals = shiftSummaryTotals(summaryRows);
+      const { totals, openBreakdowns, topEquipmentRows, alerts } = summarizeDailyData(summaryRows, productions, trips, fuels, breakdowns, rentals);
 
-      const openBreakdowns = breakdowns.filter(r=>isOpenRow(r));
-      const topEquipment = {};
-      productions.forEach(r=>{
-        const key = String(r.equipment_id || '');
-        if(!key) return;
-        if(!topEquipment[key]) topEquipment[key] = {name: r.equipment_name || r.equipment_name_snapshot || findEquipmentById(r.equipment_id)?.name || '-', trip:0, ton:0};
-        topEquipment[key].trip += Number(r.trip_count || 0);
-        topEquipment[key].ton += Number(r.trip_count || 0) * Number(getPackageTonnageFactor(r.package_id) || 0 || 1);
-      });
-      const topEquipmentRows = Object.values(topEquipment).sort((a,b)=>b.trip-a.trip).slice(0,8);
-
-      const alerts = [];
-      if(openBreakdowns.length) alerts.push({type:'red', text:`Açık arıza sayısı ${openBreakdowns.length}. Kritik ekipmanları kontrol edin.`});
-      if(Number(totals.fuel || 0) > 0 && Number(totals.trip || 0) === 0) alerts.push({type:'red', text:'Yakıt kaydı var ancak toplam sefer 0 görünüyor.'});
-      if(Number(totals.trip || 0) > 0 && Number(totals.fuel || 0) / Math.max(Number(totals.trip || 0),1) > 50) alerts.push({type:'orange', text:'Sefer başına yakıt tüketimi yüksek görünüyor.'});
-      if(!alerts.length) alerts.push({type:'green', text:'Bugün için kritik uyarı görünmüyor.'});
-
-      const html = `
+      const cover = `
         <div class="hero">
           <h1>Günlük Operasyon Raporu</h1>
           <div class="sub">Tarih: <b>${escapeHtml(date)}</b> • Maden Takip v40</div>
         </div>
-
         <div class="grid g4" style="margin-bottom:16px">
           <div class="card kpi"><div class="label">Toplam Sefer</div><div class="value">${numFmt(totals.trip)}</div></div>
           <div class="card kpi"><div class="label">Tahmini Tonaj</div><div class="value">${numFmt(totals.ton)}</div></div>
           <div class="card kpi"><div class="label">Toplam Yakıt</div><div class="value">${numFmt(totals.fuel)} L</div></div>
           <div class="card kpi"><div class="label">Açık Arıza</div><div class="value">${numFmt(openBreakdowns.length)}</div></div>
         </div>
-
         <div class="grid g2">
           <div class="card">
-            <h2 class="section-title">Vardiya Özeti</h2>
-            <table>
-              <thead><tr><th>Tarih</th><th>Vardiya</th><th>Sefer</th><th>Tonaj</th><th>Yakıt</th><th>Aktif Ekipman</th></tr></thead>
-              <tbody>
-                ${(summaryRows.length ? summaryRows : [{shift_date:date, shift_name:'-', total_trip_count:0, estimated_tonnage:0, total_fuel_liters:0, active_equipment_count:0}]).map(r=>`
-                  <tr>
-                    <td>${escapeHtml(String(r.shift_date || ''))}</td>
-                    <td>${escapeHtml(String(r.shift_name || ''))}</td>
-                    <td>${numFmt(r.total_trip_count)}</td>
-                    <td>${numFmt(r.estimated_tonnage)}</td>
-                    <td>${numFmt(r.total_fuel_liters)}</td>
-                    <td>${numFmt(r.active_equipment_count)}</td>
-                  </tr>`).join('')}
-              </tbody>
-            </table>
-          </div>
-          <div class="card">
-            <h2 class="section-title">Akıllı Uyarılar</h2>
+            <h3 class="section-title">Akıllı Uyarılar</h3>
             <div class="alert-list">
               ${alerts.map(a=>`<div class="alert ${a.type==='red'?'red':(a.type==='green'?'green':'')}">${escapeHtml(a.text)}</div>`).join('')}
             </div>
           </div>
-        </div>
-
-        <div class="card" style="margin-top:16px">
-          <h2 class="section-title">Ekipman Performans Özeti</h2>
-          <table>
-            <thead><tr><th>Ekipman</th><th>Sefer</th><th>Tahmini Tonaj</th></tr></thead>
-            <tbody>
-              ${(topEquipmentRows.length ? topEquipmentRows : [{name:'Veri yok',trip:0,ton:0}]).map(r=>`
-                <tr><td>${escapeHtml(r.name)}</td><td>${numFmt(r.trip)}</td><td>${numFmt(r.ton)}</td></tr>
-              `).join('')}
-            </tbody>
-          </table>
-        </div>
-
-        <div class="grid g2" style="margin-top:16px">
           <div class="card">
-            <h2 class="section-title">Açık Arızalar</h2>
-            <table>
-              <thead><tr><th>Vardiya</th><th>Ekipman</th><th>Sebep</th><th>Süre</th></tr></thead>
-              <tbody>
-                ${(openBreakdowns.length ? openBreakdowns : [{shift_name:'-',equipment_name:'Açık arıza yok',reason:'-',start_at:''}]).map(r=>`
-                  <tr>
-                    <td>${escapeHtml(String(r.shift_name || '-'))}</td>
-                    <td>${escapeHtml(String(r.equipment_name || r.equipment_name_snapshot || findEquipmentById(r.equipment_id)?.name || '-'))}</td>
-                    <td>${escapeHtml(String(r.reason || '-'))}</td>
-                    <td>${numFmt(minutesBetweenSafe(r.start_at || r.created_at, r.end_at || null))} dk</td>
-                  </tr>`).join('')}
-              </tbody>
-            </table>
-          </div>
-          <div class="card">
-            <h2 class="section-title">Kayıt Özeti</h2>
-            <table>
-              <tbody>
-                <tr><th>Üretim Kaydı</th><td>${numFmt(productions.length)}</td></tr>
-                <tr><th>Sefer Kaydı</th><td>${numFmt(trips.length)}</td></tr>
-                <tr><th>Yakıt Kaydı</th><td>${numFmt(fuels.length)}</td></tr>
-                <tr><th>Kiralık Kaydı</th><td>${numFmt(rentals.length)}</td></tr>
-                <tr><th>Arıza Kaydı</th><td>${numFmt(breakdowns.length)}</td></tr>
-              </tbody>
-            </table>
+            <h3 class="section-title">Kayıt Özeti</h3>
+            <div class="summary-list">
+              <div class="summary-line"><strong>Üretim Kaydı</strong><span>${numFmt(productions.length)}</span></div>
+              <div class="summary-line"><strong>Sefer Kaydı</strong><span>${numFmt(trips.length)}</span></div>
+              <div class="summary-line"><strong>Yakıt Kaydı</strong><span>${numFmt(fuels.length)}</span></div>
+              <div class="summary-line"><strong>Sayaç Kaydı</strong><span>${numFmt(meters.length)}</span></div>
+              <div class="summary-line"><strong>Kiralık Kaydı</strong><span>${numFmt(rentals.length)}</span></div>
+              <div class="summary-line"><strong>Arıza Kaydı</strong><span>${numFmt(breakdowns.length)}</span></div>
+            </div>
           </div>
         </div>
       `;
+
+      const shiftSummaryTable = toHtmlTable(
+        ['Tarih','Vardiya','Sefer','Tonaj','Yakıt','Aktif Ekipman'],
+        (summaryRows.length ? summaryRows : [{shift_date:date, shift_name:'-', total_trip_count:0, estimated_tonnage:0, total_fuel_liters:0, active_equipment_count:0}]).map(r=>[
+          escapeHtml(String(r.shift_date || '')),
+          escapeHtml(String(r.shift_name || '')),
+          numFmt(r.total_trip_count),
+          numFmt(r.estimated_tonnage),
+          `${numFmt(r.total_fuel_liters)} L`,
+          numFmt(r.active_equipment_count)
+        ])
+      );
+
+      const equipmentTable = toHtmlTable(
+        ['Ekipman','Sefer','Tahmini Tonaj','Yakıt'],
+        (topEquipmentRows.length ? topEquipmentRows : [{name:'Veri yok',trip:0,ton:0,fuel:0}]).map(r=>[
+          escapeHtml(r.name || '-'),
+          numFmt(r.trip),
+          numFmt(r.ton),
+          `${numFmt(r.fuel)} L`
+        ])
+      );
+
+      const productionTable = toHtmlTable(
+        ['Ekipman','Paket','Rota','Sefer','Başlangıç','Bitiş','Durum'],
+        (productions.length ? productions : [{equipment_name:'Veri yok', package_name:'-', from_location:'-', to_location:'-', trip_count:0, start_at:'', end_at:'', status:'-'}]).map(r=>[
+          escapeHtml(String(r.equipment_name || r.equipment_name_snapshot || findEquipmentById(r.equipment_id)?.name || '-')),
+          escapeHtml(String(r.package_name || r.package_name_snapshot || packageName(r.package_id) || '-')),
+          escapeHtml([r.from_location||'', r.to_location||''].filter(Boolean).join(' → ') || '-'),
+          numFmt(r.trip_count),
+          escapeHtml(fmtDate(r.start_at || r.created_at || '') || '-'),
+          escapeHtml(fmtDate(r.end_at || '') || '-'),
+          escapeHtml(String(r.status || '-'))
+        ])
+      );
+
+      const fuelTable = toHtmlTable(
+        ['Ekipman','Yakıt (L)','Kaynak/Not','Saat'],
+        (fuels.length ? fuels : [{equipment_name:'Veri yok', liters:0, source:'-', created_at:''}]).map(r=>[
+          escapeHtml(String(r.equipment_name || findEquipmentById(r.equipment_id)?.name || '-')),
+          numFmt(r.liters),
+          escapeHtml(String(r.source || '-')),
+          escapeHtml(fmtDate(r.recorded_at || r.created_at || '') || '-')
+        ])
+      );
+
+      const tripTable = toHtmlTable(
+        ['Kamyon','Bağlı Ekskavatör','Paket','Rota','Sefer'],
+        (trips.length ? trips : [{equipment_name:'Veri yok', linked_excavator_name:'-', package_name:'-', from_location:'-', to_location:'-', trip_count:0}]).map(r=>[
+          escapeHtml(String(r.equipment_name || findEquipmentById(r.equipment_id)?.name || '-')),
+          escapeHtml(String(r.linked_excavator_name || findEquipmentById(r.linked_excavator_id)?.name || '-')),
+          escapeHtml(String(r.package_name || packageName(r.package_id) || '-')),
+          escapeHtml([r.from_location||'', r.to_location||''].filter(Boolean).join(' → ') || '-'),
+          numFmt(r.trip_count)
+        ])
+      );
+
+      const breakdownTable = toHtmlTable(
+        ['Vardiya','Ekipman','Sebep','Süre','Durum'],
+        ((breakdowns.length ? breakdowns : [{shift_name:'-',equipment_name:'Veri yok',reason:'-',start_at:'',end_at:'',status:'-'}])).map(r=>[
+          escapeHtml(String(r.shift_name || '-')),
+          escapeHtml(String(r.equipment_name || r.equipment_name_snapshot || findEquipmentById(r.equipment_id)?.name || '-')),
+          escapeHtml(String(r.reason || '-')),
+          `${numFmt(minutesBetweenSafe(r.start_at || r.created_at, r.end_at || null))} dk`,
+          escapeHtml(String(r.status || (isOpenRow(r) ? 'open' : '-')))
+        ])
+      );
+
+      const rentalTable = toHtmlTable(
+        ['Ekipman','Tedarikçi','Başlangıç','Bitiş','Durum'],
+        (rentals.length ? rentals : [{equipment_name:'Veri yok', vendor_name:'-', start_at:'', end_at:'', status:'-'}]).map(r=>[
+          escapeHtml(String(r.equipment_name || r.equipment_name_snapshot || findEquipmentById(r.equipment_id)?.name || '-')),
+          escapeHtml(String(r.vendor_name || '-')),
+          escapeHtml(fmtDate(r.start_at || r.created_at || '') || '-'),
+          escapeHtml(fmtDate(r.end_at || '') || '-'),
+          escapeHtml(String(r.status || '-'))
+        ])
+      );
+
+      const html = [
+        reportPage('Günlük Operasyon Özeti', `${date} tarihli günlük rapor özeti`, cover, 'Kapak'),
+        reportPage('Vardiya Özeti ve Performans', 'Vardiya bazlı üretim ve ekipman performansı', `<div class="grid g2"><div class="card"><h3 class="section-title">Vardiya Özeti</h3>${shiftSummaryTable}</div><div class="card"><h3 class="section-title">Ekipman Performans Özeti</h3>${equipmentTable}</div></div>`, 'Sayfa 2'),
+        reportPage('Üretim ve Sefer Detayı', 'Üretim ve kamyon sefer kayıtları', `<div class="grid g2"><div class="card"><h3 class="section-title">Üretim</h3>${productionTable}</div><div class="card"><h3 class="section-title">Sefer</h3>${tripTable}</div></div>`, 'Sayfa 3'),
+        reportPage('Yakıt, Arıza ve Kiralık', 'Destek kayıtları ve açık sorunlar', `<div class="grid g2"><div class="card"><h3 class="section-title">Yakıt</h3>${fuelTable}</div><div class="card"><h3 class="section-title">Arıza</h3>${breakdownTable}</div></div><div class="card" style="margin-top:14px"><h3 class="section-title">Kiralık</h3>${rentalTable}</div>`, 'Sayfa 4')
+      ].join('');
       openPrintableReportHtml(`Gunluk Rapor ${date}`, html);
     }catch(err){
       alert(err.message || err);
@@ -6822,6 +6993,102 @@ function renderDeleted(){
       alert(err.message || err);
     }
   }
+
+  async function exportShiftPdf(){
+    if(currentUserRole() !== 'manager'){ alert('Bu rapor yalnızca yöneticiye açıktır.'); return; }
+    try{
+      const date = document.getElementById('report_shift_date')?.value || todayStr();
+      const shiftName = document.getElementById('report_shift_name')?.value || '';
+      if(!shiftName) throw new Error('Vardiya seçiniz');
+      const productions = (await fetchRowsForRange(TABLES.PRODUCTIONS, date, date, shiftName)).filter(r=>!r.deleted_at);
+      const trips = (await fetchRowsForRange(TABLES.TRUCK_TRIPS, date, date, shiftName)).filter(r=>!r.deleted_at);
+      const fuels = (await fetchRowsForRange(TABLES.FUEL_LOGS, date, date, shiftName)).filter(r=>!r.deleted_at);
+      const meters = (await fetchRowsForRange(TABLES.METER_LOGS, date, date, shiftName)).filter(r=>!r.deleted_at);
+      const breakdowns = (await fetchRowsForRange(TABLES.BREAKDOWNS, date, date, shiftName)).filter(r=>!r.deleted_at);
+      const rentals = (await fetchRowsForRange(TABLES.RENTALS, date, date, shiftName)).filter(r=>!r.deleted_at);
+      const summaryRows = await fetchSummaryRange(date, date);
+      const summary = (summaryRows || []).find(r=>String(r.shift_name||'')===String(shiftName||'')) || {};
+      const shiftAlerts = [];
+      const openBreakdowns = breakdowns.filter(r=>isOpenRow(r));
+      if(openBreakdowns.length) shiftAlerts.push({type:'red', text:`Bu vardiyada ${openBreakdowns.length} açık arıza kaydı var.`});
+      if(!shiftAlerts.length) shiftAlerts.push({type:'green', text:'Bu vardiya için kritik açık uyarı görünmüyor.'});
+
+      const html = [
+        reportPage('Vardiya Operasyon Raporu', `${date} • ${shiftName}`, `
+          <div class="hero">
+            <h1>${escapeHtml(shiftName)} Vardiyası</h1>
+            <div class="sub">Tarih: <b>${escapeHtml(date)}</b> • Detaylı vardiya özeti</div>
+          </div>
+          <div class="grid g4" style="margin-bottom:16px">
+            <div class="card kpi"><div class="label">Toplam Sefer</div><div class="value">${numFmt(summary.total_trip_count || trips.reduce((a,b)=>a+Number(b.trip_count||0),0))}</div></div>
+            <div class="card kpi"><div class="label">Tahmini Tonaj</div><div class="value">${numFmt(summary.estimated_tonnage || 0)}</div></div>
+            <div class="card kpi"><div class="label">Toplam Yakıt</div><div class="value">${numFmt(summary.total_fuel_liters || fuels.reduce((a,b)=>a+Number(b.liters||0),0))} L</div></div>
+            <div class="card kpi"><div class="label">Açık Arıza</div><div class="value">${numFmt(openBreakdowns.length)}</div></div>
+          </div>
+          <div class="card">
+            <h3 class="section-title">Vardiya Uyarıları</h3>
+            <div class="alert-list">${shiftAlerts.map(a=>`<div class="alert ${a.type==='red'?'red':(a.type==='green'?'green':'')}">${escapeHtml(a.text)}</div>`).join('')}</div>
+          </div>
+        `, 'Kapak'),
+        reportPage('Üretim ve Sefer', `${shiftName} vardiyasına ait üretim ve taşıma hareketleri`, `
+          <div class="grid g2">
+            <div class="card"><h3 class="section-title">Üretim</h3>${toHtmlTable(['Ekipman','Paket','Rota','Sefer','Başlangıç','Bitiş','Durum'], (productions.length ? productions : [{equipment_name:'Veri yok',package_name:'-',from_location:'-',to_location:'-',trip_count:0,start_at:'',end_at:'',status:'-'}]).map(r=>[
+              escapeHtml(String(r.equipment_name || r.equipment_name_snapshot || findEquipmentById(r.equipment_id)?.name || '-')),
+              escapeHtml(String(r.package_name || r.package_name_snapshot || packageName(r.package_id) || '-')),
+              escapeHtml([r.from_location||'',r.to_location||''].filter(Boolean).join(' → ') || '-'),
+              numFmt(r.trip_count),
+              escapeHtml(fmtDate(r.start_at || r.created_at || '') || '-'),
+              escapeHtml(fmtDate(r.end_at || '') || '-'),
+              escapeHtml(String(r.status || '-'))
+            ]))}</div>
+            <div class="card"><h3 class="section-title">Sefer</h3>${toHtmlTable(['Kamyon','Bağlı Ekskavatör','Paket','Rota','Sefer'], (trips.length ? trips : [{equipment_name:'Veri yok',linked_excavator_name:'-',package_name:'-',from_location:'-',to_location:'-',trip_count:0}]).map(r=>[
+              escapeHtml(String(r.equipment_name || findEquipmentById(r.equipment_id)?.name || '-')),
+              escapeHtml(String(r.linked_excavator_name || findEquipmentById(r.linked_excavator_id)?.name || '-')),
+              escapeHtml(String(r.package_name || packageName(r.package_id) || '-')),
+              escapeHtml([r.from_location||'',r.to_location||''].filter(Boolean).join(' → ') || '-'),
+              numFmt(r.trip_count)
+            ]))}</div>
+          </div>
+        `, 'Sayfa 2'),
+        reportPage('Yakıt, Sayaç, Arıza ve Kiralık', `${shiftName} vardiyasına ait destek kayıtları`, `
+          <div class="grid g2">
+            <div class="card"><h3 class="section-title">Yakıt</h3>${toHtmlTable(['Ekipman','Yakıt (L)','Kaynak/Not','Saat'], (fuels.length ? fuels : [{equipment_name:'Veri yok',liters:0,source:'-',created_at:''}]).map(r=>[
+              escapeHtml(String(r.equipment_name || findEquipmentById(r.equipment_id)?.name || '-')),
+              numFmt(r.liters),
+              escapeHtml(String(r.source || '-')),
+              escapeHtml(fmtDate(r.recorded_at || r.created_at || '') || '-')
+            ]))}</div>
+            <div class="card"><h3 class="section-title">Sayaç</h3>${toHtmlTable(['Ekipman','Sayaç Tipi','Değer','Saat'], (meters.length ? meters : [{equipment_name:'Veri yok',meter_type:'-',meter_value:0,created_at:''}]).map(r=>[
+              escapeHtml(String(r.equipment_name || findEquipmentById(r.equipment_id)?.name || '-')),
+              escapeHtml(String(r.meter_type || '-')),
+              numFmt(r.meter_value),
+              escapeHtml(fmtDate(r.recorded_at || r.created_at || '') || '-')
+            ]))}</div>
+          </div>
+          <div class="grid g2" style="margin-top:14px">
+            <div class="card"><h3 class="section-title">Arıza</h3>${toHtmlTable(['Ekipman','Sebep','Başlangıç','Bitiş','Durum'], (breakdowns.length ? breakdowns : [{equipment_name:'Veri yok',reason:'-',start_at:'',end_at:'',status:'-'}]).map(r=>[
+              escapeHtml(String(r.equipment_name || r.equipment_name_snapshot || findEquipmentById(r.equipment_id)?.name || '-')),
+              escapeHtml(String(r.reason || '-')),
+              escapeHtml(fmtDate(r.start_at || r.created_at || '') || '-'),
+              escapeHtml(fmtDate(r.end_at || '') || '-'),
+              escapeHtml(String(r.status || (isOpenRow(r) ? 'open' : '-')))
+            ]))}</div>
+            <div class="card"><h3 class="section-title">Kiralık</h3>${toHtmlTable(['Ekipman','Tedarikçi','Başlangıç','Bitiş','Durum'], (rentals.length ? rentals : [{equipment_name:'Veri yok',vendor_name:'-',start_at:'',end_at:'',status:'-'}]).map(r=>[
+              escapeHtml(String(r.equipment_name || r.equipment_name_snapshot || findEquipmentById(r.equipment_id)?.name || '-')),
+              escapeHtml(String(r.vendor_name || '-')),
+              escapeHtml(fmtDate(r.start_at || r.created_at || '') || '-'),
+              escapeHtml(fmtDate(r.end_at || '') || '-'),
+              escapeHtml(String(r.status || '-'))
+            ]))}</div>
+          </div>
+        `, 'Sayfa 3')
+      ].join('');
+      openPrintableReportHtml(`Vardiya Raporu ${shiftName} ${date}`, html);
+    }catch(err){
+      alert(err.message || err);
+    }
+  }
+
   function downloadBlob(buffer, filename, mime){
     const blob = new Blob([buffer], {type:mime});
     const url = URL.createObjectURL(blob);
@@ -6848,10 +7115,10 @@ function renderDeleted(){
         <div class="report-grid">
           <div class="report-card">
             <h3>Günlük PDF</h3>
-            <span class="muted">Seçilen tarih için modern, yazdırılabilir günlük rapor açar. Tarayıcıdan PDF olarak kaydedebilirsiniz; Türkçe karakterler daha düzgün çıkar.</span>
+            <span class="muted">Seçilen gün için kapak, vardiya özeti, üretim-sefer ve yakıt-arıza bölümleri ayrı sayfalar halinde açılır. Tarayıcıdan PDF olarak kaydedebilirsiniz.</span>
             <input id="report_daily_date" type="date" value="${today}" />
             <div class="report-actions" style="margin-top:10px">
-              <button onclick="exportDailyPdf()">Günlük PDF İndir</button>
+              <button onclick="exportDailyPdf()">Günlük PDF Aç</button>
             </div>
           </div>
           <div class="report-card">
@@ -6864,13 +7131,14 @@ function renderDeleted(){
           </div>
           <div class="report-card">
             <h3>Vardiya Raporu</h3>
-            <span class="muted">Belirli bir tarih ve vardiya için tüm hareketleri tek Excel dosyasında indirir.</span>
+            <span class="muted">Belirli bir tarih ve vardiya için PDF veya Excel çıktı alabilirsiniz. PDF çıktıda konular ayrı sayfalarda düzenlenir.</span>
             <div class="inline">
               <input id="report_shift_date" type="date" value="${today}" />
               <select id="report_shift_name"><option value="">Vardiya seç</option>${shiftOptions}</select>
             </div>
             <div class="report-actions" style="margin-top:10px">
-              <button onclick="exportShiftReport()">Vardiya Raporu İndir</button>
+              <button onclick="exportShiftPdf()">Vardiya PDF Aç</button>
+              <button class="secondary" onclick="exportShiftReport()">Vardiya Excel İndir</button>
             </div>
           </div>
         </div>
@@ -7032,7 +7300,19 @@ function renderUsers(){
   }
 
   async function refreshData(){ await loadAllSafe(); renderAll(); }
-  async function logout(){ try{ await teardownRealtimeSubscriptions(); await teardownOnlinePresence(); const sb = await initClient(); await sb.auth.signOut(); } catch(e){} location.reload(); }
+  async function logout(){
+    try{
+      await teardownRealtimeSubscriptions();
+      await teardownOnlinePresence();
+      const sb = await initClient();
+      await sb.auth.signOut({ scope:'local' });
+    }catch(e){}
+    state.user = null;
+    state.profile = null;
+    document.getElementById('appView')?.classList.add('hidden');
+    document.getElementById('loginView')?.classList.remove('hidden');
+    setStatus('Çıkış yapıldı');
+  }
 
   document.addEventListener('click', async (e)=>{
     const closeBtn = e.target.closest('[data-close-modal]');
@@ -7136,9 +7416,11 @@ function renderUsers(){
         setStatus('Mevcut oturum bulundu');
         await bootstrap();
       } else {
+        state.authReady = true;
         log({stage:'page-ready', session:false});
       }
     }catch(err){
+      state.authReady = true;
       log({stage:'auto-session-catch', message:String(err.message||err)});
     }
   })();
