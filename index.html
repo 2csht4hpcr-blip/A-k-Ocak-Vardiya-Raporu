@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>⛏️ Maden Takip Sistemi</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     *{box-sizing:border-box;font-family:Arial,sans-serif}
     body{margin:0;background:#f4f6f8;color:#111827}
@@ -237,6 +238,22 @@
 
     .pdf-export-ignore{display:initial}
     .dashboard-pro-pdf-mode .pdf-export-ignore{display:none!important}
+
+
+    .gps-layout{display:grid;grid-template-columns:minmax(280px,360px) 1fr;gap:14px;align-items:start}
+    .gps-map{height:620px;min-height:420px;border-radius:20px;border:1px solid #dbe3ef;overflow:hidden;background:#e2e8f0;box-shadow:0 12px 28px rgba(15,23,42,.08)}
+    .gps-control-grid{display:grid;gap:10px}
+    .gps-status-box{padding:12px;border-radius:16px;background:#f8fafc;border:1px solid #e2e8f0}
+    .gps-status-title{font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:.35px;color:#64748b}
+    .gps-status-value{font-size:18px;font-weight:900;color:#0f172a;margin-top:4px}
+    .gps-machine-list{display:grid;gap:8px;max-height:320px;overflow:auto;padding-right:4px}
+    .gps-machine-row{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:10px 12px;border-radius:14px;background:#fff;border:1px solid #e2e8f0}
+    .gps-machine-name{font-weight:900;color:#0f172a;font-size:13px}
+    .gps-machine-sub{font-size:11px;color:#64748b;margin-top:3px}
+    .gps-dot{width:10px;height:10px;border-radius:999px;display:inline-block;background:#94a3b8}
+    .gps-dot.live{background:#16a34a}.gps-dot.warn{background:#f59e0b}.gps-dot.off{background:#dc2626}
+    @media(max-width:960px){.gps-layout{grid-template-columns:1fr}.gps-map{height:520px}}
+
     .dashboard-pro-pdf-mode .dashboard-scroll{max-height:none!important;overflow:visible!important}
     .dashboard-pro-pdf-mode{background:#f4f6f8!important;padding:4px}
 
@@ -267,6 +284,7 @@
         <div class="menu-title">Genel</div>
         <button class="menu-btn active" data-page="dashboard">Dashboard</button>
         <button class="menu-btn" data-page="dashboardPro">Dashboard Pro</button>
+        <button class="menu-btn" data-page="gpsLive">GPS / Canlı Takip</button>
       </div>
 
       <div class="menu-group">
@@ -320,6 +338,7 @@
 
       <section id="dashboard" class="page active"></section>
       <section id="dashboardPro" class="page"></section>
+      <section id="gpsLive" class="page"></section>
       <section id="production" class="page"></section>
       <section id="breakdown" class="page"></section>
       <section id="rental" class="page"></section>
@@ -345,6 +364,7 @@
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 (function(){
   function loadShiftConfig(){
@@ -1599,7 +1619,7 @@
     const role = currentUserRole();
     if(role === 'manager') return true;
     if(role === 'shift_lead'){
-      return ['dashboard','production','breakdown','rental','trip','fuel','meter','records'].includes(pageId);
+      return ['dashboard','dashboardPro','gpsLive','production','breakdown','rental','trip','fuel','meter','records'].includes(pageId);
     }
     return ['dashboard'].includes(pageId);
   }
@@ -1649,6 +1669,7 @@
     fuel_logs: [],
     meter_logs: [],
     truck_trips: [],
+    gps_positions: [],
     userProfiles: [],
     currentPage: 'dashboard',
     recordTab: 'operations',
@@ -1675,7 +1696,8 @@
       sessionKey: `${Date.now()}_${Math.random().toString(36).slice(2,10)}`,
       heartbeatTimer: null
     },
-    realtimeChannels: []
+    realtimeChannels: [],
+    gps: { watchId:null, sessionId:null, tracking:false, selectedEquipmentId: localStorage.getItem('maden_gps_assigned_equipment_id') || localStorage.getItem('maden_gps_equipment_id') || '', map:null, markers:{}, polyline:null }
   };
 
   const I18N = {
@@ -1693,7 +1715,7 @@
       "Yakıt Tüketimi": "Fuel Consumption", "Yakıt Tüketimi Analizi": "Fuel Consumption Analysis", "Yakıt almadı": "No fuel taken", "Önceki sayaç yok": "No previous meter", "Sayaç farkı yok": "No meter difference", "Anormal düşük tüketim": "Abnormally low consumption", "Anormal yüksek tüketim": "Abnormally high consumption", "Yüksek tüketim": "High consumption", "Normal": "Normal",
       "Günlük Ortalama": "Daily Average", "Haftalık Ortalama": "Weekly Average", "Aylık Ortalama": "Monthly Average", "Yıllık Ortalama": "Yearly Average", "Vardiyalık": "Per Shift", "Ortalama": "Average", "Uyarı": "Warning", "Uyarılar": "Warnings",
       "Akıllı Uyarı Eşikleri": "Smart Alert Thresholds", "Kamyon yüksek tüketim eşiği": "Truck high consumption threshold", "Ekskavatör yüksek tüketim eşiği": "Excavator high consumption threshold", "Yardımcı makina yüksek tüketim eşiği": "Auxiliary machine high consumption threshold", "Anormal düşük tüketim eşiği": "Abnormally low consumption threshold", "Ortalamaya göre yüksek tüketim oranı": "High consumption ratio vs average",
-      "Bu alan yalnızca yöneticiye açıktır.": "This area is only available to managers.", "Bu alan için yetkin yok.": "You do not have permission for this area.", "Yönetici • Tüm veriler": "Manager • All data", "Vardiya Sorumlusu • Kendi vardiyası": "Shift Lead • Own shift", "Misafir • Sadece dashboard": "Guest • Dashboard only"
+      "Bu alan yalnızca yöneticiye açıktır.": "This area is only available to managers.", "Bu alan için yetkin yok.": "You do not have permission for this area.", "Yönetici • Tüm veriler": "Manager • All data", "Vardiya Sorumlusu • Kendi vardiyası": "Shift Lead • Own shift", "Misafir • Sadece dashboard": "Guest • Dashboard only", "GPS / Canlı Takip":"GPS / Live Tracking", "Canlı Harita":"Live Map", "GPS Başlat":"Start GPS", "GPS Durdur":"Stop GPS", "GPS Senkronize Et":"Sync GPS", "GPS takip aktif":"GPS tracking active", "GPS takip kapalı":"GPS tracking stopped", "Offline bekleyen kayıt":"Pending offline record(s)", "Son Konum":"Last Position", "Konum bekleniyor":"Waiting for position", "Harita yüklenemedi":"Map could not be loaded", "Ekipman seçmeden GPS başlatılamaz":"Select equipment before starting GPS", "Tarayıcı GPS desteklemiyor":"Browser does not support GPS", "Konum izni verilmedi veya GPS alınamadı":"Location permission denied or GPS unavailable"
     },
     ru: {
       "⛏️ Maden Takip": "⛏️ Учет горных работ", "Canlı Giriş": "Вход в систему", "email": "email", "şifre": "пароль", "Bağlantıyı Test Et": "Проверить соединение", "Giriş Yap": "Войти", "Hazır": "Готово",
@@ -1709,7 +1731,7 @@
       "Yakıt Tüketimi": "Расход топлива", "Yakıt Tüketimi Analizi": "Анализ расхода топлива", "Yakıt almadı": "Не заправлялся", "Önceki sayaç yok": "Нет предыдущего счетчика", "Sayaç farkı yok": "Нет разницы счетчика", "Anormal düşük tüketim": "Аномально низкий расход", "Anormal yüksek tüketim": "Аномально высокий расход", "Yüksek tüketim": "Высокий расход", "Normal": "Норма",
       "Günlük Ortalama": "Среднее за день", "Haftalık Ortalama": "Среднее за неделю", "Aylık Ortalama": "Среднее за месяц", "Yıllık Ortalama": "Среднее за год", "Vardiyalık": "За смену", "Ortalama": "Среднее", "Uyarı": "Предупреждение", "Uyarılar": "Предупреждения",
       "Akıllı Uyarı Eşikleri": "Пороги умных предупреждений", "Kamyon yüksek tüketim eşiği": "Порог высокого расхода самосвала", "Ekskavatör yüksek tüketim eşiği": "Порог высокого расхода экскаватора", "Yardımcı makina yüksek tüketim eşiği": "Порог высокого расхода вспом. техники", "Anormal düşük tüketim eşiği": "Порог аномально низкого расхода", "Ortalamaya göre yüksek tüketim oranı": "Коэффициент высокого расхода к среднему",
-      "Bu alan yalnızca yöneticiye açıktır.": "Этот раздел доступен только менеджеру.", "Bu alan için yetkin yok.": "У вас нет доступа к этому разделу.", "Yönetici • Tüm veriler": "Менеджер • Все данные", "Vardiya Sorumlusu • Kendi vardiyası": "Начальник смены • Своя смена", "Misafir • Sadece dashboard": "Гость • Только панель"
+      "Bu alan yalnızca yöneticiye açıktır.": "Этот раздел доступен только менеджеру.", "Bu alan için yetkin yok.": "У вас нет доступа к этому разделу.", "Yönetici • Tüm veriler": "Менеджер • Все данные", "Vardiya Sorumlusu • Kendi vardiyası": "Начальник смены • Своя смена", "Misafir • Sadece dashboard": "Гость • Только панель", "GPS / Canlı Takip":"GPS / Онлайн отслеживание", "Canlı Harita":"Онлайн карта", "GPS Başlat":"Запустить GPS", "GPS Durdur":"Остановить GPS", "GPS Senkronize Et":"Синхронизировать GPS", "GPS takip aktif":"GPS отслеживание активно", "GPS takip kapalı":"GPS отслеживание остановлено", "Offline bekleyen kayıt":"Ожидающие офлайн записи", "Son Konum":"Последняя позиция", "Konum bekleniyor":"Ожидание координат", "Harita yüklenemedi":"Карта не загружена", "Ekipman seçmeden GPS başlatılamaz":"Выберите технику перед запуском GPS", "Tarayıcı GPS desteklemiyor":"Браузер не поддерживает GPS", "Konum izni verilmedi veya GPS alınamadı":"Нет разрешения на геолокацию или GPS недоступен"
     }
   };
 
@@ -3402,7 +3424,8 @@
     APP_SETTINGS: 'app_settings',
     DASHBOARD_SHIFT_SUMMARY: 'v_shift_summary_safe',
     DASHBOARD_EQUIPMENT_SHIFT_SUMMARY: 'v_equipment_shift_summary_safe',
-    DASHBOARD_PRO_SHIFT_SUMMARY: 'v_dashboard_pro_shift_summary_safe'
+    DASHBOARD_PRO_SHIFT_SUMMARY: 'v_dashboard_pro_shift_summary_safe',
+    GPS_POSITIONS: 'gps_positions'
   };
 
   function resolveDbTableName(name){
@@ -4087,6 +4110,7 @@
       created_at: r.created_at || r.recorded_at || nowIso()
     }));
     state.userProfiles = canManageUsers() ? ((results[TABLES.PROFILES]?.data || []).sort((a,b)=>String(a.full_name || a.email || '').localeCompare(String(b.full_name || b.email || ''), 'tr'))) : [];
+    await loadGpsPositionsSafe();
 
     if(!state._autoClosingPreviousShift){
       state._autoClosingPreviousShift = true;
@@ -9209,6 +9233,256 @@ function renderUsers(){
     `;
   }
 
+
+  function gpsQueueKey(){ return 'maden_gps_offline_queue'; }
+  function loadGpsOfflineQueue(){
+    try{ const raw = localStorage.getItem(gpsQueueKey()); const parsed = raw ? JSON.parse(raw) : []; return Array.isArray(parsed) ? parsed : []; }catch(e){ return []; }
+  }
+  function saveGpsOfflineQueue(rows){ try{ localStorage.setItem(gpsQueueKey(), JSON.stringify(Array.isArray(rows) ? rows : [])); }catch(e){} }
+  function gpsDemoPositionsKey(){ return 'maden_gps_demo_positions'; }
+  function loadGpsDemoPositions(){
+    try{ const raw = localStorage.getItem(gpsDemoPositionsKey()); const parsed = raw ? JSON.parse(raw) : []; return Array.isArray(parsed) ? parsed : []; }catch(e){ return []; }
+  }
+  function saveGpsDemoPositions(rows){ try{ localStorage.setItem(gpsDemoPositionsKey(), JSON.stringify((Array.isArray(rows) ? rows : []).slice(0,5000))); }catch(e){} }
+  function gpsTimeValue(row){ return row?.gps_time || row?.recorded_at || row?.created_at || ''; }
+  function gpsAgeMinutes(row){
+    const d = new Date(gpsTimeValue(row));
+    if(Number.isNaN(d.getTime())) return Infinity;
+    return Math.max(0, Math.round((Date.now() - d.getTime()) / 60000));
+  }
+  function latestGpsByEquipment(){
+    const map = new Map();
+    (state.gps_positions || []).forEach(r=>{
+      if(!r || r.deleted_at) return;
+      const key = String(r.equipment_id || '');
+      if(!key) return;
+      const old = map.get(key);
+      if(!old || new Date(gpsTimeValue(r)||0) > new Date(gpsTimeValue(old)||0)) map.set(key, r);
+    });
+    return map;
+  }
+  async function loadGpsPositionsSafe(){
+    // DEMO MOD: Supabase'e bağlanmaz, sadece bu cihazın localStorage kayıtlarını okur.
+    const rows = loadGpsDemoPositions();
+    state.gps_positions = (rows || []).filter(r=>!r.deleted_at).map(r=>({
+      ...r,
+      equipment_name: r.equipment_name || (findEquipmentById(r.equipment_id)?.name || ''),
+      equipment_type: r.equipment_type || equipmentTypeKey(findEquipmentById(r.equipment_id))
+    }));
+  }
+  function gpsSelectedEquipment(){ return findEquipmentById(state.gps.selectedEquipmentId); }
+  function gpsAssignedEquipmentId(){
+    try{ return String(localStorage.getItem('maden_gps_assigned_equipment_id') || ''); }catch(e){ return ''; }
+  }
+  function gpsAssignedEquipment(){ return findEquipmentById(gpsAssignedEquipmentId()); }
+  function setGpsSelectedEquipment(id){
+    state.gps.selectedEquipmentId = String(id || '');
+    try{ localStorage.setItem('maden_gps_equipment_id', state.gps.selectedEquipmentId); }catch(e){}
+  }
+  function assignGpsPhoneToSelectedEquipment(){
+    const id = String(state.gps.selectedEquipmentId || '');
+    const eq = findEquipmentById(id);
+    if(!id || !eq){ alert('Önce atanacak ekipmanı seçiniz'); return; }
+    try{
+      localStorage.setItem('maden_gps_assigned_equipment_id', id);
+      localStorage.setItem('maden_gps_assigned_equipment_name', eq.name || '');
+      localStorage.setItem('maden_gps_assigned_at', new Date().toISOString());
+    }catch(e){}
+    state.gps.selectedEquipmentId = id;
+    renderGpsLive();
+    showToast(`Bu telefon ${eq.name || 'seçili ekipman'} için atandı`);
+  }
+  function clearGpsPhoneAssignment(){
+    if(state.gps.tracking){ alert('Atamayı kaldırmadan önce GPS takibini durdurun'); return; }
+    try{
+      localStorage.removeItem('maden_gps_assigned_equipment_id');
+      localStorage.removeItem('maden_gps_assigned_equipment_name');
+      localStorage.removeItem('maden_gps_assigned_at');
+    }catch(e){}
+    renderGpsLive();
+    showToast('Telefon makina ataması kaldırıldı');
+  }
+  function renderGpsLive(){
+    const el = document.getElementById('gpsLive');
+    if(!el) return;
+    const latest = latestGpsByEquipment();
+    const selectedId = state.gps.selectedEquipmentId || '';
+    const offlineCount = loadGpsDemoPositions().length;
+    const rows = (state.equipments || []).filter(e=>!e.deleted_at).map(e=>{
+      const pos = latest.get(String(e.id));
+      const age = pos ? gpsAgeMinutes(pos) : Infinity;
+      const cls = !pos ? 'off' : (age <= 3 ? 'live' : (age <= 15 ? 'warn' : 'off'));
+      const sub = pos ? `${fmtDate(gpsTimeValue(pos))} • ${Number(pos.speed || 0).toFixed(1)} km/s` : 'Konum bekleniyor';
+      return `<div class="gps-machine-row"><div><div class="gps-machine-name"><span class="gps-dot ${cls}"></span> ${escapeHtml(e.name || '-')}</div><div class="gps-machine-sub">${escapeHtml(equipmentTypeLabel(equipmentTypeKey(e)))} • ${escapeHtml(sub)}</div></div><button class="secondary" style="width:auto;padding:7px 10px" onclick="gpsSelectFromList('${escapeHtml(e.id)}')">Seç</button></div>`;
+    }).join('');
+    const selected = gpsSelectedEquipment();
+    const assignedId = gpsAssignedEquipmentId();
+    const assigned = gpsAssignedEquipment();
+    const assignedAt = (()=>{ try{ return localStorage.getItem('maden_gps_assigned_at') || ''; }catch(e){ return ''; } })();
+    const last = (assigned || selected) ? latest.get(String((assigned || selected).id)) : null;
+    el.innerHTML = `
+      <div class="card pro-hero">
+        <h2 class="section-title">GPS / Canlı Takip</h2>
+        <div class="muted">Telefon GPS verisi ile canlı harita denemesi. Demo moddur; Supabase'e veri yazmaz, kayıtlar sadece bu cihazın tarayıcı hafızasında tutulur.</div>
+      </div>
+      <div class="gps-layout" style="margin-top:14px">
+        <div class="card gps-control-grid">
+          <h3 style="margin:0">Canlı Takip Kontrol</h3>
+          <div class="gps-status-box" style="border-color:#bfdbfe;background:#eff6ff">
+            <div class="gps-status-title">Bu telefonun atandığı makina</div>
+            <div class="gps-status-value">${escapeHtml(assigned?.name || 'Atama yok')}</div>
+            <div class="muted" style="margin-top:5px">${assigned ? `${escapeHtml(equipmentTypeLabel(equipmentTypeKey(assigned)))}${assignedAt ? ' • ' + escapeHtml(fmtDate(assignedAt)) : ''}` : 'Bu telefondan gelen GPS verisi için önce makina atayın.'}</div>
+          </div>
+          <div class="form-field">
+            <label>Ekipman seç / atama değiştir</label>
+            <select id="gpsEquipmentSelect" onchange="gpsSelectFromList(this.value)">
+              <option value="">Ekipman seçiniz</option>
+              ${(state.equipments || []).filter(e=>!e.deleted_at).map(e=>`<option value="${escapeHtml(e.id)}" ${String(e.id)===String(selectedId)?'selected':''}>${escapeHtml(e.name || '-')}</option>`).join('')}
+            </select>
+          </div>
+          <div class="inline">
+            <button class="secondary" onclick="assignGpsPhoneToSelectedEquipment()">Bu telefonu makinaya ata</button>
+            <button class="warning" onclick="clearGpsPhoneAssignment()">Atamayı kaldır</button>
+          </div>
+          <div class="inline">
+            <button class="success" onclick="startGpsTracking()">GPS Başlat</button>
+            <button class="danger" onclick="stopGpsTracking()">GPS Durdur</button>
+          </div>
+          <button class="secondary" onclick="refreshGpsMapNow()">Demo Haritayı Yenile</button>
+          <button class="danger" onclick="clearGpsDemoData()">Demo GPS Verilerini Temizle</button>
+          <div class="gps-status-box">
+            <div class="gps-status-title">Durum</div>
+            <div id="gpsTrackingStatus" class="gps-status-value">${state.gps.tracking ? 'GPS takip aktif' : 'GPS takip kapalı'}</div>
+            <div class="muted" style="margin-top:5px">Seçili: ${escapeHtml(selected?.name || '-')} • Atanan: ${escapeHtml(assigned?.name || '-')}</div>
+          </div>
+          <div class="gps-status-box">
+            <div class="gps-status-title">Bu cihazdaki demo kayıt</div>
+            <div id="gpsOfflineCount" class="gps-status-value">${offlineCount}</div>
+          </div>
+          <div class="gps-status-box">
+            <div class="gps-status-title">Son Konum</div>
+            <div class="muted">${last ? `${Number(last.latitude).toFixed(6)}, ${Number(last.longitude).toFixed(6)}<br>${escapeHtml(fmtDate(gpsTimeValue(last)))}` : 'Konum bekleniyor'}</div>
+          </div>
+          <h3 style="margin:8px 0 0">Makinalar</h3>
+          <div class="gps-machine-list">${rows || '<div class="empty">Ekipman yok.</div>'}</div>
+        </div>
+        <div class="card" style="padding:12px">
+          <div class="toolbar" style="justify-content:space-between;align-items:center">
+            <h3 style="margin:0">Canlı Harita</h3>
+            <button class="secondary" style="width:auto" onclick="refreshGpsMapNow()">Haritayı Yenile</button>
+          </div>
+          <div id="gpsMap" class="gps-map"></div>
+        </div>
+      </div>
+    `;
+    setTimeout(()=>{ try{ initGpsMap(); updateGpsMapMarkers(); applyLanguage(); }catch(e){ console.error(e); } }, 80);
+  }
+  function gpsSelectFromList(id){
+    setGpsSelectedEquipment(id);
+    const sel = document.getElementById('gpsEquipmentSelect');
+    if(sel && sel.value !== String(id || '')) sel.value = String(id || '');
+    renderGpsLive();
+  }
+  function initGpsMap(){
+    const host = document.getElementById('gpsMap');
+    if(!host || typeof L === 'undefined'){
+      if(host) host.innerHTML = '<div class="notice">Harita yüklenemedi</div>';
+      return;
+    }
+    if(state.gps.map){ try{ state.gps.map.remove(); }catch(e){} }
+    state.gps.map = L.map(host).setView([41.2995, 69.2401], 12);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' }).addTo(state.gps.map);
+    state.gps.markers = {};
+  }
+  function updateGpsMapMarkers(){
+    const map = state.gps.map;
+    if(!map || typeof L === 'undefined') return;
+    const latest = latestGpsByEquipment();
+    const bounds = [];
+    latest.forEach((pos, eqId)=>{
+      const lat = Number(pos.latitude), lng = Number(pos.longitude);
+      if(!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+      const eq = findEquipmentById(eqId);
+      const name = pos.equipment_name || eq?.name || 'Ekipman';
+      const type = equipmentTypeLabel(equipmentTypeKey(eq || pos));
+      const html = `<b>${escapeHtml(name)}</b><br>${escapeHtml(type)}<br>${escapeHtml(fmtDate(gpsTimeValue(pos)))}<br>Hız: ${Number(pos.speed || 0).toFixed(1)} km/s`;
+      if(state.gps.markers[eqId]) state.gps.markers[eqId].setLatLng([lat,lng]).setPopupContent(html);
+      else state.gps.markers[eqId] = L.marker([lat,lng]).addTo(map).bindPopup(html);
+      bounds.push([lat,lng]);
+    });
+    if(bounds.length){ try{ map.fitBounds(bounds, { padding:[30,30], maxZoom:15 }); }catch(e){} }
+  }
+  async function refreshGpsMapNow(){ await loadGpsPositionsSafe(); renderGpsLive(); }
+  function buildGpsPayload(position){
+    const coords = position?.coords || {};
+    const assigned = gpsAssignedEquipment();
+    const eq = assigned || gpsSelectedEquipment();
+    const now = new Date(position?.timestamp || Date.now()).toISOString();
+    return {
+      equipment_id: eq?.id || state.gps.selectedEquipmentId,
+      equipment_name: eq?.name || '',
+      equipment_type: equipmentTypeKey(eq),
+      user_id: state.user?.id || null,
+      latitude: Number(coords.latitude),
+      longitude: Number(coords.longitude),
+      accuracy: Number(coords.accuracy || 0),
+      speed: Number.isFinite(Number(coords.speed)) ? Math.max(0, Number(coords.speed) * 3.6) : 0,
+      heading: Number.isFinite(Number(coords.heading)) ? Number(coords.heading) : null,
+      gps_time: now,
+      recorded_at: now,
+      source: 'web_phone',
+      session_id: state.gps.sessionId || ''
+    };
+  }
+  async function saveGpsPosition(payload){
+    // DEMO MOD: Supabase'e yazmaz. Sadece cihaz localStorage alanına kaydeder.
+    const row = { ...payload, id: `gps_demo_${Date.now()}_${Math.random().toString(36).slice(2,8)}`, created_at: new Date().toISOString() };
+    const rows = [row, ...(loadGpsDemoPositions() || [])].slice(0,5000);
+    saveGpsDemoPositions(rows);
+    state.gps_positions = rows;
+    return true;
+  }
+  async function syncOfflineGpsPositions(showToastMessage){
+    await loadGpsPositionsSafe();
+    if(showToastMessage) showToast('Demo GPS kayıtları bu cihazdan yenilendi');
+    renderGpsLive();
+  }
+  function clearGpsDemoData(){
+    if(!confirm('Bu cihazdaki demo GPS kayıtları silinsin mi? Supabase etkilenmez.')) return;
+    saveGpsDemoPositions([]);
+    saveGpsOfflineQueue([]);
+    state.gps_positions = [];
+    renderGpsLive();
+    showToast('Demo GPS kayıtları temizlendi');
+  }
+  async function startGpsTracking(){
+    const assigned = gpsAssignedEquipment();
+    if(!assigned){ alert('GPS başlatmadan önce bu telefonu bir makinaya atayın'); return; }
+    state.gps.selectedEquipmentId = String(assigned.id || '');
+    if(!navigator.geolocation){ alert('Tarayıcı GPS desteklemiyor'); return; }
+    if(state.gps.watchId !== null) stopGpsTracking(false);
+    state.gps.sessionId = `${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
+    state.gps.tracking = true;
+    state.gps.watchId = navigator.geolocation.watchPosition(async pos=>{
+      const payload = buildGpsPayload(pos);
+      if(Number.isFinite(payload.latitude) && Number.isFinite(payload.longitude)) await saveGpsPosition(payload);
+      const st = document.getElementById('gpsTrackingStatus'); if(st) st.textContent = 'GPS takip aktif';
+      const oc = document.getElementById('gpsOfflineCount'); if(oc) oc.textContent = String(loadGpsDemoPositions().length);
+      if(state.currentPage === 'gpsLive') updateGpsMapMarkers();
+    }, err=>{
+      console.error('gps error', err);
+      const st = document.getElementById('gpsTrackingStatus'); if(st) st.textContent = 'Konum izni verilmedi veya GPS alınamadı';
+    }, { enableHighAccuracy:true, maximumAge:15000, timeout:20000 });
+    renderGpsLive();
+  }
+  function stopGpsTracking(rerender=true){
+    try{ if(state.gps.watchId !== null) navigator.geolocation.clearWatch(state.gps.watchId); }catch(e){}
+    state.gps.watchId = null;
+    state.gps.tracking = false;
+    if(rerender) renderGpsLive();
+  }
+  window.addEventListener('online', ()=>{ try{ if(state.currentPage === 'gpsLive') refreshGpsMapNow(); }catch(e){} });
+
   function renderPageError(id, title, err){
     const el = document.getElementById(id);
     if(el) el.innerHTML = `<div class="card"><h2 class="section-title">${escapeHtml(title)}</h2><div class="notice">Bu sayfa yüklenirken hata oluştu.</div></div>`;
@@ -9219,6 +9493,7 @@ function renderUsers(){
   function renderAll(){
     try{ renderDashboard(); }catch(err){ renderPageError('dashboard', 'Dashboard', err); }
     try{ renderDashboardPro(); }catch(err){ renderPageError('dashboardPro', 'Dashboard Pro', err); }
+    try{ if(canAccessPage('gpsLive')) renderGpsLive(); else document.getElementById('gpsLive').innerHTML = `<div class="card"><h2 class="section-title">GPS / Canlı Takip</h2><div class="notice">Bu alan için yetkin yok.</div></div>`; }catch(err){ renderPageError('gpsLive', 'GPS / Canlı Takip', err); }
     try{ if(canAccessPage('definitions')) renderDefinitions(); else document.getElementById('definitions').innerHTML = `<div class="card"><h2 class="section-title">Tanımlar</h2><div class="notice">Bu alan yalnızca yöneticiye açıktır.</div></div>`; }catch(err){ renderPageError('definitions', 'Tanımlar', err); }
     try{ if(canManageUsers()) renderUsers(); else { const u=document.getElementById('users'); if(u) u.innerHTML = `<div class="card"><h2 class="section-title">Kullanıcılar</h2><div class="notice">Bu alan yalnızca yöneticiye açıktır.</div></div>`; } }catch(err){ renderPageError('users', 'Kullanıcılar', err); }
     try{ if(currentUserRole()==='manager') renderReports(); else { const r=document.getElementById('reports'); if(r) r.innerHTML = `<div class="card"><h2 class="section-title">Raporlar</h2><div class="notice">Bu alan yalnızca yöneticiye açıktır.</div></div>`; } }catch(err){ renderPageError('reports', 'Raporlar', err); }
@@ -9302,6 +9577,7 @@ function renderUsers(){
     if(page) page.classList.add('active');
     document.querySelectorAll('.menu-btn').forEach(b=>b.classList.remove('active'));
     document.querySelectorAll(`.menu-btn[data-page="${id}"]`).forEach(b=>b.classList.add('active'));
+    if(id === 'gpsLive') setTimeout(()=>{ try{ initGpsMap(); updateGpsMapMarkers(); }catch(e){} }, 120);
   }
 
   async function refreshData(){ await loadAllSafe(); renderAll(); }
@@ -9541,7 +9817,7 @@ function renderUsers(){
   document.getElementById('email').addEventListener('keydown', e=>{ if(e.key==='Enter') login(); });
   document.getElementById('password').addEventListener('keydown', e=>{ if(e.key==='Enter') login(); });
 
-  Object.assign(window, { openModal, closeModal, fillTruckRouteFromExcavator, updateAutoMeterLabels, updateProductionStartMeterHints, updateTripProductionContext, updateFuelProductionContext, updateMeterCorrectionContext, toggleProductionEditLinkedField, refreshLogisticsEquipmentSelect, markShiftSelectManual, continueBreakdownToCurrentShift, finishBreakdownFromWarning, saveStartProductionExcavator, saveStartProductionTruck, saveStartProductionOther, saveEndProduction, saveStartBreakdown, saveEndBreakdown, saveStartRental, saveEndRental, saveNewTrip, saveNewFuel, saveNewMeter, confirmSoftDelete, restoreDeleted, deleteAllDeletedRecordsNow, deleteDeletedOlderThan30Days, saveEditRecord, saveDefinition, deleteTruckModel, toggleDefinitionTruckModelField, renderShiftConfigInputs, saveShiftConfigFromForm, renderShiftConfigCardRefresh, applyRecordFiltersFromUI, resetRecordFilters, bulkDeleteRecordTable, exportRecordsToExcel, saveUserRoleSettings, refreshData, exportDailyPdf, exportWeeklyExcel, exportShiftReport });
+  Object.assign(window, { openModal, closeModal, fillTruckRouteFromExcavator, updateAutoMeterLabels, updateProductionStartMeterHints, updateTripProductionContext, updateFuelProductionContext, updateMeterCorrectionContext, toggleProductionEditLinkedField, refreshLogisticsEquipmentSelect, markShiftSelectManual, continueBreakdownToCurrentShift, finishBreakdownFromWarning, saveStartProductionExcavator, saveStartProductionTruck, saveStartProductionOther, saveEndProduction, saveStartBreakdown, saveEndBreakdown, saveStartRental, saveEndRental, saveNewTrip, saveNewFuel, saveNewMeter, confirmSoftDelete, restoreDeleted, deleteAllDeletedRecordsNow, deleteDeletedOlderThan30Days, saveEditRecord, saveDefinition, deleteTruckModel, toggleDefinitionTruckModelField, renderShiftConfigInputs, saveShiftConfigFromForm, renderShiftConfigCardRefresh, applyRecordFiltersFromUI, resetRecordFilters, bulkDeleteRecordTable, exportRecordsToExcel, saveUserRoleSettings, refreshData, exportDailyPdf, exportWeeklyExcel, exportShiftReport, gpsSelectFromList, assignGpsPhoneToSelectedEquipment, clearGpsPhoneAssignment, startGpsTracking, stopGpsTracking, syncOfflineGpsPositions, refreshGpsMapNow });
 
   (async function autoSession(){
     try{
