@@ -221,6 +221,20 @@
     .report-actions{display:flex;gap:8px;flex-wrap:wrap}
     .report-actions button{width:auto}
 
+    .fuel-consumption-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;margin-bottom:12px}
+    .fuel-consumption-note{font-size:12px;color:#64748b;line-height:1.45;max-width:760px}
+    .fuel-consumption-section{margin-top:14px}
+    .fuel-consumption-section-title{display:flex;align-items:center;gap:8px;font-size:18px;font-weight:900;color:#0f172a;margin:0 0 10px}
+    .fuel-consumption-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+    .fuel-consumption-card{border:1px solid #e2e8f0;border-radius:20px;padding:15px;background:linear-gradient(180deg,#ffffff 0%,#fbfdff 100%);box-shadow:0 10px 24px rgba(15,23,42,.05)}
+    .fuel-consumption-title{font-size:17px;font-weight:900;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .fuel-consumption-sub{font-size:12px;color:#64748b;margin-top:3px}
+    .fuel-consumption-status{margin-top:10px;font-size:13px;font-weight:800;color:#475569}
+    .fuel-consumption-kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}
+    .fuel-consumption-kpi{padding:9px 10px;border-radius:14px;background:#f8fafc;border:1px solid #e2e8f0}
+    .fuel-consumption-kpi .k-label{font-size:10px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.32px}
+    .fuel-consumption-kpi .k-value{font-size:17px;font-weight:900;color:#0f172a;margin-top:4px}
+
   </style>
 </head>
 <body>
@@ -543,7 +557,12 @@
     abnormalKmThreshold: 35,
     abnormalKmTripLimit: 3,
     kmPerTripRatio: 1.50,
-    lowExcEfficiencyRatio: 0.70
+    lowExcEfficiencyRatio: 0.70,
+    fuelConsumptionTruckMax: 0.70,
+    fuelConsumptionExcavatorMax: 35,
+    fuelConsumptionHelperMax: 20,
+    fuelConsumptionLowMin: 0.05,
+    fuelConsumptionHighRatio: 1.30
   };
   function normalizeAlertRules(rules){
     const cleaned = { ...DEFAULT_ALERT_RULES };
@@ -3984,7 +4003,8 @@
         const equipment_id = document.getElementById('m_edit_equipment_id').value;
         const eq = findEquipmentById(equipment_id);
         const meter_value = num(document.getElementById('m_edit_meter_value').value);
-        ensureMeterNotBelowLatest(equipment_id, meter_value, { key:`fuel_logs:${row.id}` });
+        // Yakıt kaydı düzenlemede sayaç değeri serbest bırakıldı.
+        // Yeni yakıt girişi ve diğer modüllerdeki son sayaç kontrolü korunur.
         payload = {
           equipment_id,
           equipment_name_snapshot: eq?.name || '',
@@ -4619,6 +4639,18 @@
           <div id="dashboardProPackageBody" class="dashboard-scroll"></div>
         </div>
       </div>
+      <div class="grid g1" style="margin-top:16px">
+        <div class="dashboard-block">
+          <div class="fuel-consumption-head">
+            <div>
+              <h3 style="margin:0">Yakıt Tüketimi</h3>
+              <div class="fuel-consumption-note">Yakıt sekmesindeki tam depo kabulüne göre hesaplanır: verilen litre / iki yakıt kaydı arasındaki sayaç farkı. Kamyonlarda L/km, ekskavatör ve yardımcı makinalarda L/saat gösterilir.</div>
+            </div>
+            <span class="pill orange">Yeni analiz</span>
+          </div>
+          <div id="dashboardProFuelConsumptionBody" class="dashboard-scroll"></div>
+        </div>
+      </div>
     `;
     attachDashboardProEvents();
     renderDashboardProData();
@@ -4728,6 +4760,172 @@
     }
   }
 
+
+  function dashboardProFuelLogTime(row){
+    try{
+      const dt = new Date(row?.recorded_at || row?.created_at || row?.updated_at || 0).getTime();
+      return Number.isFinite(dt) ? dt : 0;
+    }catch(e){ return 0; }
+  }
+  function dashboardProFuelLogMeter(row){
+    const n = Number(row?.meter_value ?? row?.value ?? row?.end_meter_value);
+    return Number.isFinite(n) ? n : null;
+  }
+  function fuelConsumptionTypeForEquipment(eq){
+    if(isTruckEquipment(eq)) return 'truck';
+    if(isExcavatorEquipment(eq)) return 'excavator';
+    return 'helper';
+  }
+  function fuelConsumptionTypeLabel(type){
+    if(type === 'truck') return 'Kamyonlar';
+    if(type === 'excavator') return 'Ekskavatörler';
+    return 'Yardımcı Makinalar';
+  }
+  function fuelConsumptionUnitForEquipment(equipmentId){
+    const unit = String(autoMeterTypeForEquipment(equipmentId) || '').toLowerCase();
+    return unit === 'km' ? 'L/km' : 'L/saat';
+  }
+  function fuelConsumptionPeriodRange(dateKey, type){
+    try{
+      const parts = String(dateKey || todayStr()).slice(0,10).split('-').map(Number);
+      const base = new Date(parts[0], (parts[1] || 1) - 1, parts[2] || 1, 0, 0, 0, 0);
+      let start = new Date(base);
+      let end = new Date(base);
+      if(type === 'day'){
+        end.setDate(start.getDate() + 1);
+      }else if(type === 'week'){
+        const day = start.getDay();
+        const diffToMonday = (day + 6) % 7;
+        start.setDate(start.getDate() - diffToMonday);
+        end = new Date(start); end.setDate(start.getDate() + 7);
+      }else if(type === 'month'){
+        start = new Date(base.getFullYear(), base.getMonth(), 1);
+        end = new Date(base.getFullYear(), base.getMonth() + 1, 1);
+      }else{
+        start = new Date(base.getFullYear(), 0, 1);
+        end = new Date(base.getFullYear() + 1, 0, 1);
+      }
+      return { startMs:start.getTime(), endMs:end.getTime() };
+    }catch(e){
+      const now = Date.now();
+      return { startMs: now, endMs: now };
+    }
+  }
+  function fuelConsumptionEventForLog(row){
+    const equipmentId = String(row?.equipment_id || '');
+    const liters = Number(row?.liters || 0);
+    const meterValue = dashboardProFuelLogMeter(row);
+    const at = dashboardProFuelLogTime(row);
+    if(!equipmentId || !Number.isFinite(liters) || liters <= 0) return { valid:false, reason:'Yakıt litre değeri yok' };
+    if(meterValue === null) return { valid:false, reason:'Sayaç değeri yok' };
+    const previous = (state.fuel_logs || [])
+      .filter(r=>!r?.deleted_at && String(r.equipment_id || '') === equipmentId && String(r.id || '') !== String(row?.id || '') && dashboardProFuelLogMeter(r) !== null && dashboardProFuelLogTime(r) < at)
+      .sort((a,b)=>dashboardProFuelLogTime(b) - dashboardProFuelLogTime(a))[0] || null;
+    if(!previous) return { valid:false, reason:'Önceki yakıt sayaç kaydı yok', liters, meterValue };
+    const previousMeter = dashboardProFuelLogMeter(previous);
+    const diff = Number(meterValue) - Number(previousMeter);
+    if(!Number.isFinite(diff) || diff <= 0) return { valid:false, reason:'Sayaç farkı yok veya ters', liters, meterValue, previousMeter, diff };
+    const rate = liters / diff;
+    return { valid:true, liters, meterValue, previousMeter, diff, rate, unit:fuelConsumptionUnitForEquipment(equipmentId) };
+  }
+  function aggregateFuelConsumptionLogs(logs){
+    const events = (logs || []).map(fuelConsumptionEventForLog);
+    const valid = events.filter(e=>e.valid);
+    const totalLiters = valid.reduce((s,e)=>s + (Number(e.liters) || 0), 0);
+    const totalDiff = valid.reduce((s,e)=>s + (Number(e.diff) || 0), 0);
+    const rate = totalDiff > 0 ? (totalLiters / totalDiff) : null;
+    const firstInvalid = events.find(e=>!e.valid);
+    return { fuelLogCount:(logs || []).length, validCount:valid.length, totalLiters, totalDiff, rate, reason:firstInvalid?.reason || '', hasFuel:(logs || []).length > 0 };
+  }
+  function fuelConsumptionAverageForPeriod(equipmentId, dateKey, periodType){
+    const range = fuelConsumptionPeriodRange(dateKey, periodType);
+    const logs = (state.fuel_logs || []).filter(r=>{
+      if(r?.deleted_at || String(r.equipment_id || '') !== String(equipmentId || '')) return false;
+      const at = dashboardProFuelLogTime(r);
+      return at >= range.startMs && at < range.endMs;
+    });
+    return aggregateFuelConsumptionLogs(logs);
+  }
+  function formatFuelConsumptionRate(rate, unit){
+    return Number.isFinite(Number(rate)) ? `${Number(rate).toFixed(2)} ${unit || ''}` : '-';
+  }
+  function fuelConsumptionMaxThresholdByType(type){
+    const rules = { ...DEFAULT_ALERT_RULES, ...(state.alertRules || {}) };
+    if(type === 'truck') return Number(rules.fuelConsumptionTruckMax || DEFAULT_ALERT_RULES.fuelConsumptionTruckMax);
+    if(type === 'excavator') return Number(rules.fuelConsumptionExcavatorMax || DEFAULT_ALERT_RULES.fuelConsumptionExcavatorMax);
+    return Number(rules.fuelConsumptionHelperMax || DEFAULT_ALERT_RULES.fuelConsumptionHelperMax);
+  }
+  function fuelConsumptionAlertInfo(item, agg){
+    const rules = { ...DEFAULT_ALERT_RULES, ...(state.alertRules || {}) };
+    if(!agg?.hasFuel) return { level:'orange', text:'Yakıt almadı' };
+    if(!agg.validCount) return { level:'red', text:agg.reason || 'Hesaplanamadı' };
+    const rate = Number(agg.rate);
+    if(!Number.isFinite(rate)) return { level:'red', text:'Hesaplanamadı' };
+    const lowMin = Number(rules.fuelConsumptionLowMin || DEFAULT_ALERT_RULES.fuelConsumptionLowMin);
+    const max = fuelConsumptionMaxThresholdByType(item?.type);
+    const highRatio = Number(rules.fuelConsumptionHighRatio || DEFAULT_ALERT_RULES.fuelConsumptionHighRatio);
+    const periodAvg = Number(item?.week?.rate || item?.month?.rate || item?.day?.rate || 0);
+    if(Number.isFinite(lowMin) && lowMin > 0 && rate < lowMin) return { level:'red', text:`Anormal düşük (${rate.toFixed(2)} ${item?.unit || ''})` };
+    if(Number.isFinite(max) && max > 0 && rate > max) return { level:'red', text:`Yüksek tüketim (${rate.toFixed(2)} ${item?.unit || ''})` };
+    if(Number.isFinite(periodAvg) && periodAvg > 0 && Number.isFinite(highRatio) && highRatio > 1 && rate > periodAvg * highRatio) return { level:'orange', text:`Ortalamadan yüksek (${rate.toFixed(2)} ${item?.unit || ''})` };
+    return { level:'green', text:`${agg.validCount} dolumdan hesaplandı` };
+  }
+  function fuelConsumptionStatusText(agg, item){
+    return fuelConsumptionAlertInfo(item, agg).text;
+  }
+  function fuelConsumptionStatusClass(agg, item){
+    const level = fuelConsumptionAlertInfo(item, agg).level;
+    if(level === 'red') return 'pill red';
+    if(level === 'orange') return 'pill orange';
+    return 'pill green';
+  }
+  function buildDashboardFuelConsumptionItems(summary, selected, truckItems, excItems){
+    const filters = state.dashboardProFilters || {};
+    const selectedType = String(filters.equipment_type || '');
+    const selectedEquipmentId = String(filters.equipment_id || '');
+    const ids = new Set();
+    (truckItems || []).forEach(item=>ids.add(String(item.id || '')));
+    (excItems || []).forEach(item=>ids.add(String(item.id || '')));
+    (summary?.fuels || []).forEach(row=>ids.add(String(row.equipment_id || '')));
+    (summary?.meters || []).forEach(row=>ids.add(String(row.equipment_id || '')));
+    (summary?.productions || []).forEach(row=>ids.add(String(row.equipment_id || '')));
+    rowsForShiftBucket(state.rentals, summary.shift_name, summary.shift_date).forEach(row=>ids.add(String(row.equipment_id || '')));
+    return Array.from(ids).filter(Boolean).map(id=>{
+      const eq = findEquipmentById(id) || {};
+      const type = fuelConsumptionTypeForEquipment(eq);
+      if(selectedType && type !== selectedType) return null;
+      if(selectedEquipmentId && String(id) !== selectedEquipmentId) return null;
+      const shiftLogs = (summary?.fuels || []).filter(r=>String(r.equipment_id || '') === id);
+      const shiftAgg = aggregateFuelConsumptionLogs(shiftLogs);
+      const unit = fuelConsumptionUnitForEquipment(id);
+      return { id, type, name:eq.name || (shiftLogs[0]?.equipment_name || '-'), unit, shift:shiftAgg, day:fuelConsumptionAverageForPeriod(id, summary.shift_date, 'day'), week:fuelConsumptionAverageForPeriod(id, summary.shift_date, 'week'), month:fuelConsumptionAverageForPeriod(id, summary.shift_date, 'month'), year:fuelConsumptionAverageForPeriod(id, summary.shift_date, 'year') };
+    }).filter(Boolean).sort((a,b)=>{
+      const typeOrder = { excavator:1, truck:2, helper:3 };
+      return (typeOrder[a.type] || 9) - (typeOrder[b.type] || 9) || String(a.name || '').localeCompare(String(b.name || ''), 'tr');
+    });
+  }
+  function renderFuelConsumptionKpi(label, agg, unit){
+    return `<div class="fuel-consumption-kpi"><div class="k-label">${escapeHtml(label)}</div><div class="k-value">${formatFuelConsumptionRate(agg?.rate, unit)}</div></div>`;
+  }
+  function renderDashboardFuelConsumption(items){
+    if(!items || !items.length) return '<div class="empty">Seçilen filtre için yakıt tüketimi analizi yok.</div>';
+    const groups = [{ type:'excavator', icon:'⛏️' }, { type:'truck', icon:'🚛' }, { type:'helper', icon:'🛠️' }];
+    return groups.map(g=>{
+      const rows = items.filter(item=>item.type === g.type);
+      if(!rows.length) return '';
+      return `<div class="fuel-consumption-section"><div class="fuel-consumption-section-title">${g.icon} ${fuelConsumptionTypeLabel(g.type)} <span class="group-count">${rows.length}</span></div><div class="fuel-consumption-grid">${rows.map(item=>`
+        <div class="fuel-consumption-card">
+          <div class="pro-item-top">
+            <div style="min-width:0"><div class="fuel-consumption-title">${escapeHtml(item.name)}</div><div class="fuel-consumption-sub">Birim: ${escapeHtml(item.unit)} • Tam depo varsayımı</div></div>
+            <span class="${fuelConsumptionStatusClass(item.shift, item)}">${escapeHtml(fuelConsumptionStatusText(item.shift, item))}</span>
+          </div>
+          <div class="fuel-consumption-status">Vardiya tüketimi: <b>${formatFuelConsumptionRate(item.shift?.rate, item.unit)}</b></div>
+          <div class="fuel-consumption-kpis">${renderFuelConsumptionKpi('Günlük ort.', item.day, item.unit)}${renderFuelConsumptionKpi('Haftalık ort.', item.week, item.unit)}${renderFuelConsumptionKpi('Aylık ort.', item.month, item.unit)}${renderFuelConsumptionKpi('Yıllık ort.', item.year, item.unit)}</div>
+          <div class="muted" style="margin-top:10px">Yakıt: ${(item.shift?.totalLiters || 0).toFixed(1)} L • Sayaç farkı: ${(item.shift?.totalDiff || 0).toFixed(1)} • Kayıt: ${item.shift?.fuelLogCount || 0}</div>
+        </div>`).join('')}</div></div>`;
+    }).join('') || '<div class="empty">Seçilen filtre için yakıt tüketimi analizi yok.</div>';
+  }
+
   async function renderDashboardProData(){
 
     const buckets = getCompletedShiftBuckets();
@@ -4738,6 +4936,7 @@
       document.getElementById('dashboardProTruckBody').innerHTML = '<div class="empty">Kamyon analizi yok.</div>';
       document.getElementById('dashboardProExcBody').innerHTML = '<div class="empty">Ekskavatör analizi yok.</div>';
       document.getElementById('dashboardProPackageBody').innerHTML = '<div class="empty">Paket tonaj analizi yok.</div>';
+      const fuelConsumptionBody = document.getElementById('dashboardProFuelConsumptionBody'); if(fuelConsumptionBody) fuelConsumptionBody.innerHTML = '<div class="empty">Yakıt tüketimi analizi yok.</div>';
       ['proTripsStat','proFuelStat','proMeterStat','proAvgTripStat','proFuelPerTripStat','proCompareStat'].forEach(id=>{ const el=document.getElementById(id); if(el) el.textContent='-'; });
       ['proTripsSub','proFuelSub','proMeterSub','proAvgTripSub','proFuelPerTripSub','proCompareSub'].forEach(id=>{ const el=document.getElementById(id); if(el) el.textContent='Veri yok'; });
       return;
@@ -4841,6 +5040,13 @@
 
     const filteredAvgTripPerTruck = filteredTruckCount ? (filteredTripCount / filteredTruckCount) : 0;
     const filteredTruckFuelPerTrip = filteredTripCount ? (filteredTruckFuelLiters / filteredTripCount) : 0;
+    const fuelConsumptionItems = buildDashboardFuelConsumptionItems(summary, selected, truckItems, excItems);
+    const fuelConsumptionNoFuelCount = fuelConsumptionItems.filter(item=>!item.shift?.hasFuel).length;
+    const fuelConsumptionInvalidCount = fuelConsumptionItems.filter(item=>item.shift?.hasFuel && !item.shift?.validCount).length;
+    const fuelConsumptionHighCount = fuelConsumptionItems.filter(item=>{
+      const info = fuelConsumptionAlertInfo(item, item.shift);
+      return item.shift?.hasFuel && item.shift?.validCount && (info.level === 'red' || info.level === 'orange');
+    }).length;
 
     const avg3Trips = sqlRecent.length ? averageOf(sqlRecent, 'total_trip_count') : averageOf(recent, 'total_trip_count');
     const avg3Fuel = sqlRecent.length ? averageOf(sqlRecent, 'total_fuel_liters') : averageOf(recent, 'total_fuel_liters');
@@ -4865,6 +5071,9 @@
 
     const alertRules = { ...DEFAULT_ALERT_RULES, ...(state.alertRules || {}) };
     const alerts = [];
+    if(fuelConsumptionNoFuelCount > 0) alerts.push({level:'orange', title:'Yakıt almayan ekipman', text:`Seçilen vardiyada ${fuelConsumptionNoFuelCount} ekipman çalıştı/kayıt gördü ama yakıt almadı.`});
+    if(fuelConsumptionInvalidCount > 0) alerts.push({level:'red', title:'Yakıt tüketimi hesaplanamadı', text:`${fuelConsumptionInvalidCount} ekipmanda sayaç farkı veya önceki yakıt sayaç kaydı eksik.`});
+    if(fuelConsumptionHighCount > 0) alerts.push({level:'red', title:'Yakıt tüketimi eşik dışı', text:`${fuelConsumptionHighCount} ekipmanda yakıt tüketimi belirlenen eşiklerin dışında.`});
     if(avg3Trips > 0 && filteredTripCount < avg3Trips * alertRules.lowProductionRatio) alerts.push({level:'red', title:'Düşük üretim vardiyası', text:`Sefer ${filteredTripCount}, son 3 vardiya ortalaması ${avg3Trips.toFixed(1)}.`});
     if(avg3Fuel > 0 && filteredFuelLiters > avg3Fuel * alertRules.highFuelRatio) alerts.push({level:'orange', title:'Yakıt yükselmiş', text:`Yakıt ${filteredFuelLiters.toFixed(0)} L, son 3 vardiya ortalaması ${avg3Fuel.toFixed(0)} L.`});
     if(filteredLongBreakdowns > 0 || filteredBreakdownMinutes >= alertRules.longBreakdownMinutes) alerts.push({level:'red', title:'Uzun süren arıza', text:`Bu seçimde toplam ${formatDurationMinutes(filteredBreakdownMinutes)} arıza süresi var.`});
@@ -4987,6 +5196,9 @@
       </div>
     `).join('') + `</div>` : '<div class="empty">Seçilen filtre için paket bazlı tonaj analizi yok.</div>';
 
+    const fuelConsumptionBody = document.getElementById('dashboardProFuelConsumptionBody');
+    if(fuelConsumptionBody) fuelConsumptionBody.innerHTML = renderDashboardFuelConsumption(fuelConsumptionItems);
+
     state.lastDashboardProExport = {
       selectedLabel: summary.label,
       filters: {
@@ -5003,6 +5215,9 @@
         { 'Kalem': 'Kamyon Yakıtı (L)', 'Değer': Number(filteredTruckFuelLiters.toFixed(1)) },
         { 'Kalem': 'Ekskavatör Yakıtı (L)', 'Değer': Number(filteredExcFuelLiters.toFixed(1)) },
         { 'Kalem': 'Yardımcı Makina Yakıtı (L)', 'Değer': Number(filteredHelperFuelLiters.toFixed(1)) },
+        { 'Kalem': 'Yakıt Almayan Ekipman', 'Değer': fuelConsumptionNoFuelCount },
+        { 'Kalem': 'Tüketimi Hesaplanamayan Ekipman', 'Değer': fuelConsumptionInvalidCount },
+        { 'Kalem': 'Tüketimi Eşik Dışı Ekipman', 'Değer': fuelConsumptionHighCount },
         { 'Kalem': 'Toplam Tonaj', 'Değer': Number(filteredTonnage.toFixed(1)) },
         { 'Kalem': 'Aktif Kamyon', 'Değer': filteredTruckCount },
         { 'Kalem': 'Aktif Ekskavatör', 'Değer': filteredExcCount },
@@ -5045,6 +5260,20 @@
         'Sefer': item.tripCount || 0,
         'Tonaj': Number((item.tonnage || 0).toFixed(1)),
         'Ton/Sefer': Number((item.tripCount ? (item.tonnage / item.tripCount) : 0).toFixed(2))
+      })),
+      fuelConsumptionRows: fuelConsumptionItems.map(item=>({
+        'Tip': fuelConsumptionTypeLabel(item.type),
+        'Ekipman': item.name || '',
+        'Birim': item.unit || '',
+        'Vardiya Durumu': fuelConsumptionStatusText(item.shift, item),
+        'Vardiya Tüketimi': Number.isFinite(Number(item.shift?.rate)) ? Number(Number(item.shift.rate).toFixed(3)) : '',
+        'Günlük Ortalama': Number.isFinite(Number(item.day?.rate)) ? Number(Number(item.day.rate).toFixed(3)) : '',
+        'Haftalık Ortalama': Number.isFinite(Number(item.week?.rate)) ? Number(Number(item.week.rate).toFixed(3)) : '',
+        'Aylık Ortalama': Number.isFinite(Number(item.month?.rate)) ? Number(Number(item.month.rate).toFixed(3)) : '',
+        'Yıllık Ortalama': Number.isFinite(Number(item.year?.rate)) ? Number(Number(item.year.rate).toFixed(3)) : '',
+        'Vardiya Yakıt (L)': Number((item.shift?.totalLiters || 0).toFixed(1)),
+        'Vardiya Sayaç Farkı': Number((item.shift?.totalDiff || 0).toFixed(1)),
+        'Vardiya Yakıt Kayıt': item.shift?.fuelLogCount || 0
       })),
       tripDetailRows: filteredTrips.map((row, index)=>({
         'No': index + 1,
@@ -5184,7 +5413,8 @@
         { name:'Arıza Kayıtları', title:'Arıza Kayıtları', rows:data.breakdownDetailRows || [] },
         { name:'Kamyon Analizi', title:'Kamyon Analizi', rows:data.truckRows || [] },
         { name:'Ekskavatör Analizi', title:'Ekskavatör Analizi', rows:data.excavatorRows || [] },
-        { name:'Paket Analizi', title:'Paket Analizi', rows:data.packageRows || [] }
+        { name:'Paket Analizi', title:'Paket Analizi', rows:data.packageRows || [] },
+        { name:'Yakıt Tüketimi', title:'Yakıt Tüketimi Analizi', rows:data.fuelConsumptionRows || [] }
       ]);
       if(!styledOk){
         if(typeof XLSX === 'undefined'){
@@ -5287,6 +5517,11 @@
             <div class="form-field"><label>Anormal km için max sefer</label><input type="number" step="1" min="1" value="${Number(state.alertRules?.abnormalKmTripLimit ?? DEFAULT_ALERT_RULES.abnormalKmTripLimit).toFixed(0)}" onchange="updateAlertRule('abnormalKmTripLimit', this.value)" /><div class="muted">Bu sefer sayısının altında kırmızı uyarı çalışır.</div></div>
             <div class="form-field"><label>Km / sefer sapma oranı</label><input type="number" step="0.01" min="1" value="${Number(state.alertRules?.kmPerTripRatio ?? DEFAULT_ALERT_RULES.kmPerTripRatio).toFixed(2)}" onchange="updateAlertRule('kmPerTripRatio', this.value)" /><div class="muted">Filo ortalamasına göre turuncu sapma eşiği.</div></div>
             <div class="form-field"><label>Düşük ekskavatör verimi oranı</label><input type="number" step="0.01" min="0.1" value="${Number(state.alertRules?.lowExcEfficiencyRatio ?? DEFAULT_ALERT_RULES.lowExcEfficiencyRatio).toFixed(2)}" onchange="updateAlertRule('lowExcEfficiencyRatio', this.value)" /><div class="muted">Filo ortalamasının bu oran altı uyarı verir.</div></div>
+            <div class="form-field"><label>Kamyon yüksek tüketim eşiği</label><input type="number" step="0.01" min="0.01" value="${Number(state.alertRules?.fuelConsumptionTruckMax ?? DEFAULT_ALERT_RULES.fuelConsumptionTruckMax).toFixed(2)}" onchange="updateAlertRule('fuelConsumptionTruckMax', this.value)" /><div class="muted">L/km. Bu değer üstü kırmızı uyarı verir.</div></div>
+            <div class="form-field"><label>Ekskavatör yüksek tüketim eşiği</label><input type="number" step="0.1" min="0.1" value="${Number(state.alertRules?.fuelConsumptionExcavatorMax ?? DEFAULT_ALERT_RULES.fuelConsumptionExcavatorMax).toFixed(1)}" onchange="updateAlertRule('fuelConsumptionExcavatorMax', this.value)" /><div class="muted">L/saat. Bu değer üstü kırmızı uyarı verir.</div></div>
+            <div class="form-field"><label>Yardımcı makina yüksek tüketim eşiği</label><input type="number" step="0.1" min="0.1" value="${Number(state.alertRules?.fuelConsumptionHelperMax ?? DEFAULT_ALERT_RULES.fuelConsumptionHelperMax).toFixed(1)}" onchange="updateAlertRule('fuelConsumptionHelperMax', this.value)" /><div class="muted">L/saat veya L/km. Ekipmanın sayaç tipine göre uygulanır.</div></div>
+            <div class="form-field"><label>Anormal düşük tüketim eşiği</label><input type="number" step="0.01" min="0" value="${Number(state.alertRules?.fuelConsumptionLowMin ?? DEFAULT_ALERT_RULES.fuelConsumptionLowMin).toFixed(2)}" onchange="updateAlertRule('fuelConsumptionLowMin', this.value)" /><div class="muted">Bu değer altı veri hatası/eksik sayaç olabilir.</div></div>
+            <div class="form-field"><label>Ortalamaya göre yüksek tüketim oranı</label><input type="number" step="0.01" min="1" value="${Number(state.alertRules?.fuelConsumptionHighRatio ?? DEFAULT_ALERT_RULES.fuelConsumptionHighRatio).toFixed(2)}" onchange="updateAlertRule('fuelConsumptionHighRatio', this.value)" /><div class="muted">Örn: 1.30 = dönem ortalamasının %30 üstü turuncu uyarı.</div></div>
           </div>
         </div>
       </div>
