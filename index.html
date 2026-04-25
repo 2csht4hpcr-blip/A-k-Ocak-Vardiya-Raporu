@@ -258,6 +258,34 @@
     .gps-assignment-item{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:9px 10px;border-radius:13px;background:#fff;border:1px solid #e2e8f0}
     @media(max-width:700px){.gps-assignment-row{grid-template-columns:1fr}}
     @media(max-width:960px){.gps-layout{grid-template-columns:1fr}.gps-map{height:520px}}
+    .gps-manager-shell{display:grid;grid-template-columns:380px 1fr;gap:14px;align-items:start;margin-top:14px}
+    .gps-manager-panel{display:grid;gap:12px}
+    .gps-fleet-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+    .gps-fleet-kpi{padding:12px;border-radius:16px;background:#fff;border:1px solid #e2e8f0;box-shadow:0 8px 18px rgba(15,23,42,.05)}
+    .gps-fleet-kpi .k{font-size:11px;font-weight:900;color:#64748b;text-transform:uppercase;letter-spacing:.35px}
+    .gps-fleet-kpi .v{font-size:24px;font-weight:900;color:#0f172a;margin-top:4px}
+    .gps-fleet-list{display:grid;gap:10px;max-height:520px;overflow:auto;padding-right:4px}
+    .gps-fleet-card{position:relative;display:grid;gap:10px;padding:13px;border-radius:18px;background:linear-gradient(180deg,#ffffff 0%,#f8fbff 100%);border:1px solid #e2e8f0;box-shadow:0 10px 22px rgba(15,23,42,.06);cursor:pointer;transition:.15s transform,.15s box-shadow,.15s border-color}
+    .gps-fleet-card:hover{transform:translateY(-2px);box-shadow:0 14px 30px rgba(15,23,42,.10);border-color:#bfdbfe}
+    .gps-fleet-card.active{border-color:#2563eb;box-shadow:0 16px 34px rgba(37,99,235,.16)}
+    .gps-fleet-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+    .gps-fleet-name{font-size:16px;font-weight:950;color:#0f172a;line-height:1.2}
+    .gps-fleet-meta{font-size:11px;color:#64748b;margin-top:3px;line-height:1.35}
+    .gps-fleet-status{display:inline-flex;align-items:center;gap:6px;padding:6px 9px;border-radius:999px;font-size:11px;font-weight:900;white-space:nowrap;border:1px solid #e2e8f0;background:#f8fafc;color:#475569}
+    .gps-fleet-status.live{background:#ecfdf5;color:#166534;border-color:#bbf7d0}.gps-fleet-status.warn{background:#fff7ed;color:#c2410c;border-color:#fed7aa}.gps-fleet-status.off{background:#fef2f2;color:#b91c1c;border-color:#fecaca}
+    .gps-fleet-info{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+    .gps-info-mini{padding:8px 9px;border-radius:13px;background:#fff;border:1px solid #edf2f7;min-width:0}
+    .gps-info-mini .l{font-size:10px;font-weight:900;color:#64748b;text-transform:uppercase;letter-spacing:.32px}
+    .gps-info-mini .d{font-size:12px;font-weight:850;color:#0f172a;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .gps-driver-view{display:grid;grid-template-columns:330px 1fr;gap:14px;align-items:start;margin-top:14px}
+    .gps-driver-card{display:grid;gap:12px}
+    .gps-driver-identity{padding:16px;border-radius:20px;background:linear-gradient(135deg,#0f172a 0%,#1d4ed8 100%);color:#fff;box-shadow:0 16px 36px rgba(15,23,42,.20)}
+    .gps-driver-identity .muted{color:rgba(255,255,255,.78)}
+    .gps-driver-big{font-size:24px;font-weight:950;margin-top:8px;line-height:1.15}
+    .gps-selected-detail{padding:13px;border-radius:18px;background:#f8fafc;border:1px solid #e2e8f0}
+    .gps-tooltip-table{font-size:12px;line-height:1.5}.gps-tooltip-table b{font-size:14px}.gps-tooltip-muted{color:#64748b}
+    @media(max-width:1050px){.gps-manager-shell,.gps-driver-view{grid-template-columns:1fr}.gps-fleet-list{max-height:360px}}
+
 
     .dashboard-pro-pdf-mode .dashboard-scroll{max-height:none!important;overflow:visible!important}
     .dashboard-pro-pdf-mode{background:#f4f6f8!important;padding:4px}
@@ -9476,122 +9504,66 @@ function renderUsers(){
     renderGpsLive();
     showToast('Telefon makina ataması kaldırıldı');
   }
+  function gpsOperationInfoForEquipment(equipmentId){
+    const eid = String(equipmentId || '');
+    const prod = currentOpenProductionForEquipment(eid);
+    const breakdown = activeBreakdownRows().find(r=>String(r.equipment_id || '')===eid);
+    const rental = activeRentalRows().find(r=>String(r.equipment_id || '')===eid);
+    const shift = getCurrentShiftBucketInfo();
+    const tripRows = (typeof currentShiftTripRows === 'function' ? currentShiftTripRows() : (state.truck_trips || [])).filter(r=>!r.deleted_at && String(r.equipment_id || '')===eid);
+    const fuelRows = (typeof currentShiftFuelRows === 'function' ? currentShiftFuelRows() : (state.fuel_logs || [])).filter(r=>!r.deleted_at && String(r.equipment_id || '')===eid);
+    const tripCount = tripRows.reduce((sum,r)=>sum + Number(r.trip_count || 0),0);
+    const fuelLiters = fuelRows.reduce((sum,r)=>sum + Number(r.liters || r.fuel_liters || 0),0);
+    let mode = 'Beklemede', route = '-', packageName = '-', started = '';
+    if(prod){ mode = 'Üretimde'; route = prod.to_location ? `${prod.from_location || ''} → ${prod.to_location || ''}` : (prod.from_location || '-'); packageName = prod.package_name || '-'; started = prod.start_at || prod.start_time || prod.created_at || ''; }
+    else if(breakdown){ mode = 'Arızada'; route = breakdown.location || breakdown.from_location || '-'; packageName = breakdown.reason || '-'; started = breakdown.start_at || breakdown.start_time || breakdown.created_at || ''; }
+    else if(rental){ mode = 'Kiralıkta'; route = rental.location || rental.from_location || '-'; packageName = rental.work_type || rental.description || '-'; started = rental.start_at || rental.start_time || rental.created_at || ''; }
+    return { mode, route, packageName, started, shiftName: shift?.name || getShiftNameForRow(prod || breakdown || rental || {}) || '-', shiftDate: shift?.shift_date || todayStr(), tripCount, fuelLiters };
+  }
+  function gpsFleetCounts(latest){
+    const rows = (state.equipments || []).filter(e=>!e.deleted_at);
+    return rows.reduce((acc,e)=>{ const st = gpsEquipmentStatus(e.id, latest); acc.total += 1; if(st.cls==='live') acc.online += 1; else if(st.cls==='warn') acc.warn += 1; else acc.offline += 1; if(!gpsAssignmentForEquipment(e.id)) acc.unassigned += 1; return acc; }, {total:0,online:0,warn:0,offline:0,unassigned:0});
+  }
+  function gpsMarkerPopupHtml(pos, eqId){
+    const eq = findEquipmentById(eqId);
+    const op = gpsOperationInfoForEquipment(eqId);
+    const name = pos?.equipment_name || eq?.name || 'Ekipman';
+    const type = equipmentTypeLabel(equipmentTypeKey(eq || pos));
+    const driver = pos?.user_name || pos?.driver_name || (gpsAssignmentForEquipment(eqId)?.user_name || gpsAssignmentForEquipment(eqId)?.user_email || '-');
+    return `<div class="gps-tooltip-table"><b>${escapeHtml(name)}</b><br><span class="gps-tooltip-muted">${escapeHtml(type)}</span><br>Şoför: <b>${escapeHtml(driver || '-')}</b><br>Durum: <b>${escapeHtml(op.mode)}</b><br>Vardiya: ${escapeHtml(op.shiftName || '-')}<br>Paket/İş: ${escapeHtml(op.packageName || '-')}<br>Rota/Bölge: ${escapeHtml(op.route || '-')}<br>Sefer: ${Number(op.tripCount || 0)} • Yakıt: ${Number(op.fuelLiters || 0).toFixed(1)} L<br>Son GPS: ${escapeHtml(fmtDate(gpsTimeValue(pos)))}<br>Hız: ${Number(pos?.speed || 0).toFixed(1)} km/s</div>`;
+  }
   function renderGpsLive(){
     const el = document.getElementById('gpsLive');
     if(!el) return;
+    const role = currentUserRole();
     const latest = latestGpsByEquipment();
-    const selectedId = state.gps.selectedEquipmentId || '';
-    const offlineCount = loadGpsOfflineQueue().length;
+    const gpsIsManager = role === 'manager';
+    const assigned = gpsAssignedEquipment();
+    const remoteAssignment = gpsAssignmentForUser(state.user?.id);
     const managerFilterId = state.gps.managerFilterId || '';
     const visibleEquipments = (state.equipments || []).filter(e=>!e.deleted_at).filter(e=>!managerFilterId || String(e.id)===String(managerFilterId));
-    const rows = visibleEquipments.map(e=>{
-      const pos = latest.get(String(e.id));
-      const status = gpsEquipmentStatus(e.id, latest);
-      const assignment = gpsAssignmentForEquipment(e.id);
-      const driver = assignment?.user_name || assignment?.user_email || pos?.user_name || '-';
-      const sub = pos ? `${fmtDate(gpsTimeValue(pos))} • ${Number(pos.speed || 0).toFixed(1)} km/s • Şoför: ${driver}` : `Konum bekleniyor • Şoför: ${driver}`;
-      return `<div class="gps-machine-row"><div><div class="gps-machine-name"><span class="gps-dot ${status.cls}"></span> ${escapeHtml(e.name || '-')} <span class="pill ${status.cls==='live'?'green':status.cls==='warn'?'orange':'red'}">${escapeHtml(status.label)}</span></div><div class="gps-machine-sub">${escapeHtml(equipmentTypeLabel(equipmentTypeKey(e)))} • ${escapeHtml(sub)} • ${assignment ? 'Bağlı' : 'Atama yok'}</div></div>${currentUserRole()==='manager' ? `<button class="secondary" style="width:auto;padding:7px 10px" onclick="gpsSelectFromList('${escapeHtml(e.id)}')">Haritada Göster</button>` : ''}</div>`;
-    }).join('');
-    const selected = gpsSelectedEquipment();
-    const assignedId = gpsAssignedEquipmentId();
-    const assigned = gpsAssignedEquipment();
-    const assignedAt = (()=>{ try{ return localStorage.getItem('maden_gps_assigned_at') || ''; }catch(e){ return ''; } })();
-    const gpsIsManager = currentUserRole() === 'manager';
+    const counts = gpsFleetCounts(latest);
     const driverOptions = gpsDriverOptions();
-    const assignmentError = state.gpsAssignmentError || '';
-    const positionError = state.gpsPositionError || '';
-    const remoteAssignment = gpsAssignmentForUser(state.user?.id);
-    const selectedForStatus = managerFilterId ? findEquipmentById(managerFilterId) : (assigned || selected);
-    const selectedStatus = selectedForStatus ? gpsEquipmentStatus(selectedForStatus.id, latest) : null;
-    const selectedAssignment = selectedForStatus ? gpsAssignmentForEquipment(selectedForStatus.id) : null;
-    const assignmentRows = activeGpsAssignments();
     const driverOptionsHtml = driverOptions.map(u=>`<option value="${escapeHtml(u.id)}">${escapeHtml(u.full_name || u.email || u.id || '-')}</option>`).join('');
     const equipmentOptionsHtml = (state.equipments || []).filter(e=>!e.deleted_at).map(e=>`<option value="${escapeHtml(e.id)}">${escapeHtml(e.name || '-')} — ${escapeHtml(equipmentTypeLabel(equipmentTypeKey(e)))}</option>`).join('');
+    const assignmentRows = activeGpsAssignments();
     const assignmentListHtml = assignmentRows.length ? assignmentRows.map(a=>{ const eq=findEquipmentById(a.equipment_id); return `<div class="gps-assignment-item"><div><b>${escapeHtml(a.user_name || a.user_email || a.user_id || '-')}</b><div class="muted">${escapeHtml((eq?.name || a.equipment_name || '-'))} • ${escapeHtml(fmtDate(a.assigned_at || a.updated_at || ''))}</div></div><button class="warning" style="width:auto;padding:7px 10px" onclick="clearRemoteGpsAssignment('${escapeHtml(a.user_id)}')">Kaldır</button></div>`; }).join('') : '<div class="empty">Aktif uzaktan atama yok.</div>';
-    const last = (assigned || selected) ? latest.get(String((assigned || selected).id)) : null;
-    el.innerHTML = `
-      <div class="card pro-hero">
-        <h2 class="section-title">GPS / Canlı Takip</h2>
-        <div class="muted">Telefon GPS verisi Supabase'e kaydedilir; yönetici şoför-makina atamasını uzaktan yapar ve canlı haritada izler.</div>
-      </div>
-      <div class="gps-layout" style="margin-top:14px">
-        <div class="card gps-control-grid">
-          <h3 style="margin:0">Canlı Takip Kontrol</h3>
-          <div class="gps-status-box" style="border-color:#bfdbfe;background:#eff6ff">
-            <div class="gps-status-title">Bu telefonun atandığı makina</div>
-            <div class="gps-status-value">${escapeHtml(assigned?.name || 'Atama yok')}</div>
-            <div class="muted" style="margin-top:5px">${assigned ? `${escapeHtml(equipmentTypeLabel(equipmentTypeKey(assigned)))}${assignedAt ? ' • ' + escapeHtml(fmtDate(assignedAt)) : ''}` : 'Bu kullanıcı için yönetici uzaktan makina ataması yapmalıdır.'}</div>
-          </div>
-          ${gpsIsManager ? `
-          <div class="gps-assignment-card">
-            <h3 style="margin:0 0 8px">Yönetici Uzaktan Atama</h3>
-            <div class="muted" style="margin-bottom:10px">Şoför/kullanıcı seçip makinaya ata. Şoför telefonu giriş yaptığında bu atamayı otomatik okur.</div>
-            ${assignmentError ? `<div class="notice" style="margin-bottom:10px">GPS atama tablosu okunamadı. Supabase'de <b>gps_device_assignments</b> tablosu/policy eksik olabilir; verilen SQL'i çalıştır.</div>` : ''}
-            ${positionError ? `<div class="notice" style="margin-bottom:10px">GPS konum tablosu okunamadı. Supabase'de <b>gps_positions</b> tablosu/policy eksik olabilir.</div>` : ''}
-            <div class="gps-assignment-row">
-              <div class="form-field">
-                <label>Şoför / Kullanıcı</label>
-                <select id="gpsAssignUserSelect"><option value="">Kullanıcı seçiniz</option>${driverOptionsHtml}</select>
-              </div>
-              <div class="form-field">
-                <label>Makina</label>
-                <select id="gpsAssignEquipmentSelect"><option value="">Makina seçiniz</option>${equipmentOptionsHtml}</select>
-              </div>
-              <button class="success" onclick="saveRemoteGpsAssignment()" style="width:auto;min-width:110px">Ata</button>
-            </div>
-            <div class="gps-assignment-list">${assignmentListHtml}</div>
-          </div>
-          <div class="form-field">
-            <label>Makina filtresi / durum kontrolü</label>
-            <select id="gpsEquipmentSelect" onchange="applyGpsManagerFilter(this.value)">
-              <option value="">Tüm makinalar</option>
-              ${(state.equipments || []).filter(e=>!e.deleted_at).map(e=>`<option value="${escapeHtml(e.id)}" ${String(e.id)===String(managerFilterId)?'selected':''}>${escapeHtml(e.name || '-')} — ${escapeHtml(equipmentTypeLabel(equipmentTypeKey(e)))}</option>`).join('')}
-            </select>
-          </div>
-          <div class="gps-status-box" style="border-color:${selectedStatus?.cls==='live'?'#bbf7d0':selectedStatus?.cls==='warn'?'#fed7aa':'#fecaca'}">
-            <div class="gps-status-title">Seçili makina bağlantı durumu</div>
-            <div class="gps-status-value"><span class="gps-dot ${selectedStatus?.cls || 'off'}"></span> ${escapeHtml(selectedForStatus?.name || 'Tüm makinalar')} ${selectedStatus ? '• ' + escapeHtml(selectedStatus.label) : ''}</div>
-            <div class="muted" style="margin-top:5px">Şoför: ${escapeHtml(selectedAssignment?.user_name || selectedAssignment?.user_email || '-')} • Bağlantı: ${selectedAssignment ? 'Atama var' : 'Atama yok'}${selectedStatus ? ' • ' + escapeHtml(selectedStatus.detail) : ''}</div>
-          </div>
-          ` : `
-          <div class="notice">Bu kullanıcının makina ataması yönetici tarafından uzaktan yapılır. Şoför bu atamayı değiştiremez.${remoteAssignment ? '' : ' Şu anda aktif atama bulunamadı.'}</div>
-          `}
-          ${gpsIsManager ? `<button class="secondary" onclick="refreshGpsMapNow()">Haritayı Yenile</button>` : `
-          <div class="inline">
-            <button class="success" onclick="startGpsTracking()">GPS Başlat</button>
-            <button class="danger" onclick="stopGpsTracking()">GPS Durdur</button>
-          </div>
-          <button class="secondary" onclick="refreshGpsMapNow()">Haritayı Yenile</button>`}
-          
-          <div class="gps-status-box">
-            <div class="gps-status-title">Durum</div>
-            <div id="gpsTrackingStatus" class="gps-status-value">${state.gps.tracking ? 'GPS takip aktif' : 'GPS takip kapalı'}</div>
-            <div class="muted" style="margin-top:5px">Seçili: ${escapeHtml(selected?.name || '-')} • Atanan: ${escapeHtml(assigned?.name || '-')}</div>
-          </div>
-          <div class="gps-status-box">
-            <div class="gps-status-title">Bekleyen offline kayıt</div>
-            <div id="gpsOfflineCount" class="gps-status-value"></div>
-            <div class="muted" style="margin-top:5px">Rotalar Supabase GPS geçmişinden çizilir. İnternet kesilirse kayıtlar cihazda bekletilir ve bağlantı gelince gönderilir.</div>
-          </div>
-          <div class="gps-status-box">
-            <div class="gps-status-title">Son Konum</div>
-            <div class="muted">${last ? `${Number(last.latitude).toFixed(6)}, ${Number(last.longitude).toFixed(6)}<br>${escapeHtml(fmtDate(gpsTimeValue(last)))}` : 'Konum bekleniyor'}</div>
-          </div>
-          <h3 style="margin:8px 0 0">Makinalar</h3>
-          <div class="gps-machine-list">${rows || '<div class="empty">Ekipman yok.</div>'}</div>
-        </div>
-        <div class="card" style="padding:12px">
-          <div class="toolbar" style="justify-content:space-between;align-items:center">
-            <h3 style="margin:0">Canlı Harita</h3>
-            <div class="inline" style="width:auto;max-width:420px">
-              <button class="secondary" style="width:auto" onclick="refreshGpsMapNow()">Haritayı Yenile</button>
-              <button class="secondary" style="width:auto" onclick="toggleGpsRoutes()">Rota Göster/Gizle</button>
-            </div>
-          </div>
-          <div id="gpsMap" class="gps-map"></div>
-        </div>
-      </div>
-    `;
+    const fleetRows = visibleEquipments.map(e=>{
+      const pos = latest.get(String(e.id)); const st = gpsEquipmentStatus(e.id, latest); const assignment = gpsAssignmentForEquipment(e.id); const op = gpsOperationInfoForEquipment(e.id); const isActive = String(e.id) === String(managerFilterId || state.gps.selectedEquipmentId || '');
+      return `<div class="gps-fleet-card ${isActive?'active':''}" onclick="gpsSelectFromList('${escapeHtml(e.id)}')" title="${escapeHtml(e.name || '-')} • ${escapeHtml(st.label)} • ${escapeHtml(op.mode)}"><div class="gps-fleet-top"><div><div class="gps-fleet-name">${escapeHtml(e.name || '-')}</div><div class="gps-fleet-meta">${escapeHtml(equipmentTypeLabel(equipmentTypeKey(e)))} • ${assignment ? 'Bağlı' : 'Atama yok'}</div></div><span class="gps-fleet-status ${st.cls}"><span class="gps-dot ${st.cls}"></span>${escapeHtml(st.label)}</span></div><div class="gps-fleet-info"><div class="gps-info-mini"><div class="l">Şoför</div><div class="d">${escapeHtml(assignment?.user_name || assignment?.user_email || pos?.user_name || '-')}</div></div><div class="gps-info-mini"><div class="l">Vardiya</div><div class="d">${escapeHtml(op.shiftName || '-')}</div></div><div class="gps-info-mini"><div class="l">Anlık İş</div><div class="d">${escapeHtml(op.mode || '-')}</div></div><div class="gps-info-mini"><div class="l">Son GPS</div><div class="d">${pos ? escapeHtml(st.detail) : '-'}</div></div><div class="gps-info-mini"><div class="l">Paket/İş</div><div class="d">${escapeHtml(op.packageName || '-')}</div></div><div class="gps-info-mini"><div class="l">Rota/Bölge</div><div class="d">${escapeHtml(op.route || '-')}</div></div></div></div>`;
+    }).join('');
+    const selectedForStatus = managerFilterId ? findEquipmentById(managerFilterId) : (visibleEquipments[0] || null);
+    const selectedStatus = selectedForStatus ? gpsEquipmentStatus(selectedForStatus.id, latest) : null;
+    const selectedAssignment = selectedForStatus ? gpsAssignmentForEquipment(selectedForStatus.id) : null;
+    const selectedOp = selectedForStatus ? gpsOperationInfoForEquipment(selectedForStatus.id) : null;
+    const driverLast = assigned ? latest.get(String(assigned.id)) : null;
+    const driverOp = assigned ? gpsOperationInfoForEquipment(assigned.id) : null;
+    const positionError = state.gpsPositionError || '', assignmentError = state.gpsAssignmentError || '';
+    if(!gpsIsManager){
+      el.innerHTML = `<div class="card pro-hero"><h2 class="section-title">GPS / Şoför Takip</h2><div class="muted">GPS otomatik başlar. Şoför makina seçimi, GPS başlat/durdur ve atama işlemlerine müdahale edemez.</div></div><div class="gps-driver-view"><div class="card gps-driver-card"><div class="gps-driver-identity"><div class="muted">Şoför</div><div class="gps-driver-big">${escapeHtml(gpsCurrentDriverName())}</div><div class="muted" style="margin-top:8px">Cihaz kodu: ${escapeHtml(gpsDeviceCode())}</div></div><div class="gps-status-box" style="border-color:#bfdbfe;background:#eff6ff"><div class="gps-status-title">Atanan makina</div><div class="gps-status-value">${escapeHtml(assigned?.name || 'Atama yok')}</div><div class="muted" style="margin-top:5px">${assigned ? escapeHtml(equipmentTypeLabel(equipmentTypeKey(assigned))) : 'Yönetici bu şoföre makina atamalı.'}</div></div><div class="gps-selected-detail"><b>Anlık vardiya</b><div class="muted" style="margin-top:8px">Vardiya: ${escapeHtml(driverOp?.shiftName || '-')}<br>Durum: ${escapeHtml(driverOp?.mode || '-')}<br>Paket/İş: ${escapeHtml(driverOp?.packageName || '-')}<br>Rota/Bölge: ${escapeHtml(driverOp?.route || '-')}<br>Sefer: ${Number(driverOp?.tripCount || 0)} • Yakıt: ${Number(driverOp?.fuelLiters || 0).toFixed(1)} L</div></div><div class="gps-status-box"><div class="gps-status-title">GPS durumu</div><div id="gpsTrackingStatus" class="gps-status-value">${state.gps.tracking ? 'GPS takip aktif' : (assigned ? 'GPS otomatik başlatılıyor' : 'Atama bekleniyor')}</div><div class="muted" style="margin-top:5px">Son konum: ${driverLast ? `${Number(driverLast.latitude).toFixed(6)}, ${Number(driverLast.longitude).toFixed(6)} • ${escapeHtml(fmtDate(gpsTimeValue(driverLast)))}` : 'Konum bekleniyor'}</div></div><div class="gps-status-box"><div class="gps-status-title">Offline kayıt</div><div id="gpsOfflineCount" class="gps-status-value">${loadGpsOfflineQueue().length}</div><div class="muted" style="margin-top:5px">İnternet kesilirse kayıt cihazda bekler, bağlantı gelince otomatik gönderilir.</div></div>${remoteAssignment ? '' : '<div class="notice">Aktif atama bulunamadı. Yönetici ekranından bu şoföre makina atanmalı.</div>'}</div><div class="card" style="padding:12px"><div class="toolbar" style="justify-content:space-between;align-items:center"><h3 style="margin:0">Kendi Haritam</h3><span class="pill green">Otomatik takip</span></div><div id="gpsMap" class="gps-map"></div></div></div>`;
+      setTimeout(()=>{ try{ initGpsMap(); updateGpsMapMarkers(); applyLanguage(); }catch(e){ console.error(e); } }, 80); return;
+    }
+    el.innerHTML = `<div class="card pro-hero"><h2 class="section-title">GPS / Filo Canlı Takip</h2><div class="muted">Şoför telefonları otomatik veri gönderir; yönetici burada tüm filoyu durum, atama, vardiya ve operasyon bilgisiyle izler.</div></div><div class="gps-manager-shell"><div class="card gps-manager-panel"><div class="gps-fleet-summary"><div class="gps-fleet-kpi"><div class="k">Toplam</div><div class="v">${counts.total}</div></div><div class="gps-fleet-kpi"><div class="k">Online</div><div class="v">${counts.online}</div></div><div class="gps-fleet-kpi"><div class="k">Sorun/Offline</div><div class="v">${counts.warn + counts.offline}</div></div></div><div class="gps-assignment-card"><h3 style="margin:0 0 8px">Uzaktan Şoför–Makina Atama</h3><div class="muted" style="margin-bottom:10px">Şoför giriş yapınca kendi makinasına otomatik bağlanır; şoför makina listesi görmez.</div>${assignmentError ? `<div class="notice" style="margin-bottom:10px">GPS atama tablosu okunamadı. SQL'i kontrol et.</div>` : ''}${positionError ? `<div class="notice" style="margin-bottom:10px">GPS konum tablosu okunamadı. SQL'i kontrol et.</div>` : ''}<div class="gps-assignment-row"><div class="form-field"><label>Şoför</label><select id="gpsAssignUserSelect"><option value="">Şoför seçiniz</option>${driverOptionsHtml}</select></div><div class="form-field"><label>Makina</label><select id="gpsAssignEquipmentSelect"><option value="">Makina seçiniz</option>${equipmentOptionsHtml}</select></div><button class="success" onclick="saveRemoteGpsAssignment()" style="width:auto;min-width:110px">Ata</button></div><div class="gps-assignment-list">${assignmentListHtml}</div></div><div class="form-field"><label>Filo filtresi</label><select id="gpsEquipmentSelect" onchange="applyGpsManagerFilter(this.value)"><option value="">Tüm makinalar</option>${(state.equipments || []).filter(e=>!e.deleted_at).map(e=>`<option value="${escapeHtml(e.id)}" ${String(e.id)===String(managerFilterId)?'selected':''}>${escapeHtml(e.name || '-')} — ${escapeHtml(equipmentTypeLabel(equipmentTypeKey(e)))}</option>`).join('')}</select></div><div class="gps-status-box" style="border-color:${selectedStatus?.cls==='live'?'#bbf7d0':selectedStatus?.cls==='warn'?'#fed7aa':'#fecaca'}"><div class="gps-status-title">Seçili makina özeti</div><div class="gps-status-value"><span class="gps-dot ${selectedStatus?.cls || 'off'}"></span> ${escapeHtml(selectedForStatus?.name || 'Tüm makinalar')} ${selectedStatus ? '• ' + escapeHtml(selectedStatus.label) : ''}</div><div class="muted" style="margin-top:5px">Şoför: ${escapeHtml(selectedAssignment?.user_name || selectedAssignment?.user_email || '-')} • İş: ${escapeHtml(selectedOp?.mode || '-')} • Vardiya: ${escapeHtml(selectedOp?.shiftName || '-')} • ${selectedStatus ? escapeHtml(selectedStatus.detail) : ''}</div></div><h3 style="margin:4px 0 0">Filo Listesi</h3><div class="gps-fleet-list">${fleetRows || '<div class="empty">Ekipman yok.</div>'}</div></div><div class="card" style="padding:12px"><div class="toolbar" style="justify-content:space-between;align-items:center"><h3 style="margin:0">Canlı Harita</h3><div class="inline" style="width:auto;max-width:420px"><button class="secondary" style="width:auto" onclick="refreshGpsMapNow()">Haritayı Yenile</button><button class="secondary" style="width:auto" onclick="toggleGpsRoutes()">Rota Göster/Gizle</button></div></div><div id="gpsMap" class="gps-map"></div></div></div>`;
     setTimeout(()=>{ try{ initGpsMap(); updateGpsMapMarkers(); applyLanguage(); }catch(e){ console.error(e); } }, 80);
   }
   function gpsSelectFromList(id){
@@ -9653,6 +9625,7 @@ function renderUsers(){
     let idx = 0;
     groups.forEach((rows, eqId)=>{
       if(state.gps.managerFilterId && String(eqId) !== String(state.gps.managerFilterId)) return;
+      if(currentUserRole() === 'driver' && gpsAssignedEquipmentId() && String(eqId) !== String(gpsAssignedEquipmentId())) return;
       const points = rows.map(r=>[Number(r.latitude), Number(r.longitude)]).filter(p=>Number.isFinite(p[0]) && Number.isFinite(p[1]));
       if(points.length < 2) return;
       const color = gpsRouteColor(idx++);
@@ -9686,13 +9659,10 @@ function renderUsers(){
     });
     latest.forEach((pos, eqId)=>{
       if(state.gps.managerFilterId && String(eqId) !== String(state.gps.managerFilterId)) return;
+      if(currentUserRole() === 'driver' && gpsAssignedEquipmentId() && String(eqId) !== String(gpsAssignedEquipmentId())) return;
       const lat = Number(pos.latitude), lng = Number(pos.longitude);
       if(!Number.isFinite(lat) || !Number.isFinite(lng)) return;
-      const eq = findEquipmentById(eqId);
-      const name = pos.equipment_name || eq?.name || 'Ekipman';
-      const type = equipmentTypeLabel(equipmentTypeKey(eq || pos));
-      const driver = pos.user_name || pos.driver_name || (gpsAssignmentForEquipment(eqId)?.user_name || gpsAssignmentForEquipment(eqId)?.user_email || '');
-      const html = `<b>${escapeHtml(name)}</b><br>Şoför: ${escapeHtml(driver || '-')}<br>${escapeHtml(type)}<br>${escapeHtml(fmtDate(gpsTimeValue(pos)))}<br>Hız: ${Number(pos.speed || 0).toFixed(1)} km/s`;
+      const html = gpsMarkerPopupHtml(pos, eqId);
       if(state.gps.markers[eqId]) state.gps.markers[eqId].setLatLng([lat,lng]).setPopupContent(html);
       else state.gps.markers[eqId] = L.marker([lat,lng]).addTo(map).bindPopup(html);
       bounds.push([lat,lng]);
