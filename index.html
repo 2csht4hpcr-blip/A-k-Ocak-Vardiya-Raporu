@@ -235,6 +235,11 @@
     .fuel-consumption-kpi .k-label{font-size:10px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.32px}
     .fuel-consumption-kpi .k-value{font-size:17px;font-weight:900;color:#0f172a;margin-top:4px}
 
+    .pdf-export-ignore{display:initial}
+    .dashboard-pro-pdf-mode .pdf-export-ignore{display:none!important}
+    .dashboard-pro-pdf-mode .dashboard-scroll{max-height:none!important;overflow:visible!important}
+    .dashboard-pro-pdf-mode{background:#f4f6f8!important;padding:4px}
+
   </style>
 </head>
 <body>
@@ -334,6 +339,7 @@
 <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <script>
 (function(){
   function loadShiftConfig(){
@@ -1278,6 +1284,7 @@
     const sources = [state.productions, state.truck_trips, state.fuel_logs, state.breakdowns, state.meter_logs];
     sources.forEach(rows=>{
       (rows || []).forEach(r=>{
+        if(!r || r.deleted_at) return;
         const bucket = resolveShiftBucketForRow(r);
         if(!bucket) return;
         const endMs = getShiftBucketEndMs(bucket.shift_name, bucket.shift_date);
@@ -4573,8 +4580,9 @@
               <option value="name">Ada göre</option>
             </select>
           </div>
-          <div class="filter-actions">
+          <div class="filter-actions pdf-export-ignore">
             <button id="dashboardProExportBtn" type="button" class="success">Excel'e Aktar</button>
+            <button id="dashboardProPdfBtn" type="button" class="warning">PDF Çıktı Al</button>
             <button id="dashboardProClearFilterBtn" type="button" class="secondary">Filtreyi Temizle</button>
           </div>
         </div>
@@ -4665,6 +4673,7 @@
     const sort = document.getElementById('dashboardProSortFilter');
     const clearBtn = document.getElementById('dashboardProClearFilterBtn');
     const exportBtn = document.getElementById('dashboardProExportBtn');
+    const pdfBtn = document.getElementById('dashboardProPdfBtn');
 
     if(day && day.dataset.bound !== '1'){
       day.value = state.dashboardProFilters.day || '';
@@ -4724,31 +4733,19 @@
       exportBtn.addEventListener('click', ()=>{ exportDashboardProToExcel(); });
       exportBtn.dataset.bound = '1';
     }
+    if(pdfBtn && pdfBtn.dataset.bound !== '1'){
+      pdfBtn.addEventListener('click', ()=>{ exportDashboardProToPdf(); });
+      pdfBtn.dataset.bound = '1';
+    }
   }
 
 
   async function loadDashboardProSummaryRows(){
-    try{
-      if(!state?.sb) return [];
-      let { data, error } = await state.sb
-        .from(TABLES.DASHBOARD_PRO_SHIFT_SUMMARY)
-        .select('*')
-        .order('shift_date', { ascending: false })
-        .limit(40);
-      if(error){
-        const fallback = await state.sb
-          .from(TABLES.DASHBOARD_SHIFT_SUMMARY)
-          .select('*')
-          .order('shift_date', { ascending: false })
-          .limit(40);
-        data = fallback.data;
-        error = fallback.error;
-      }
-      if(error) return [];
-      return Array.isArray(data) ? data : [];
-    }catch(e){
-      return [];
-    }
+    // Dashboard Pro değerleri, silinen kayıtların analize karışmaması için
+    // doğrudan state içindeki canlı tablolardan hesaplanır. Supabase viewları
+    // bazı projelerde deleted_at filtresi olmadan eski/silinmiş verileri döndürebildiği
+    // için burada kullanılmaz. Raporlar ve diğer ekranların işleyişi değiştirilmez.
+    return [];
   }
 
   function findDashboardProSummaryRow(rows, bucket){
@@ -5393,6 +5390,77 @@
 
   function buildDashboardProExportData(){
     return state.lastDashboardProExport || null;
+  }
+
+  async function exportDashboardProToPdf(){
+    const target = document.getElementById('dashboardPro');
+    if(!target){
+      alert('Dashboard Pro ekranı bulunamadı.');
+      return;
+    }
+    if(typeof window.jspdf === 'undefined' || !window.jspdf.jsPDF){
+      alert('PDF kütüphanesi yüklenemedi. Sayfayı yenileyip tekrar deneyin.');
+      return;
+    }
+    if(typeof html2canvas === 'undefined'){
+      alert('PDF ekran çıktısı kütüphanesi yüklenemedi. İnternet bağlantısını kontrol edip tekrar deneyin.');
+      return;
+    }
+    const pdfBtn = document.getElementById('dashboardProPdfBtn');
+    const oldText = pdfBtn ? pdfBtn.textContent : '';
+    try{
+      if(pdfBtn){ pdfBtn.disabled = true; pdfBtn.textContent = 'PDF hazırlanıyor...'; }
+      target.classList.add('dashboard-pro-pdf-mode');
+      await new Promise(resolve=>setTimeout(resolve, 150));
+
+      const canvas = await html2canvas(target, {
+        scale: 2,
+        backgroundColor: '#f4f6f8',
+        useCORS: true,
+        logging: false,
+        windowWidth: Math.max(document.documentElement.scrollWidth, target.scrollWidth),
+        windowHeight: Math.max(document.documentElement.scrollHeight, target.scrollHeight)
+      });
+
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 8;
+      const imgWidth = pageWidth - (margin * 2);
+      const pageBodyHeight = pageHeight - (margin * 2);
+      const pageCanvasHeight = Math.max(1, Math.floor((canvas.width * pageBodyHeight) / imgWidth));
+      let sourceY = 0;
+      let pageIndex = 0;
+
+      while(sourceY < canvas.height){
+        const sliceHeight = Math.min(pageCanvasHeight, canvas.height - sourceY);
+        const pageCanvas = document.createElement('canvas');
+        pageCanvas.width = canvas.width;
+        pageCanvas.height = sliceHeight;
+        const ctx = pageCanvas.getContext('2d');
+        ctx.fillStyle = '#f4f6f8';
+        ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+        ctx.drawImage(canvas, 0, sourceY, canvas.width, sliceHeight, 0, 0, canvas.width, sliceHeight);
+        const pageImgData = pageCanvas.toDataURL('image/jpeg', 0.92);
+        const pageImgHeight = (sliceHeight * imgWidth) / canvas.width;
+        if(pageIndex > 0) pdf.addPage();
+        pdf.addImage(pageImgData, 'JPEG', margin, margin, imgWidth, pageImgHeight);
+        sourceY += sliceHeight;
+        pageIndex += 1;
+      }
+
+      const stamp = new Date();
+      const filename = `dashboard_pro_ekran_${stamp.getFullYear()}${String(stamp.getMonth()+1).padStart(2,'0')}${String(stamp.getDate()).padStart(2,'0')}_${String(stamp.getHours()).padStart(2,'0')}${String(stamp.getMinutes()).padStart(2,'0')}.pdf`;
+      pdf.save(filename);
+      showToast('Dashboard Pro PDF çıktısı hazırlandı');
+    }catch(err){
+      console.error('exportDashboardProToPdf error', err);
+      alert('Dashboard Pro PDF çıktı sırasında hata oluştu: ' + (err.message || err));
+    }finally{
+      target.classList.remove('dashboard-pro-pdf-mode');
+      if(pdfBtn){ pdfBtn.disabled = false; pdfBtn.textContent = oldText || 'PDF Çıktı Al'; }
+    }
   }
 
   async function exportDashboardProToExcel(){
