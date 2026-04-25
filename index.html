@@ -5464,7 +5464,7 @@
         await updateWithOptionalColumns(TABLES.PRODUCTIONS, { trip_count: nextTripTotal }, ['trip_count'], matchedProduction.id);
       }
       closeModal();
-      await refreshData();
+      await refreshLogisticsAfterSave('trip');
       showToast(payload.production_id ? 'Sefer kaydı üretim bilgisiyle eklendi' : 'Sefer kaydı eklendi');
     }catch(err){ alert(err.message || err); }
   }
@@ -5505,7 +5505,7 @@
       const insertedRow = (res.data && res.data[0]) ? res.data[0] : { ...payload, id:`temp_fuel_${Date.now()}` };
       state.fuel_logs = [insertedRow, ...state.fuel_logs.filter(r=>String(r.id)!==String(insertedRow.id))];
       closeModal();
-      await refreshData();
+      await refreshLogisticsAfterSave('fuel');
       showToast(payload.production_id ? 'Yakıt kaydı üretim bağlantısıyla eklendi' : 'Yakıt kaydı eklendi');
     }catch(err){ alert(err.message || err); }
   }
@@ -5600,7 +5600,7 @@
         await syncNextShiftProductionStartMeters(equipment_id, payload.shift_name, payload.shift_date, endVal, beforeLatest);
       }
       closeModal();
-      await refreshData();
+      await refreshLogisticsAfterSave('meter');
       showToast(payload.production_id ? 'Sayaç kaydı üretim bağlantısıyla eklendi' : 'Sayaç düzeltme kaydı eklendi');
     }catch(err){ alert(err.message || err); }
   }
@@ -5613,7 +5613,7 @@
       const { error } = await state.sb.from(resolveDbTableName(d.table)).update(payload).eq('id', d.id);
       if(error) throw error;
       closeModal();
-      await refreshData();
+      await refreshAfterRecordDelete(d.table, d.id, 'soft');
       showToast('Kayıt silinenlere taşındı');
     }catch(err){ alert(err.message || err); }
   }
@@ -5638,7 +5638,7 @@
         const { error } = await state.sb.from(resolveDbTableName(table)).delete().not('deleted_at','is',null);
         if(error) throw error;
       }
-      await refreshData();
+      await refreshAfterRecordDelete('', [], 'permanent_all_deleted');
       showToast('Silinen tüm kayıtlar kalıcı olarak silindi');
     }catch(err){ alert(err.message || err); }
   }
@@ -5654,7 +5654,7 @@
         const { error } = await state.sb.from(resolveDbTableName(table)).delete().not('deleted_at','is',null).lt('deleted_at', cutoff);
         if(error) throw error;
       }
-      await refreshData();
+      await refreshAfterRecordDelete('', [], 'permanent_all_deleted');
       showToast('30 günden eski silinen kayıtlar temizlendi');
     }catch(err){ alert(err.message || err); }
   }
@@ -5803,9 +5803,11 @@
       }
       const updateRes = table === 'truck_trips'
         ? await updateWithOptionalColumns(table, payload, ['production_id','shift_name','material_type','shift_date','recorded_at'], row.id)
-        : table === 'meter_logs'
-          ? await updateWithOptionalColumns(table, payload, ['production_id','shift_name','shift_date','recorded_at','start_meter_value','end_meter_value'], row.id)
-          : await state.sb.from(resolveDbTableName(table)).update(payload).eq('id', row.id);
+        : table === 'fuel_logs'
+          ? await updateWithOptionalColumns(table, payload, ['production_id','shift_name','shift_date','source','recorded_at'], row.id)
+          : table === 'meter_logs'
+            ? await updateWithOptionalColumns(table, payload, ['production_id','shift_name','shift_date','recorded_at','start_meter_value','end_meter_value'], row.id)
+            : await state.sb.from(resolveDbTableName(table)).update(payload).eq('id', row.id);
       if(updateRes.error) throw updateRes.error;
       if(table === 'truck_trips' && row.production_id){
         const relatedProd = state.productions.find(p=>String(p.id) === String(row.production_id));
@@ -5842,7 +5844,7 @@
         }
       }
       closeModal();
-      await refreshData();
+      await refreshAfterRecordEdit(table, row.id, payload);
       showToast('Kayıt güncellendi');
     }catch(err){ alert(err.message || err); }
   }
@@ -7735,8 +7737,9 @@ function applyRecordFilters(rows){
     if(!confirmed) return;
     const ids = rows.map(r=>r.id).filter(Boolean);
     if(!ids.length) return;
-    await state.sb.from(resolveDbTableName(tableName)).update({ deleted_at:new Date().toISOString(), deleted_by: state.user?.id || null }).in('id', ids);
-    await refreshData();
+    const { error } = await state.sb.from(resolveDbTableName(tableName)).update({ deleted_at:new Date().toISOString(), deleted_by: state.user?.id || null }).in('id', ids);
+    if(error) throw error;
+    await refreshAfterRecordDelete(tableName, ids, 'soft');
     renderRecords();
   }
 
@@ -9302,6 +9305,142 @@ function renderUsers(){
   }
 
   async function refreshData(){ await loadAllSafe(); renderAll(); }
+
+  function dashboardProClearInvalidSelection(){
+    try{
+      const selected = getSelectedDashboardProBucket && getSelectedDashboardProBucket();
+      if(!selected && state.dashboardProFilters){
+        state.dashboardProFilters.day = '';
+        state.dashboardProFilters.shift_name = '';
+        state.dashboardProFilters.equipment_id = '';
+      }
+    }catch(e){}
+  }
+  function stateListNameForRecordTable(table){
+    const raw = String(table || '');
+    const db = resolveDbTableName(raw);
+    const map = {
+      productions: 'productions',
+      production_logs: 'productions',
+      breakdowns: 'breakdowns',
+      rentals: 'rentals',
+      truck_trips: 'truck_trips',
+      fuel_logs: 'fuel_logs',
+      meter_logs: 'meter_logs',
+      equipments: 'equipments',
+      packages: 'packages'
+    };
+    return map[raw] || map[db] || raw;
+  }
+  async function refreshAfterRecordDelete(table, ids, mode){
+    // Dar kapsamlı silme sonrası yenileme:
+    // Silinen veya kalıcı silinen kayıtlar Dashboard Pro analizine eski state/cache üzerinden
+    // karışmasın diye ilgili liste ve kayıt sayfası önbelleği temizlenir. Diğer işlevler değiştirilmez.
+    const pageToKeep = state.currentPage || 'records';
+    const listName = stateListNameForRecordTable(table);
+    const idSet = new Set((Array.isArray(ids) ? ids : [ids]).map(v=>String(v || '')).filter(Boolean));
+    const deletedAt = nowIso();
+    try{
+      if(state.recordsServer){
+        delete state.recordsServer[table];
+        delete state.recordsServer[listName];
+      }
+      if(listName && Array.isArray(state[listName]) && idSet.size){
+        if(mode === 'permanent'){
+          state[listName] = state[listName].filter(r=>!idSet.has(String(r.id || '')));
+        }else{
+          state[listName] = state[listName].map(r=>idSet.has(String(r.id || '')) ? { ...r, deleted_at: r.deleted_at || deletedAt, deleted_by: state.user?.id || null } : r);
+        }
+      }
+      if(mode === 'permanent_all_deleted'){
+        ['productions','breakdowns','rentals','truck_trips','fuel_logs','meter_logs','equipments','packages'].forEach(name=>{
+          if(Array.isArray(state[name])) state[name] = state[name].filter(r=>!r?.deleted_at);
+        });
+        if(state.recordsServer) state.recordsServer = {};
+      }
+      await loadAllSafe();
+      dashboardProClearInvalidSelection();
+      renderAll();
+      showPage(pageToKeep);
+      if(pageToKeep === 'dashboardPro'){
+        try{ await renderDashboardProData(); }catch(e){ console.error('dashboard pro refresh after delete', e); }
+      }
+      if(pageToKeep === 'records'){
+        try{ await loadRecordsPageData(); }catch(e){ console.error('records refresh after delete', e); }
+      }
+      try{ applyRolePermissions(); }catch(e){}
+      try{ applyLanguage(); }catch(e){}
+    }catch(err){
+      console.error('refreshAfterRecordDelete error', err);
+      try{
+        dashboardProClearInvalidSelection();
+        renderAll();
+        showPage(pageToKeep);
+        if(pageToKeep === 'dashboardPro') await renderDashboardProData();
+      }catch(e){}
+    }
+  }
+
+  async function refreshLogisticsAfterSave(targetPage){
+    // Dar kapsamlı kayıt sonrası yenileme:
+    // Sefer/Yakıt/Sayaç kaydı eklendiğinde ilgili liste, eksik giriş uyarıları
+    // ve Dashboard Pro analizleri aynı state üzerinden anında yeniden hesaplanır.
+    // Veri modeli, Supabase kolonları ve diğer modüller değiştirilmez.
+    const pageToKeep = targetPage || state.currentPage || 'dashboard';
+    try{
+      await loadAllSafe();
+      renderAll();
+      showPage(pageToKeep);
+      if(pageToKeep === 'dashboardPro'){
+        try{ await renderDashboardProData(); }catch(e){ console.error('dashboard pro refresh after logistics save', e); }
+      }
+      try{ applyRolePermissions(); }catch(e){}
+      try{ applyLanguage(); }catch(e){}
+    }catch(err){
+      console.error('refreshLogisticsAfterSave error', err);
+      // Son çare: mevcut state ile yine de ekranı yenile, kullanıcı kaydı görsün.
+      try{ renderAll(); showPage(pageToKeep); }catch(e){}
+      throw err;
+    }
+  }
+  async function refreshAfterRecordEdit(table, editedId, payload){
+    // Dar kapsamlı düzenleme sonrası yenileme:
+    // Kayıtlar ekranında yapılan Sefer/Yakıt/Sayaç düzeltmeleri Dashboard Pro'ya
+    // eski değerle değil, Supabase'e yazılan son değerle yansısın diye canlı state
+    // ve kayıt sayfası önbelleği birlikte yenilenir. Veri modeli ve diğer modüller değişmez.
+    const pageToKeep = state.currentPage || 'records';
+    try{
+      if(state.recordsServer && table){ delete state.recordsServer[table]; }
+      await loadAllSafe();
+      const dbTable = resolveDbTableName(table);
+      const targetListMap = {
+        [TABLES.TRUCK_TRIPS]: 'truck_trips',
+        [TABLES.FUEL_LOGS]: 'fuel_logs',
+        [TABLES.METER_LOGS]: 'meter_logs',
+        [TABLES.PRODUCTIONS]: 'productions',
+        [TABLES.BREAKDOWNS]: 'breakdowns',
+        [TABLES.RENTALS]: 'rentals'
+      };
+      const listName = targetListMap[dbTable] || table;
+      if(listName && Array.isArray(state[listName]) && editedId){
+        state[listName] = state[listName].map(r=>String(r.id || '') === String(editedId || '') ? { ...r, ...(payload || {}), id:r.id } : r);
+      }
+      renderAll();
+      showPage(pageToKeep);
+      if(pageToKeep === 'dashboardPro'){
+        try{ await renderDashboardProData(); }catch(e){ console.error('dashboard pro refresh after record edit', e); }
+      }
+      if(pageToKeep === 'records'){
+        try{ await loadRecordsPageData(); }catch(e){ console.error('records refresh after edit', e); }
+      }
+      try{ applyRolePermissions(); }catch(e){}
+      try{ applyLanguage(); }catch(e){}
+    }catch(err){
+      console.error('refreshAfterRecordEdit error', err);
+      try{ await refreshData(); }catch(e){}
+    }
+  }
+
   async function logout(){ try{ await teardownRealtimeSubscriptions(); await teardownOnlinePresence(); const sb = await initClient(); await sb.auth.signOut(); } catch(e){} location.reload(); }
 
   document.addEventListener('click', async (e)=>{
