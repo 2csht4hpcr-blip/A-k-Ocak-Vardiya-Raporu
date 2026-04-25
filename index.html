@@ -3400,9 +3400,9 @@
     PACKAGES: 'packages',
     SHIFT_DEFINITIONS: 'shift_definitions',
     APP_SETTINGS: 'app_settings',
-    DASHBOARD_SHIFT_SUMMARY: 'v_shift_summary',
-    DASHBOARD_EQUIPMENT_SHIFT_SUMMARY: 'v_equipment_shift_summary',
-    DASHBOARD_PRO_SHIFT_SUMMARY: 'v_dashboard_pro_shift_summary'
+    DASHBOARD_SHIFT_SUMMARY: 'v_shift_summary_safe',
+    DASHBOARD_EQUIPMENT_SHIFT_SUMMARY: 'v_equipment_shift_summary_safe',
+    DASHBOARD_PRO_SHIFT_SUMMARY: 'v_dashboard_pro_shift_summary_safe'
   };
 
   function resolveDbTableName(name){
@@ -8281,7 +8281,7 @@ function renderDeleted(){
   }
   async function fetchSummaryRange(startDate, endDate){
     const sb = state.sb || await initClient();
-    const res = await sb.from('v_shift_summary').select('*').gte('shift_date', startDate).lte('shift_date', endDate).order('shift_date', {ascending:true});
+    const res = await sb.from(TABLES.DASHBOARD_SHIFT_SUMMARY).select('*').gte('shift_date', startDate).lte('shift_date', endDate).order('shift_date', {ascending:true});
     if(res.error) throw res.error;
     return res.data || [];
   }
