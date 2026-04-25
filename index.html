@@ -252,6 +252,11 @@
     .gps-machine-sub{font-size:11px;color:#64748b;margin-top:3px}
     .gps-dot{width:10px;height:10px;border-radius:999px;display:inline-block;background:#94a3b8}
     .gps-dot.live{background:#16a34a}.gps-dot.warn{background:#f59e0b}.gps-dot.off{background:#dc2626}
+    .gps-assignment-card{padding:12px;border-radius:16px;background:linear-gradient(180deg,#ffffff 0%,#f8fbff 100%);border:1px solid #dbeafe;box-shadow:0 8px 18px rgba(37,99,235,.05)}
+    .gps-assignment-row{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end}
+    .gps-assignment-list{display:grid;gap:8px;max-height:220px;overflow:auto;margin-top:10px}
+    .gps-assignment-item{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:9px 10px;border-radius:13px;background:#fff;border:1px solid #e2e8f0}
+    @media(max-width:700px){.gps-assignment-row{grid-template-columns:1fr}}
     @media(max-width:960px){.gps-layout{grid-template-columns:1fr}.gps-map{height:520px}}
 
     .dashboard-pro-pdf-mode .dashboard-scroll{max-height:none!important;overflow:visible!important}
@@ -1676,6 +1681,8 @@
     meter_logs: [],
     truck_trips: [],
     gps_positions: [],
+    gpsPositionError: '',
+    gps_assignments: [],
     userProfiles: [],
     currentPage: 'dashboard',
     recordTab: 'operations',
@@ -3431,7 +3438,8 @@
     DASHBOARD_SHIFT_SUMMARY: 'v_shift_summary_safe',
     DASHBOARD_EQUIPMENT_SHIFT_SUMMARY: 'v_equipment_shift_summary_safe',
     DASHBOARD_PRO_SHIFT_SUMMARY: 'v_dashboard_pro_shift_summary_safe',
-    GPS_POSITIONS: 'gps_positions'
+    GPS_POSITIONS: 'gps_positions',
+    GPS_ASSIGNMENTS: 'gps_device_assignments'
   };
 
   function resolveDbTableName(name){
@@ -4117,6 +4125,8 @@
     }));
     state.userProfiles = canManageUsers() ? ((results[TABLES.PROFILES]?.data || []).sort((a,b)=>String(a.full_name || a.email || '').localeCompare(String(b.full_name || b.email || ''), 'tr'))) : [];
     await loadGpsPositionsSafe();
+    await loadGpsAssignmentsSafe();
+    applyGpsAssignmentForCurrentUser();
 
     if(!state._autoClosingPreviousShift){
       state._autoClosingPreviousShift = true;
@@ -9241,6 +9251,96 @@ function renderUsers(){
   }
 
 
+  function gpsAssignmentUserId(row){ return String(row?.user_id || row?.profile_id || row?.id || ''); }
+  function gpsAssignmentUserName(row){ return String(row?.full_name || row?.email || row?.user_email || row?.id || '-'); }
+  function activeGpsAssignments(){ return (state.gps_assignments || []).filter(a=>a && !a.deleted_at && a.is_active !== false); }
+  function gpsAssignmentForUser(userId){
+    const uid = String(userId || state.user?.id || '');
+    if(!uid) return null;
+    return activeGpsAssignments().find(a=>String(a.user_id || '') === uid) || null;
+  }
+  function gpsAssignedEquipmentId(){
+    const remote = gpsAssignmentForUser(state.user?.id);
+    if(remote?.equipment_id) return String(remote.equipment_id);
+    try{ return String(localStorage.getItem('maden_gps_assigned_equipment_id') || ''); }catch(e){ return ''; }
+  }
+  function gpsAssignedEquipment(){ return findEquipmentById(gpsAssignedEquipmentId()); }
+  function applyGpsAssignmentForCurrentUser(){
+    const id = gpsAssignedEquipmentId();
+    if(id){
+      state.gps.selectedEquipmentId = String(id);
+      try{ localStorage.setItem('maden_gps_equipment_id', String(id)); }catch(e){}
+    }
+  }
+  async function loadGpsAssignmentsSafe(){
+    try{
+      const sb = await initClient();
+      let query = sb.from(TABLES.GPS_ASSIGNMENTS).select('*').is('deleted_at', null).eq('is_active', true);
+      if(currentUserRole() !== 'manager' && state.user?.id) query = query.eq('user_id', state.user.id);
+      const res = await withTimeout(query, 10000, TABLES.GPS_ASSIGNMENTS);
+      if(res.error) throw res.error;
+      state.gps_assignments = (res.data || []).filter(r=>!r.deleted_at && r.is_active !== false);
+      state.gpsAssignmentError = '';
+      return true;
+    }catch(err){
+      state.gps_assignments = [];
+      state.gpsAssignmentError = String(err?.message || err || '');
+      return false;
+    }
+  }
+  function gpsDriverOptions(){
+    const drivers = (state.userProfiles || []).filter(u=>!u.deleted_at && u.is_active !== false && normalizeRole(u.role)==='driver');
+    return drivers.length ? drivers : (state.userProfiles || []).filter(u=>!u.deleted_at && u.is_active !== false);
+  }
+  async function saveRemoteGpsAssignment(){
+    if(currentUserRole() !== 'manager'){ alert('Uzaktan atama yalnızca yönetici tarafından yapılabilir'); return; }
+    const userId = String(document.getElementById('gpsAssignUserSelect')?.value || '');
+    const equipmentId = String(document.getElementById('gpsAssignEquipmentSelect')?.value || '');
+    const profile = (state.userProfiles || []).find(u=>String(u.id || '') === userId);
+    const eq = findEquipmentById(equipmentId);
+    if(!userId || !profile){ alert('Önce şoför/kullanıcı seçiniz'); return; }
+    if(!equipmentId || !eq){ alert('Önce makina seçiniz'); return; }
+    try{
+      const sb = await initClient();
+      const payload = {
+        user_id: userId,
+        user_email: profile.email || '',
+        user_name: profile.full_name || profile.email || '',
+        equipment_id: equipmentId,
+        equipment_name: eq.name || '',
+        equipment_type: equipmentTypeKey(eq),
+        assigned_by: state.user?.id || null,
+        assigned_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        is_active: true,
+        deleted_at: null
+      };
+      const res = await sb.from(TABLES.GPS_ASSIGNMENTS).upsert(payload, { onConflict:'user_id' }).select('*');
+      if(res.error) throw res.error;
+      await loadGpsAssignmentsSafe();
+      applyGpsAssignmentForCurrentUser();
+      renderGpsLive();
+      showToast((profile.full_name || profile.email || 'Kullanıcı') + ' → ' + (eq.name || 'makina') + ' atandı');
+    }catch(err){
+      alert('GPS ataması kaydedilemedi: ' + (err.message || err));
+    }
+  }
+  async function clearRemoteGpsAssignment(userId){
+    if(currentUserRole() !== 'manager'){ alert('Uzaktan atama yalnızca yönetici tarafından kaldırılabilir'); return; }
+    if(!confirm('Bu kullanıcının GPS makina ataması kaldırılsın mı?')) return;
+    try{
+      const sb = await initClient();
+      const res = await sb.from(TABLES.GPS_ASSIGNMENTS).update({ is_active:false, deleted_at:new Date().toISOString(), updated_at:new Date().toISOString() }).eq('user_id', userId).is('deleted_at', null);
+      if(res.error) throw res.error;
+      await loadGpsAssignmentsSafe();
+      applyGpsAssignmentForCurrentUser();
+      renderGpsLive();
+      showToast('GPS ataması kaldırıldı');
+    }catch(err){
+      alert('GPS ataması kaldırılamadı: ' + (err.message || err));
+    }
+  }
+
   function gpsQueueKey(){ return 'maden_gps_offline_queue'; }
   function loadGpsOfflineQueue(){
     try{ const raw = localStorage.getItem(gpsQueueKey()); const parsed = raw ? JSON.parse(raw) : []; return Array.isArray(parsed) ? parsed : []; }catch(e){ return []; }
@@ -9269,19 +9369,38 @@ function renderUsers(){
     return map;
   }
   async function loadGpsPositionsSafe(){
-    // DEMO MOD: Supabase'e bağlanmaz, sadece bu cihazın localStorage kayıtlarını okur.
-    const rows = loadGpsDemoPositions();
-    state.gps_positions = (rows || []).filter(r=>!r.deleted_at).map(r=>({
-      ...r,
-      equipment_name: r.equipment_name || (findEquipmentById(r.equipment_id)?.name || ''),
-      equipment_type: r.equipment_type || equipmentTypeKey(findEquipmentById(r.equipment_id))
-    }));
+    try{
+      const sb = await initClient();
+      const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const res = await withTimeout(
+        sb.from(TABLES.GPS_POSITIONS)
+          .select('*')
+          .gte('gps_time', since)
+          .order('gps_time', { ascending:false })
+          .limit(3000),
+        12000,
+        TABLES.GPS_POSITIONS
+      );
+      if(res.error) throw res.error;
+      state.gps_positions = (res.data || []).filter(r=>!r.deleted_at).map(r=>({
+        ...r,
+        equipment_name: r.equipment_name || (findEquipmentById(r.equipment_id)?.name || ''),
+        equipment_type: r.equipment_type || equipmentTypeKey(findEquipmentById(r.equipment_id))
+      }));
+      state.gpsPositionError = '';
+      return true;
+    }catch(err){
+      state.gpsPositionError = String(err?.message || err || '');
+      const rows = loadGpsOfflineQueue();
+      state.gps_positions = (rows || []).filter(r=>!r.deleted_at).map(r=>({
+        ...r,
+        equipment_name: r.equipment_name || (findEquipmentById(r.equipment_id)?.name || ''),
+        equipment_type: r.equipment_type || equipmentTypeKey(findEquipmentById(r.equipment_id))
+      }));
+      return false;
+    }
   }
   function gpsSelectedEquipment(){ return findEquipmentById(state.gps.selectedEquipmentId); }
-  function gpsAssignedEquipmentId(){
-    try{ return String(localStorage.getItem('maden_gps_assigned_equipment_id') || ''); }catch(e){ return ''; }
-  }
-  function gpsAssignedEquipment(){ return findEquipmentById(gpsAssignedEquipmentId()); }
   function setGpsSelectedEquipment(id){
     state.gps.selectedEquipmentId = String(id || '');
     try{ localStorage.setItem('maden_gps_equipment_id', state.gps.selectedEquipmentId); }catch(e){}
@@ -9316,7 +9435,7 @@ function renderUsers(){
     if(!el) return;
     const latest = latestGpsByEquipment();
     const selectedId = state.gps.selectedEquipmentId || '';
-    const offlineCount = loadGpsDemoPositions().length;
+    const offlineCount = loadGpsOfflineQueue().length;
     const rows = (state.equipments || []).filter(e=>!e.deleted_at).map(e=>{
       const pos = latest.get(String(e.id));
       const age = pos ? gpsAgeMinutes(pos) : Infinity;
@@ -9329,11 +9448,19 @@ function renderUsers(){
     const assigned = gpsAssignedEquipment();
     const assignedAt = (()=>{ try{ return localStorage.getItem('maden_gps_assigned_at') || ''; }catch(e){ return ''; } })();
     const gpsIsManager = currentUserRole() === 'manager';
+    const driverOptions = gpsDriverOptions();
+    const assignmentError = state.gpsAssignmentError || '';
+    const positionError = state.gpsPositionError || '';
+    const remoteAssignment = gpsAssignmentForUser(state.user?.id);
+    const assignmentRows = activeGpsAssignments();
+    const driverOptionsHtml = driverOptions.map(u=>`<option value="${escapeHtml(u.id)}">${escapeHtml(u.full_name || u.email || u.id || '-')}</option>`).join('');
+    const equipmentOptionsHtml = (state.equipments || []).filter(e=>!e.deleted_at).map(e=>`<option value="${escapeHtml(e.id)}">${escapeHtml(e.name || '-')} — ${escapeHtml(equipmentTypeLabel(equipmentTypeKey(e)))}</option>`).join('');
+    const assignmentListHtml = assignmentRows.length ? assignmentRows.map(a=>{ const eq=findEquipmentById(a.equipment_id); return `<div class="gps-assignment-item"><div><b>${escapeHtml(a.user_name || a.user_email || a.user_id || '-')}</b><div class="muted">${escapeHtml((eq?.name || a.equipment_name || '-'))} • ${escapeHtml(fmtDate(a.assigned_at || a.updated_at || ''))}</div></div><button class="warning" style="width:auto;padding:7px 10px" onclick="clearRemoteGpsAssignment('${escapeHtml(a.user_id)}')">Kaldır</button></div>`; }).join('') : '<div class="empty">Aktif uzaktan atama yok.</div>';
     const last = (assigned || selected) ? latest.get(String((assigned || selected).id)) : null;
     el.innerHTML = `
       <div class="card pro-hero">
         <h2 class="section-title">GPS / Canlı Takip</h2>
-        <div class="muted">Telefon GPS verisi ile canlı harita denemesi. Demo moddur; Supabase'e veri yazmaz, kayıtlar sadece bu cihazın tarayıcı hafızasında tutulur.</div>
+        <div class="muted">Telefon GPS verisi Supabase'e kaydedilir; yönetici şoför-makina atamasını uzaktan yapar ve canlı haritada izler.</div>
       </div>
       <div class="gps-layout" style="margin-top:14px">
         <div class="card gps-control-grid">
@@ -9341,38 +9468,52 @@ function renderUsers(){
           <div class="gps-status-box" style="border-color:#bfdbfe;background:#eff6ff">
             <div class="gps-status-title">Bu telefonun atandığı makina</div>
             <div class="gps-status-value">${escapeHtml(assigned?.name || 'Atama yok')}</div>
-            <div class="muted" style="margin-top:5px">${assigned ? `${escapeHtml(equipmentTypeLabel(equipmentTypeKey(assigned)))}${assignedAt ? ' • ' + escapeHtml(fmtDate(assignedAt)) : ''}` : 'Bu telefondan gelen GPS verisi için önce makina atayın.'}</div>
+            <div class="muted" style="margin-top:5px">${assigned ? `${escapeHtml(equipmentTypeLabel(equipmentTypeKey(assigned)))}${assignedAt ? ' • ' + escapeHtml(fmtDate(assignedAt)) : ''}` : 'Bu kullanıcı için yönetici uzaktan makina ataması yapmalıdır.'}</div>
           </div>
           ${gpsIsManager ? `
+          <div class="gps-assignment-card">
+            <h3 style="margin:0 0 8px">Yönetici Uzaktan Atama</h3>
+            <div class="muted" style="margin-bottom:10px">Şoför/kullanıcı seçip makinaya ata. Şoför telefonu giriş yaptığında bu atamayı otomatik okur.</div>
+            ${assignmentError ? `<div class="notice" style="margin-bottom:10px">GPS atama tablosu okunamadı. Supabase'de <b>gps_device_assignments</b> tablosu/policy eksik olabilir; verilen SQL'i çalıştır.</div>` : ''}
+            ${positionError ? `<div class="notice" style="margin-bottom:10px">GPS konum tablosu okunamadı. Supabase'de <b>gps_positions</b> tablosu/policy eksik olabilir.</div>` : ''}
+            <div class="gps-assignment-row">
+              <div class="form-field">
+                <label>Şoför / Kullanıcı</label>
+                <select id="gpsAssignUserSelect"><option value="">Kullanıcı seçiniz</option>${driverOptionsHtml}</select>
+              </div>
+              <div class="form-field">
+                <label>Makina</label>
+                <select id="gpsAssignEquipmentSelect"><option value="">Makina seçiniz</option>${equipmentOptionsHtml}</select>
+              </div>
+              <button class="success" onclick="saveRemoteGpsAssignment()" style="width:auto;min-width:110px">Ata</button>
+            </div>
+            <div class="gps-assignment-list">${assignmentListHtml}</div>
+          </div>
           <div class="form-field">
-            <label>Ekipman seç / atama değiştir</label>
+            <label>Haritada odaklanmak için ekipman seç</label>
             <select id="gpsEquipmentSelect" onchange="gpsSelectFromList(this.value)">
               <option value="">Ekipman seçiniz</option>
               ${(state.equipments || []).filter(e=>!e.deleted_at).map(e=>`<option value="${escapeHtml(e.id)}" ${String(e.id)===String(selectedId)?'selected':''}>${escapeHtml(e.name || '-')}</option>`).join('')}
             </select>
           </div>
-          <div class="inline">
-            <button class="secondary" onclick="assignGpsPhoneToSelectedEquipment()">Bu telefonu makinaya ata</button>
-            <button class="warning" onclick="clearGpsPhoneAssignment()">Atamayı kaldır</button>
-          </div>
           ` : `
-          <div class="notice">Bu telefondaki makina ataması yönetici tarafından yapılır. Şoför bu atamayı değiştiremez.</div>
+          <div class="notice">Bu kullanıcının makina ataması yönetici tarafından uzaktan yapılır. Şoför bu atamayı değiştiremez.${remoteAssignment ? '' : ' Şu anda aktif atama bulunamadı.'}</div>
           `}
           <div class="inline">
             <button class="success" onclick="startGpsTracking()">GPS Başlat</button>
             <button class="danger" onclick="stopGpsTracking()">GPS Durdur</button>
           </div>
-          <button class="secondary" onclick="refreshGpsMapNow()">Demo Haritayı Yenile</button>
-          ${gpsIsManager ? `<button class="danger" onclick="clearGpsDemoData()">Demo GPS Verilerini Temizle</button>` : ''}
+          <button class="secondary" onclick="refreshGpsMapNow()">Haritayı Yenile</button>
+          
           <div class="gps-status-box">
             <div class="gps-status-title">Durum</div>
             <div id="gpsTrackingStatus" class="gps-status-value">${state.gps.tracking ? 'GPS takip aktif' : 'GPS takip kapalı'}</div>
             <div class="muted" style="margin-top:5px">Seçili: ${escapeHtml(selected?.name || '-')} • Atanan: ${escapeHtml(assigned?.name || '-')}</div>
           </div>
           <div class="gps-status-box">
-            <div class="gps-status-title">Bu cihazdaki demo kayıt</div>
+            <div class="gps-status-title">Bekleyen offline kayıt</div>
             <div id="gpsOfflineCount" class="gps-status-value"></div>
-            <div class="muted" style="margin-top:5px">Rotalar bu cihazdaki GPS geçmişinden çizilir. Birden fazla makina için bu cihazda farklı makina atamalarıyla kayıt oluşmalıdır.</div>
+            <div class="muted" style="margin-top:5px">Rotalar Supabase GPS geçmişinden çizilir. İnternet kesilirse kayıtlar cihazda bekletilir ve bağlantı gelince gönderilir.</div>
           </div>
           <div class="gps-status-box">
             <div class="gps-status-title">Son Konum</div>
@@ -9501,7 +9642,7 @@ function renderUsers(){
     }
     if(bounds.length){ try{ map.fitBounds(bounds, { padding:[30,30], maxZoom:15 }); }catch(e){} }
   }
-  async function refreshGpsMapNow(){ await loadGpsPositionsSafe(); renderGpsLive(); }
+  async function refreshGpsMapNow(){ await syncOfflineGpsPositions(true); }
   function buildGpsPayload(position){
     const coords = position?.coords || {};
     const assigned = gpsAssignedEquipment();
@@ -9524,16 +9665,42 @@ function renderUsers(){
     };
   }
   async function saveGpsPosition(payload){
-    // DEMO MOD: Supabase'e yazmaz. Sadece cihaz localStorage alanına kaydeder.
-    const row = { ...payload, id: `gps_demo_${Date.now()}_${Math.random().toString(36).slice(2,8)}`, created_at: new Date().toISOString() };
-    const rows = [row, ...(loadGpsDemoPositions() || [])].slice(0,5000);
-    saveGpsDemoPositions(rows);
-    state.gps_positions = rows;
-    return true;
+    const row = { ...payload, created_at: new Date().toISOString() };
+    try{
+      const sb = await initClient();
+      const res = await sb.from(TABLES.GPS_POSITIONS).insert(row).select('*').single();
+      if(res.error) throw res.error;
+      const saved = res.data || row;
+      state.gps_positions = [saved, ...(state.gps_positions || [])].slice(0,3000);
+      return true;
+    }catch(err){
+      console.error('GPS Supabase kayıt hatası', err);
+      const queued = { ...row, id:`gps_offline_${Date.now()}_${Math.random().toString(36).slice(2,8)}`, offline:true };
+      const queue = [queued, ...(loadGpsOfflineQueue() || [])].slice(0,5000);
+      saveGpsOfflineQueue(queue);
+      state.gps_positions = [queued, ...(state.gps_positions || [])].slice(0,3000);
+      const oc = document.getElementById('gpsOfflineCount'); if(oc) oc.textContent = String(queue.length);
+      return false;
+    }
   }
   async function syncOfflineGpsPositions(showToastMessage){
+    const queue = loadGpsOfflineQueue();
+    if(queue.length){
+      try{
+        const sb = await initClient();
+        const rows = queue.map(({ id, offline, ...r })=>r);
+        const res = await sb.from(TABLES.GPS_POSITIONS).insert(rows);
+        if(res.error) throw res.error;
+        saveGpsOfflineQueue([]);
+        if(showToastMessage) showToast(`${queue.length} bekleyen GPS kaydı Supabase'e gönderildi`);
+      }catch(err){
+        console.error('Offline GPS gönderilemedi', err);
+        if(showToastMessage) showToast('GPS yenilendi, ancak offline kayıtlar gönderilemedi');
+      }
+    }else if(showToastMessage){
+      showToast('GPS kayıtları yenilendi');
+    }
     await loadGpsPositionsSafe();
-    if(showToastMessage) showToast('Demo GPS kayıtları bu cihazdan yenilendi');
     renderGpsLive();
   }
   function clearGpsDemoData(){
@@ -9570,7 +9737,7 @@ function renderUsers(){
     state.gps.tracking = false;
     if(rerender) renderGpsLive();
   }
-  window.addEventListener('online', ()=>{ try{ if(state.currentPage === 'gpsLive') refreshGpsMapNow(); }catch(e){} });
+  window.addEventListener('online', ()=>{ try{ syncOfflineGpsPositions(false); }catch(e){} });
 
   function renderPageError(id, title, err){
     const el = document.getElementById(id);
@@ -9922,6 +10089,9 @@ function renderUsers(){
       log({stage:'auto-session-catch', message:String(err.message||err)});
     }
   })();
+
+  window.saveRemoteGpsAssignment = saveRemoteGpsAssignment;
+  window.clearRemoteGpsAssignment = clearRemoteGpsAssignment;
 })();
 </script>
 </body>
