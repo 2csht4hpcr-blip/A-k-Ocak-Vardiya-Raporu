@@ -241,7 +241,7 @@
 
 
     .gps-layout{display:grid;grid-template-columns:minmax(280px,360px) 1fr;gap:14px;align-items:start}
-    .gps-map{height:620px;min-height:420px;border-radius:20px;border:1px solid #dbe3ef;overflow:hidden;background:#e2e8f0;box-shadow:0 12px 28px rgba(15,23,42,.08)}
+    .gps-map{height:760px;min-height:650px;border-radius:20px;border:1px solid #dbe3ef;overflow:hidden;background:#e2e8f0;box-shadow:0 12px 28px rgba(15,23,42,.08)}
     .gps-control-grid{display:grid;gap:10px}
     .gps-status-box{padding:12px;border-radius:16px;background:#f8fafc;border:1px solid #e2e8f0}
     .gps-status-title{font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:.35px;color:#64748b}
@@ -257,7 +257,7 @@
     .gps-assignment-list{display:grid;gap:8px;max-height:220px;overflow:auto;margin-top:10px}
     .gps-assignment-item{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:9px 10px;border-radius:13px;background:#fff;border:1px solid #e2e8f0}
     @media(max-width:700px){.gps-assignment-row{grid-template-columns:1fr}}
-    @media(max-width:960px){.gps-layout{grid-template-columns:1fr}.gps-map{height:520px}}
+    @media(max-width:960px){.gps-layout{grid-template-columns:1fr}.gps-map{height:660px;min-height:560px}}
     .gps-manager-shell{display:grid;grid-template-columns:380px 1fr;gap:14px;align-items:start;margin-top:14px}
     .gps-manager-panel{display:grid;gap:12px}
     .gps-fleet-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
@@ -284,6 +284,12 @@
     .gps-driver-big{font-size:24px;font-weight:950;margin-top:8px;line-height:1.15}
     .gps-selected-detail{padding:13px;border-radius:18px;background:#f8fafc;border:1px solid #e2e8f0}
     .gps-tooltip-table{font-size:12px;line-height:1.5}.gps-tooltip-table b{font-size:14px}.gps-tooltip-muted{color:#64748b}
+    .gps-moving-marker{position:relative;width:42px;height:42px;transform:translate(-21px,-21px);}
+    .gps-moving-core{position:absolute;left:7px;top:7px;width:28px;height:28px;border-radius:999px;background:#2563eb;border:3px solid #fff;box-shadow:0 8px 18px rgba(15,23,42,.28);display:flex;align-items:center;justify-content:center;color:#fff;font-size:15px;font-weight:900;transition:transform .25s ease, background .25s ease;}
+    .gps-moving-core.live{background:#16a34a}.gps-moving-core.warn{background:#f59e0b}.gps-moving-core.off{background:#dc2626}
+    .gps-moving-arrow{position:absolute;left:17px;top:-2px;width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-bottom:12px solid #0f172a;transform-origin:4px 23px;filter:drop-shadow(0 3px 3px rgba(15,23,42,.28));}
+    .gps-moving-speed{position:absolute;left:31px;top:1px;min-width:42px;padding:3px 6px;border-radius:999px;background:#0f172a;color:#fff;border:1px solid rgba(255,255,255,.3);font-size:10px;font-weight:900;white-space:nowrap;box-shadow:0 6px 14px rgba(15,23,42,.22)}
+
     @media(max-width:1050px){.gps-manager-shell,.gps-driver-view{grid-template-columns:1fr}.gps-fleet-list{max-height:360px}}
     .gps-manager-stack{display:grid;gap:14px;margin-top:14px}
     .gps-filter-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;align-items:end}
@@ -295,8 +301,8 @@
     .gps-fleet-liveinfo{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;min-width:0}
     .gps-fleet-actions{display:grid;grid-template-columns:minmax(170px,220px) auto;gap:8px;align-items:center}
     .gps-fleet-actions select{padding:9px;border-radius:10px}.gps-fleet-actions button{width:auto;padding:9px 12px;border-radius:10px}
-    .gps-map-under{height:640px;min-height:440px}
-    @media(max-width:1100px){.gps-fleet-wide-card{grid-template-columns:1fr}.gps-fleet-actions{grid-template-columns:1fr}.gps-map-under{height:520px}}
+    .gps-map-under{height:820px;min-height:700px}
+    @media(max-width:1100px){.gps-fleet-wide-card{grid-template-columns:1fr}.gps-fleet-actions{grid-template-columns:1fr}.gps-map-under{height:680px;min-height:580px}}
 
 
 
@@ -10500,6 +10506,105 @@ function renderUsers(){
       </div>`;
     setTimeout(()=>{ try{ initGpsMap(); updateGpsMapMarkers(); applyLanguage(); }catch(e){ console.error(e); } }, 80);
   }
+
+  /* =================== V52 HARİTA YÜKSEKLİK + HIZ/YÖN/ANİMASYON PATCH =================== */
+  function gpsFormatSpeed(pos){
+    const speed = Number(pos?.speed || 0);
+    return Number.isFinite(speed) ? Math.max(0, speed).toFixed(1) : '0.0';
+  }
+  function gpsFormatHeading(pos){
+    const heading = Number(pos?.heading ?? pos?.course ?? pos?.bearing);
+    if(!Number.isFinite(heading)) return '-';
+    const normalized = ((heading % 360) + 360) % 360;
+    return `${normalized.toFixed(0)}°`;
+  }
+  function gpsDirectionLabel(pos){
+    const heading = Number(pos?.heading ?? pos?.course ?? pos?.bearing);
+    if(!Number.isFinite(heading)) return '-';
+    const dirs = ['K','KD','D','GD','G','GB','B','KB'];
+    return dirs[Math.round((((heading % 360) + 360) % 360) / 45) % 8];
+  }
+  function gpsMarkerIcon(pos, eqId){
+    const st = gpsEquipmentStatus(eqId, latestGpsByEquipment());
+    const heading = Number(pos?.heading ?? pos?.course ?? pos?.bearing);
+    const rotation = Number.isFinite(heading) ? `transform:rotate(${heading}deg)` : 'display:none';
+    const speed = gpsFormatSpeed(pos);
+    return L.divIcon({
+      className: 'gps-moving-marker-wrap',
+      iconSize: [42,42],
+      iconAnchor: [21,21],
+      popupAnchor: [0,-22],
+      html: `<div class="gps-moving-marker"><div class="gps-moving-arrow" style="${rotation}"></div><div class="gps-moving-core ${escapeHtml(st.cls)}">🚛</div><div class="gps-moving-speed">${escapeHtml(speed)} km/s</div></div>`
+    });
+  }
+  function gpsAnimateMarker(marker, nextLatLng){
+    try{
+      const start = marker.getLatLng();
+      if(!start || !Number.isFinite(start.lat) || !Number.isFinite(start.lng)){
+        marker.setLatLng(nextLatLng); return;
+      }
+      const end = L.latLng(nextLatLng[0], nextLatLng[1]);
+      const frames = 18;
+      const duration = 700;
+      const started = performance.now();
+      if(marker.__gpsAnim) cancelAnimationFrame(marker.__gpsAnim);
+      function step(now){
+        const t = Math.min(1, (now - started) / duration);
+        const eased = t < .5 ? 2*t*t : -1 + (4 - 2*t)*t;
+        marker.setLatLng([start.lat + (end.lat - start.lat) * eased, start.lng + (end.lng - start.lng) * eased]);
+        if(t < 1) marker.__gpsAnim = requestAnimationFrame(step);
+      }
+      marker.__gpsAnim = requestAnimationFrame(step);
+    }catch(e){ marker.setLatLng(nextLatLng); }
+  }
+  function gpsMarkerPopupHtml(pos, eqId){
+    const eq = findEquipmentById(eqId);
+    const op = gpsOperationInfoForEquipment(eqId);
+    const name = pos?.equipment_name || eq?.name || 'Ekipman';
+    const type = equipmentTypeLabel(v51EquipmentTypeKey(eq || pos, op?.production));
+    const driver = pos?.user_name || pos?.driver_name || (gpsAssignmentForEquipment(eqId)?.user_name || gpsAssignmentForEquipment(eqId)?.user_email || '-');
+    const speed = gpsFormatSpeed(pos);
+    const heading = gpsFormatHeading(pos);
+    const direction = gpsDirectionLabel(pos);
+    return `<div class="gps-tooltip-table"><b>${escapeHtml(name)}</b><br><span class="gps-tooltip-muted">${escapeHtml(type)}</span><br>Şoför: <b>${escapeHtml(driver || '-')}</b><br>Durum: <b>${escapeHtml(op.mode)}</b><br>Vardiya: ${escapeHtml(op.shiftName || '-')}<br>Paket/İş: ${escapeHtml(op.packageName || '-')}<br>Rota/Bölge: ${escapeHtml(op.route || '-')}<br>Sefer: ${Number(op.tripCount || 0)} • Yakıt: ${Number(op.fuelLiters || 0).toFixed(1)} L<br>Son GPS: ${escapeHtml(fmtDate(gpsTimeValue(pos)))}<br>Hız: <b>${escapeHtml(speed)} km/s</b><br>Yön: <b>${escapeHtml(direction)}</b> ${escapeHtml(heading)}</div>`;
+  }
+  function updateGpsMapMarkers(){
+    const map = state.gps.map;
+    if(!map || typeof L === 'undefined') return;
+    const latest = latestGpsByEquipment();
+    const bounds = [];
+    const allowedManagerIds = currentUserRole() === 'manager' ? new Set(gpsFilteredEquipmentsForManager(latest).map(e=>String(e.id))) : null;
+    Object.keys(state.gps.markers || {}).forEach(eqId=>{
+      const disallowed = allowedManagerIds && !allowedManagerIds.has(String(eqId));
+      const driverDisallowed = currentUserRole() === 'driver' && gpsAssignedEquipmentId() && String(eqId) !== String(gpsAssignedEquipmentId());
+      if(!latest.has(String(eqId)) || disallowed || driverDisallowed){ try{ map.removeLayer(state.gps.markers[eqId]); }catch(e){} delete state.gps.markers[eqId]; }
+    });
+    latest.forEach((pos, eqId)=>{
+      if(allowedManagerIds && !allowedManagerIds.has(String(eqId))) return;
+      if(currentUserRole() === 'driver' && gpsAssignedEquipmentId() && String(eqId) !== String(gpsAssignedEquipmentId())) return;
+      const lat = Number(pos.latitude), lng = Number(pos.longitude);
+      if(!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+      const html = gpsMarkerPopupHtml(pos, eqId);
+      const icon = gpsMarkerIcon(pos, eqId);
+      if(state.gps.markers[eqId]){
+        state.gps.markers[eqId].setIcon(icon).setPopupContent(html);
+        gpsAnimateMarker(state.gps.markers[eqId], [lat,lng]);
+      }else{
+        state.gps.markers[eqId] = L.marker([lat,lng], { icon }).addTo(map).bindPopup(html);
+      }
+      bounds.push([lat,lng]);
+    });
+    if(!state.gps.routesHidden){
+      const routeBounds = drawGpsRoutes();
+      routeBounds.forEach(p=>bounds.push(p));
+    }else{
+      clearGpsRouteLayers();
+    }
+    setTimeout(()=>{ try{ map.invalidateSize(); }catch(e){} }, 120);
+    if(bounds.length){ try{ map.fitBounds(bounds, { padding:[35,35], maxZoom:15 }); }catch(e){} }
+  }
+  /* =================== /V52 HARİTA YÜKSEKLİK + HIZ/YÖN/ANİMASYON PATCH =================== */
+
   Object.assign(window, { renderGpsLive, gpsActiveProductionRows, gpsActiveFleetEquipments, gpsFilteredEquipmentsForManager, gpsAssignedEquipment, gpsOperationInfoForEquipment, clearGpsManagerFilters, applyGpsManagerTypeFilter, applyGpsManagerEquipmentFilter, applyGpsManagerStatusFilter, saveRemoteGpsAssignmentForEquipment });
   /* =================== /V51 TEMİZ GPS FİLO PANELİ PATCH =================== */
 
