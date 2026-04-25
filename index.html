@@ -1603,6 +1603,7 @@
     const raw = String(role || '').trim().toLowerCase();
     if(['manager','admin','yonetici','yönetici'].includes(raw)) return 'manager';
     if(['shift_lead','supervisor','vardiya_sorumlusu','vardiya sorumlusu','lead'].includes(raw)) return 'shift_lead';
+    if(['driver','sofor','şoför','surucu','sürücü'].includes(raw)) return 'driver';
     if(['guest','misafir','viewer'].includes(raw)) return 'guest';
     return 'manager';
   }
@@ -1610,6 +1611,7 @@
     const normalized = normalizeRole(role);
     if(normalized === 'manager') return 'Yönetici';
     if(normalized === 'shift_lead') return 'Vardiya Sorumlusu';
+    if(normalized === 'driver') return 'Şoför';
     return 'Misafir';
   }
   function currentUserRole(){
@@ -1620,6 +1622,9 @@
     if(role === 'manager') return true;
     if(role === 'shift_lead'){
       return ['dashboard','dashboardPro','gpsLive','production','breakdown','rental','trip','fuel','meter','records'].includes(pageId);
+    }
+    if(role === 'driver'){
+      return ['gpsLive'].includes(pageId);
     }
     return ['dashboard'].includes(pageId);
   }
@@ -1647,11 +1652,12 @@
       const allowed = canAccessPage(page);
       btn.classList.toggle('hidden', !allowed);
     });
-    if(!canAccessPage(state.currentPage)) showPage('dashboard');
+    if(!canAccessPage(state.currentPage)) showPage(currentUserRole()==='driver' ? 'gpsLive' : 'dashboard');
     const roleText = document.getElementById('userRole');
     if(roleText){
       if(role === 'manager') roleText.textContent = 'Yönetici • Tüm veriler';
       else if(role === 'shift_lead') roleText.textContent = 'Vardiya Sorumlusu • Kendi vardiyası';
+      else if(role === 'driver') roleText.textContent = 'Şoför • Sadece GPS takip';
       else roleText.textContent = 'Misafir • Sadece dashboard';
     }
   }
@@ -1697,7 +1703,7 @@
       heartbeatTimer: null
     },
     realtimeChannels: [],
-    gps: { watchId:null, sessionId:null, tracking:false, selectedEquipmentId: localStorage.getItem('maden_gps_assigned_equipment_id') || localStorage.getItem('maden_gps_equipment_id') || '', map:null, markers:{}, polyline:null }
+    gps: { watchId:null, sessionId:null, tracking:false, selectedEquipmentId: localStorage.getItem('maden_gps_assigned_equipment_id') || localStorage.getItem('maden_gps_equipment_id') || '', map:null, markers:{}, routeLines:{}, startMarkers:{}, endMarkers:{}, routesHidden:false, polyline:null }
   };
 
   const I18N = {
@@ -9199,7 +9205,7 @@ function renderUsers(){
                   <div class="user-card-name">${escapeHtml(r.full_name || '-')}</div>
                   <div class="user-card-sub">${escapeHtml(r.email || r.id || '-')}</div>
                 </div>
-                <span class="pill ${normalizeRole(r.role)==='manager' ? 'green' : (normalizeRole(r.role)==='shift_lead' ? 'orange' : '')}">${normalizeRole(r.role)==='manager' ? 'Yönetici' : (normalizeRole(r.role)==='shift_lead' ? 'Vardiya Sorumlusu' : 'Misafir')}</span>
+                <span class="pill ${normalizeRole(r.role)==='manager' ? 'green' : (normalizeRole(r.role)==='shift_lead' ? 'orange' : (normalizeRole(r.role)==='driver' ? 'blue' : ''))}">${normalizeRole(r.role)==='manager' ? 'Yönetici' : (normalizeRole(r.role)==='shift_lead' ? 'Vardiya Sorumlusu' : (normalizeRole(r.role)==='driver' ? 'Şoför' : 'Misafir'))}</span>
               </div>
               <div class="user-card-body">
                 <div class="user-card-row">
@@ -9207,6 +9213,7 @@ function renderUsers(){
                   <select id="u_role_${r.id}">
                     <option value="manager" ${normalizeRole(r.role)==='manager' ? 'selected' : ''}>Yönetici</option>
                     <option value="shift_lead" ${normalizeRole(r.role)==='shift_lead' ? 'selected' : ''}>Vardiya Sorumlusu</option>
+                    <option value="driver" ${normalizeRole(r.role)==='driver' ? 'selected' : ''}>Şoför</option>
                     <option value="guest" ${normalizeRole(r.role)==='guest' ? 'selected' : ''}>Misafir</option>
                   </select>
                 </div>
@@ -9280,6 +9287,7 @@ function renderUsers(){
     try{ localStorage.setItem('maden_gps_equipment_id', state.gps.selectedEquipmentId); }catch(e){}
   }
   function assignGpsPhoneToSelectedEquipment(){
+    if(currentUserRole() !== 'manager'){ alert('Telefon makina atamasını yalnızca yönetici yapabilir'); return; }
     const id = String(state.gps.selectedEquipmentId || '');
     const eq = findEquipmentById(id);
     if(!id || !eq){ alert('Önce atanacak ekipmanı seçiniz'); return; }
@@ -9293,6 +9301,7 @@ function renderUsers(){
     showToast(`Bu telefon ${eq.name || 'seçili ekipman'} için atandı`);
   }
   function clearGpsPhoneAssignment(){
+    if(currentUserRole() !== 'manager'){ alert('Telefon makina atamasını yalnızca yönetici kaldırabilir'); return; }
     if(state.gps.tracking){ alert('Atamayı kaldırmadan önce GPS takibini durdurun'); return; }
     try{
       localStorage.removeItem('maden_gps_assigned_equipment_id');
@@ -9313,12 +9322,13 @@ function renderUsers(){
       const age = pos ? gpsAgeMinutes(pos) : Infinity;
       const cls = !pos ? 'off' : (age <= 3 ? 'live' : (age <= 15 ? 'warn' : 'off'));
       const sub = pos ? `${fmtDate(gpsTimeValue(pos))} • ${Number(pos.speed || 0).toFixed(1)} km/s` : 'Konum bekleniyor';
-      return `<div class="gps-machine-row"><div><div class="gps-machine-name"><span class="gps-dot ${cls}"></span> ${escapeHtml(e.name || '-')}</div><div class="gps-machine-sub">${escapeHtml(equipmentTypeLabel(equipmentTypeKey(e)))} • ${escapeHtml(sub)}</div></div><button class="secondary" style="width:auto;padding:7px 10px" onclick="gpsSelectFromList('${escapeHtml(e.id)}')">Seç</button></div>`;
+      return `<div class="gps-machine-row"><div><div class="gps-machine-name"><span class="gps-dot ${cls}"></span> ${escapeHtml(e.name || '-')}</div><div class="gps-machine-sub">${escapeHtml(equipmentTypeLabel(equipmentTypeKey(e)))} • ${escapeHtml(sub)}</div></div>${currentUserRole()==='manager' ? `<button class="secondary" style="width:auto;padding:7px 10px" onclick="gpsSelectFromList('${escapeHtml(e.id)}')">Seç</button>` : ''}</div>`;
     }).join('');
     const selected = gpsSelectedEquipment();
     const assignedId = gpsAssignedEquipmentId();
     const assigned = gpsAssignedEquipment();
     const assignedAt = (()=>{ try{ return localStorage.getItem('maden_gps_assigned_at') || ''; }catch(e){ return ''; } })();
+    const gpsIsManager = currentUserRole() === 'manager';
     const last = (assigned || selected) ? latest.get(String((assigned || selected).id)) : null;
     el.innerHTML = `
       <div class="card pro-hero">
@@ -9333,6 +9343,7 @@ function renderUsers(){
             <div class="gps-status-value">${escapeHtml(assigned?.name || 'Atama yok')}</div>
             <div class="muted" style="margin-top:5px">${assigned ? `${escapeHtml(equipmentTypeLabel(equipmentTypeKey(assigned)))}${assignedAt ? ' • ' + escapeHtml(fmtDate(assignedAt)) : ''}` : 'Bu telefondan gelen GPS verisi için önce makina atayın.'}</div>
           </div>
+          ${gpsIsManager ? `
           <div class="form-field">
             <label>Ekipman seç / atama değiştir</label>
             <select id="gpsEquipmentSelect" onchange="gpsSelectFromList(this.value)">
@@ -9344,12 +9355,15 @@ function renderUsers(){
             <button class="secondary" onclick="assignGpsPhoneToSelectedEquipment()">Bu telefonu makinaya ata</button>
             <button class="warning" onclick="clearGpsPhoneAssignment()">Atamayı kaldır</button>
           </div>
+          ` : `
+          <div class="notice">Bu telefondaki makina ataması yönetici tarafından yapılır. Şoför bu atamayı değiştiremez.</div>
+          `}
           <div class="inline">
             <button class="success" onclick="startGpsTracking()">GPS Başlat</button>
             <button class="danger" onclick="stopGpsTracking()">GPS Durdur</button>
           </div>
           <button class="secondary" onclick="refreshGpsMapNow()">Demo Haritayı Yenile</button>
-          <button class="danger" onclick="clearGpsDemoData()">Demo GPS Verilerini Temizle</button>
+          ${gpsIsManager ? `<button class="danger" onclick="clearGpsDemoData()">Demo GPS Verilerini Temizle</button>` : ''}
           <div class="gps-status-box">
             <div class="gps-status-title">Durum</div>
             <div id="gpsTrackingStatus" class="gps-status-value">${state.gps.tracking ? 'GPS takip aktif' : 'GPS takip kapalı'}</div>
@@ -9357,7 +9371,8 @@ function renderUsers(){
           </div>
           <div class="gps-status-box">
             <div class="gps-status-title">Bu cihazdaki demo kayıt</div>
-            <div id="gpsOfflineCount" class="gps-status-value">${offlineCount}</div>
+            <div id="gpsOfflineCount" class="gps-status-value"></div>
+            <div class="muted" style="margin-top:5px">Rotalar bu cihazdaki GPS geçmişinden çizilir. Birden fazla makina için bu cihazda farklı makina atamalarıyla kayıt oluşmalıdır.</div>
           </div>
           <div class="gps-status-box">
             <div class="gps-status-title">Son Konum</div>
@@ -9369,7 +9384,10 @@ function renderUsers(){
         <div class="card" style="padding:12px">
           <div class="toolbar" style="justify-content:space-between;align-items:center">
             <h3 style="margin:0">Canlı Harita</h3>
-            <button class="secondary" style="width:auto" onclick="refreshGpsMapNow()">Haritayı Yenile</button>
+            <div class="inline" style="width:auto;max-width:420px">
+              <button class="secondary" style="width:auto" onclick="refreshGpsMapNow()">Haritayı Yenile</button>
+              <button class="secondary" style="width:auto" onclick="toggleGpsRoutes()">Rota Göster/Gizle</button>
+            </div>
           </div>
           <div id="gpsMap" class="gps-map"></div>
         </div>
@@ -9378,6 +9396,7 @@ function renderUsers(){
     setTimeout(()=>{ try{ initGpsMap(); updateGpsMapMarkers(); applyLanguage(); }catch(e){ console.error(e); } }, 80);
   }
   function gpsSelectFromList(id){
+    if(currentUserRole() !== 'manager'){ return; }
     setGpsSelectedEquipment(id);
     const sel = document.getElementById('gpsEquipmentSelect');
     if(sel && sel.value !== String(id || '')) sel.value = String(id || '');
@@ -9393,12 +9412,76 @@ function renderUsers(){
     state.gps.map = L.map(host).setView([41.2995, 69.2401], 12);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' }).addTo(state.gps.map);
     state.gps.markers = {};
+    state.gps.routeLines = {};
+    state.gps.startMarkers = {};
+    state.gps.endMarkers = {};
+  }
+  function gpsRouteColor(index){
+    const colors = ['#2563eb','#16a34a','#f97316','#7c3aed','#dc2626','#0891b2','#ca8a04','#db2777'];
+    return colors[Math.abs(Number(index)||0) % colors.length];
+  }
+  function gpsPositionsByEquipment(){
+    const groups = new Map();
+    (state.gps_positions || []).forEach(r=>{
+      if(!r || r.deleted_at) return;
+      const key = String(r.equipment_id || '');
+      const lat = Number(r.latitude), lng = Number(r.longitude);
+      if(!key || !Number.isFinite(lat) || !Number.isFinite(lng)) return;
+      if(!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(r);
+    });
+    groups.forEach(rows=>rows.sort((a,b)=>new Date(gpsTimeValue(a)||0) - new Date(gpsTimeValue(b)||0)));
+    return groups;
+  }
+  function clearGpsRouteLayers(){
+    const map = state.gps.map;
+    if(!map) return;
+    Object.values(state.gps.routeLines || {}).forEach(layer=>{ try{ map.removeLayer(layer); }catch(e){} });
+    Object.values(state.gps.startMarkers || {}).forEach(layer=>{ try{ map.removeLayer(layer); }catch(e){} });
+    Object.values(state.gps.endMarkers || {}).forEach(layer=>{ try{ map.removeLayer(layer); }catch(e){} });
+    state.gps.routeLines = {};
+    state.gps.startMarkers = {};
+    state.gps.endMarkers = {};
+  }
+  function drawGpsRoutes(){
+    const map = state.gps.map;
+    if(!map || typeof L === 'undefined') return [];
+    clearGpsRouteLayers();
+    const groups = gpsPositionsByEquipment();
+    const bounds = [];
+    let idx = 0;
+    groups.forEach((rows, eqId)=>{
+      const points = rows.map(r=>[Number(r.latitude), Number(r.longitude)]).filter(p=>Number.isFinite(p[0]) && Number.isFinite(p[1]));
+      if(points.length < 2) return;
+      const color = gpsRouteColor(idx++);
+      const eq = findEquipmentById(eqId);
+      const name = rows[rows.length-1]?.equipment_name || eq?.name || 'Ekipman';
+      state.gps.routeLines[eqId] = L.polyline(points, { color, weight:4, opacity:.85 }).addTo(map).bindPopup(`${escapeHtml(name)} rotası<br>${points.length} nokta`);
+      state.gps.startMarkers[eqId] = L.circleMarker(points[0], { radius:5, color, fillOpacity:.8 }).addTo(map).bindPopup(`${escapeHtml(name)} başlangıç`);
+      state.gps.endMarkers[eqId] = L.circleMarker(points[points.length-1], { radius:7, color, fillOpacity:1 }).addTo(map).bindPopup(`${escapeHtml(name)} son nokta`);
+      points.forEach(p=>bounds.push(p));
+    });
+    return bounds;
+  }
+  function toggleGpsRoutes(){
+    if(state.gps.routesHidden){
+      state.gps.routesHidden = false;
+      updateGpsMapMarkers();
+      showToast('GPS rotaları gösteriliyor');
+    }else{
+      state.gps.routesHidden = true;
+      clearGpsRouteLayers();
+      showToast('GPS rotaları gizlendi');
+    }
   }
   function updateGpsMapMarkers(){
     const map = state.gps.map;
     if(!map || typeof L === 'undefined') return;
     const latest = latestGpsByEquipment();
     const bounds = [];
+    Object.keys(state.gps.markers || {}).forEach(eqId=>{
+      if(!latest.has(String(eqId))){ try{ map.removeLayer(state.gps.markers[eqId]); }catch(e){} delete state.gps.markers[eqId]; }
+    });
     latest.forEach((pos, eqId)=>{
       const lat = Number(pos.latitude), lng = Number(pos.longitude);
       if(!Number.isFinite(lat) || !Number.isFinite(lng)) return;
@@ -9410,6 +9493,12 @@ function renderUsers(){
       else state.gps.markers[eqId] = L.marker([lat,lng]).addTo(map).bindPopup(html);
       bounds.push([lat,lng]);
     });
+    if(!state.gps.routesHidden){
+      const routeBounds = drawGpsRoutes();
+      routeBounds.forEach(p=>bounds.push(p));
+    }else{
+      clearGpsRouteLayers();
+    }
     if(bounds.length){ try{ map.fitBounds(bounds, { padding:[30,30], maxZoom:15 }); }catch(e){} }
   }
   async function refreshGpsMapNow(){ await loadGpsPositionsSafe(); renderGpsLive(); }
