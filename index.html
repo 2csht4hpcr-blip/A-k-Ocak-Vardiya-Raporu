@@ -11828,6 +11828,152 @@ function renderUsers(){
   /* =================== /V65 ŞOFÖR AKTİF VARDİYA KAMYONLARI GÖRÜNÜR PATCH =================== */
 
 
+  /* =================== V66 ŞOFÖR ÜRETİM FİLTRESİZ AKTİF KAMYON FIX =================== */
+  function v66Clean(v){
+    const s = String(v == null ? '' : v).trim();
+    return s && s !== '-' && s.toLowerCase() !== 'null' && s.toLowerCase() !== 'undefined' ? s : '';
+  }
+  function v66RowHasEnd(row){
+    return !!(row && (row.end_at || row.end_time || row.finished_at || row.finish_at || row.closed_at || row.completed_at));
+  }
+  function v66RowLooksActive(row){
+    try{
+      if(!row || row.deleted_at) return false;
+      if(v66RowHasEnd(row)) return false;
+      const status = String(row.status || row.state || row.production_status || '').trim().toLowerCase();
+      if(['closed','ended','finished','complete','completed','passive','inactive','cancelled','canceled','bitmiş','bitti','kapalı'].includes(status)) return false;
+      if(row.is_active === true || row.active === true) return true;
+      if(['active','open','working','running','started','in_progress','üretimde','aktif','açık','basladi','başladı'].includes(status)) return true;
+      if(row.start_at || row.start_time || row.created_at || row.recorded_at) return true;
+      return true;
+    }catch(e){ return false; }
+  }
+  function v66EquipmentFromProduction(row){
+    try{
+      const ids = [row?.equipment_id, row?.truck_id, row?.machine_id, row?.vehicle_id].map(v=>String(v || '').trim()).filter(Boolean);
+      for(const id of ids){
+        const eq = (typeof findEquipmentById === 'function') ? findEquipmentById(id) : null;
+        if(eq) return eq;
+      }
+      const names = [row?.equipment_name, row?.equipment_name_snapshot, row?.truck_name, row?.machine_name, row?.vehicle_name, row?.name].map(v66Clean).filter(Boolean);
+      for(const name of names){
+        const eq = (state.equipments || []).find(e=>String(e.name || '').trim().toLocaleLowerCase('tr-TR') === name.toLocaleLowerCase('tr-TR'));
+        if(eq) return eq;
+      }
+      return null;
+    }catch(e){ return null; }
+  }
+  function v66IsTruckProduction(row){
+    try{
+      const eq = v66EquipmentFromProduction(row);
+      const typeText = [eq?.type, row?.equipment_type, row?.type, row?.machine_type, row?.vehicle_type].map(v=>String(v || '').toLocaleLowerCase('tr-TR')).join(' ');
+      const nameText = [eq?.name, row?.equipment_name, row?.equipment_name_snapshot, row?.truck_name, row?.machine_name, row?.vehicle_name].map(v=>String(v || '').toLocaleLowerCase('tr-TR')).join(' ');
+      return typeText.includes('kamyon') || typeText.includes('truck') || nameText.includes('kamyon') || nameText.includes('truck');
+    }catch(e){ return false; }
+  }
+  function v66AllProductionRows(){
+    try{
+      const merged = [];
+      const seen = new Set();
+      const push = rows => (rows || []).forEach(r=>{
+        if(!r) return;
+        const key = String(r.id || r.production_id || `${r.equipment_id || r.equipment_name || ''}_${r.start_at || r.start_time || r.created_at || Math.random()}`);
+        if(seen.has(key)) return;
+        seen.add(key); merged.push(r);
+      });
+      push(state.productions || []);
+      if(typeof gpsActiveProductionRows === 'function') push(gpsActiveProductionRows() || []);
+      if(typeof activeProductionRows === 'function') push(activeProductionRows() || []);
+      if(typeof activeProductionRowsForCurrentShift === 'function') push(activeProductionRowsForCurrentShift() || []);
+      return merged;
+    }catch(e){ return state.productions || []; }
+  }
+  function v66OpenTruckProductionsRobust(){
+    try{
+      let rows = v66AllProductionRows().filter(v66RowLooksActive).filter(v66IsTruckProduction);
+      const current = (typeof getCurrentShiftBucketInfo === 'function') ? getCurrentShiftBucketInfo() : null;
+      if(current && typeof getRowShiftBucketKey === 'function'){
+        const strict = rows.filter(r=>String(getRowShiftBucketKey(r) || '') === String(current.shift_key || ''));
+        if(strict.length) rows = strict;
+      }
+      const assigned = (typeof v65PrevGpsAssignedEquipment === 'function') ? v65PrevGpsAssignedEquipment() : ((typeof gpsAssignedEquipment === 'function') ? gpsAssignedEquipment() : null);
+      if(assigned?.id){
+        const own = rows.filter(r=>{
+          const eq = v66EquipmentFromProduction(r);
+          return String(eq?.id || r?.equipment_id || r?.truck_id || r?.machine_id || '') === String(assigned.id || '');
+        });
+        if(own.length) rows = own.concat(rows.filter(r=>!own.includes(r)));
+      }
+      rows.sort((a,b)=>String((v66EquipmentFromProduction(a)?.name || a.equipment_name || a.equipment_name_snapshot || '')).localeCompare(String(v66EquipmentFromProduction(b)?.name || b.equipment_name || b.equipment_name_snapshot || ''),'tr'));
+      return rows;
+    }catch(e){ return []; }
+  }
+  v65OpenCurrentShiftTruckProductions = v66OpenTruckProductionsRobust;
+  v65EqFromProd = v66EquipmentFromProduction;
+  v65IsTruckProd = v66IsTruckProduction;
+  v65ProductionListHtml = function(){
+    const rows = v66OpenTruckProductionsRobust();
+    const total = (state.productions || []).filter(r=>!r?.deleted_at).length;
+    if(!rows.length){
+      return `<div class="gps-v59-warning" style="margin-top:10px">Üretim kaydı bu şoför ekranına ulaşmadı. Kontrol: üretim toplam ${Number(total || 0)} kayıt görünüyor. Eğer yönetici ekranında kamyon aktif görünüyorsa, şoför rolünün production tablosunu okuma yetkisi/RLS kontrol edilmeli.</div>`;
+    }
+    return `<div class="gps-v59-route" style="margin-top:10px"><div class="gps-status-title">Aktif üretimdeki kamyonlar</div><div style="display:grid;gap:8px;margin-top:8px">${rows.map(r=>{ const i=v65ProdInfo(r); return `<div class="gps-assignment-item" style="align-items:flex-start"><div><b>${escapeHtml(i.name)}</b><div class="muted">${escapeHtml(i.linked)} • ${escapeHtml(i.pkg)}</div><div class="muted">${escapeHtml(i.from)} → ${escapeHtml(i.to)} • Sefer: ${Number(i.trips || 0)}</div></div><span class="pill green">Üretimde</span></div>`; }).join('')}</div></div>`;
+  };
+  v65BestDriverProduction = function(){
+    try{
+      const direct = typeof v64ActiveProductionForCurrentDriver === 'function' ? v64ActiveProductionForCurrentDriver() : null;
+      if(direct) return direct;
+      const assigned = (typeof v65PrevGpsAssignedEquipment === 'function') ? v65PrevGpsAssignedEquipment() : null;
+      const rows = v66OpenTruckProductionsRobust();
+      if(assigned?.id){
+        const own = rows.find(r=>String(v66EquipmentFromProduction(r)?.id || r?.equipment_id || r?.truck_id || r?.machine_id || '') === String(assigned.id));
+        if(own) return own;
+      }
+      return rows.length ? rows[0] : null;
+    }catch(e){ return null; }
+  };
+  gpsAssignedEquipment = function(){
+    try{
+      const original = (typeof v65PrevGpsAssignedEquipment === 'function') ? v65PrevGpsAssignedEquipment() : null;
+      if(original) return original;
+      const prod = v65BestDriverProduction();
+      return prod ? v66EquipmentFromProduction(prod) : null;
+    }catch(e){ return null; }
+  };
+  v60TaskInfoFromActiveProduction = function(eq){
+    try{
+      const prod = v65BestDriverProduction();
+      if(prod){
+        const i = v65ProdInfo(prod);
+        return { prod, linkedMachineLabel:i.linked, selfName:i.name, packageName:i.pkg, from:i.from, to:i.to, routeText:`${i.from} → ${i.to}`, tripCount:i.trips, shiftName:i.shift };
+      }
+      return {};
+    }catch(e){ return {}; }
+  };
+  const v66PrevRenderGpsLive = renderGpsLive;
+  renderGpsLive = function(){
+    const out = v66PrevRenderGpsLive();
+    try{
+      if(typeof currentUserRole === 'function' && currentUserRole() === 'driver'){
+        setTimeout(()=>{ try{
+          const host = document.querySelector('#gpsLive .gps-driver-card');
+          if(!host) return;
+          const old = document.getElementById('gpsV59TaskCard');
+          if(old) old.remove();
+          const assigned = gpsAssignedEquipment();
+          const ref = host.querySelector('.gps-status-box[style*="eff6ff"]') || host.children[1];
+          if(ref) ref.insertAdjacentHTML('afterend', v61DriverTaskCardHtml(assigned));
+          else host.insertAdjacentHTML('afterbegin', v61DriverTaskCardHtml(assigned));
+          if(typeof applyLanguage === 'function') applyLanguage(document.getElementById('gpsV59TaskCard'));
+        }catch(e){ console.warn('v66 driver render', e); } }, 450);
+      }
+    }catch(e){ console.warn('v66 render hook', e); }
+    return out;
+  };
+  Object.assign(window, { v66OpenTruckProductionsRobust, v66AllProductionRows });
+  /* =================== /V66 ŞOFÖR ÜRETİM FİLTRESİZ AKTİF KAMYON FIX =================== */
+
+
 })();
 </script>
 </body>
