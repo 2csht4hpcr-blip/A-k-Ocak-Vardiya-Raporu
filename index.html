@@ -11744,82 +11744,83 @@ function renderUsers(){
   /* =================== /V64 ŞOFÖR GÖREV = CANLI FİLO KARTI İLE AYNI KAYNAK =================== */
 
 
-  /* =================== V65 ŞOFÖR SAYFA AÇILIŞ / GPS SAFE RENDER FIX =================== */
-  function v65IsDriver(){ try{ return typeof currentUserRole === 'function' && currentUserRole() === 'driver'; }catch(e){ return false; } }
-  function v65DriverShellCss(){
+
+  /* =================== V66 ŞOFÖR AÇILIŞ SAFE FIX - V65 GERİ ALINDI ===================
+     Amaç: Şoför girişinde ana JS akışını kilitlemeden sadece GPS sayfasına yönlendirmek.
+     Not: renderAll / refreshData / topbar butonları override edilmez; böylece Dil, Yenile, Çıkış çalışır.
+  ================================================================================ */
+  function v66IsDriver(){
+    try{ return typeof currentUserRole === 'function' && currentUserRole() === 'driver'; }catch(e){ return false; }
+  }
+  function v66ApplyDriverShell(){
     try{
-      document.body.classList.toggle('gps-driver-shell-mode', v65IsDriver());
+      const isDriver = v66IsDriver();
+      document.body.classList.toggle('gps-driver-shell-mode', isDriver);
       const app = document.getElementById('appView');
-      if(app) app.classList.toggle('gps-driver-shell-mode', v65IsDriver());
+      if(app) app.classList.toggle('gps-driver-shell-mode', isDriver);
       const online = document.getElementById('onlineUsersCard');
-      if(online && v65IsDriver()) online.style.display = 'none';
-    }catch(e){}
-  }
-  function v65FallbackDriverGpsPage(err){
-    try{
-      const el = document.getElementById('gpsLive');
-      if(!el) return;
-      const assigned = (typeof gpsAssignedEquipment === 'function') ? gpsAssignedEquipment() : null;
-      const taskHtml = (typeof v64DriverTaskCardHtml === 'function') ? v64DriverTaskCardHtml() : '<div class="notice">Aktif görev bilgisi yükleniyor.</div>';
-      el.innerHTML = `<div class="card pro-hero"><h2 class="section-title">GPS / Canlı Takip</h2><div class="muted">Şoför ekranı güvenli modda açıldı.</div></div><div class="gps-driver-view"><div class="card gps-driver-card"><div class="gps-driver-identity"><div class="muted">Şoför</div><div class="gps-driver-big">${escapeHtml(typeof gpsCurrentDriverName === 'function' ? gpsCurrentDriverName() : (state.user?.email || 'Şoför'))}</div></div><div class="gps-status-box" style="border-color:#bfdbfe;background:#eff6ff"><div class="gps-status-title">Atanan makina</div><div class="gps-status-value">${escapeHtml(assigned?.name || assigned?.equipment_name || 'Atama yok')}</div><div class="muted" style="margin-top:5px">${assigned ? 'GPS takibi hazırlanıyor' : 'Yönetici bu şoföre makina atamalı.'}</div></div>${taskHtml}<div class="gps-status-box"><div class="gps-status-title">GPS durumu</div><div id="gpsTrackingStatus" class="gps-status-value">${assigned ? 'GPS otomatik başlatılıyor' : 'Atama bekleniyor'}</div><div class="muted" style="margin-top:5px">${err ? escapeHtml(String(err.message || err)) : 'Sayfa açık.'}</div></div></div><div class="card" style="padding:12px"><div class="toolbar" style="justify-content:space-between;align-items:center"><h3 style="margin:0">Kendi Haritam</h3><span class="pill green">Otomatik takip</span></div><div id="gpsMap" class="gps-map"></div></div></div>`;
-    }catch(e){ console.warn('v65 fallback driver gps page', e); }
-  }
-  const v65PrevShowPage = showPage;
-  showPage = function(id){
-    try{
-      if(v65IsDriver()) id = 'gpsLive';
-      else if(!canAccessPage(id)) id = 'dashboard';
-      state.currentPage = id;
-      document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
-      const page = document.getElementById(id);
-      if(page) page.classList.add('active');
-      document.querySelectorAll('.menu-btn').forEach(b=>b.classList.remove('active'));
-      document.querySelectorAll(`.menu-btn[data-page="${id}"]`).forEach(b=>b.classList.add('active'));
-      v65DriverShellCss();
-      if(id === 'gpsLive') setTimeout(()=>{ try{ initGpsMap(); updateGpsMapMarkers(); }catch(e){} }, 180);
-    }catch(e){ try{ v65PrevShowPage(id); }catch(_){} }
-  };
-  const v65PrevApplyRolePermissions = applyRolePermissions;
-  applyRolePermissions = function(){
-    try{
-      v65PrevApplyRolePermissions();
-      v65DriverShellCss();
-      if(v65IsDriver()){
+      if(online) online.style.display = isDriver ? 'none' : '';
+      if(isDriver){
+        document.querySelectorAll('.menu-title').forEach(t=>{ t.style.display='none'; t.classList.add('hidden'); });
         document.querySelectorAll('.menu-btn').forEach(btn=>{
           const ok = btn.dataset.page === 'gpsLive';
-          btn.classList.toggle('hidden', !ok);
           btn.style.display = ok ? '' : 'none';
+          btn.classList.toggle('hidden', !ok);
+          btn.classList.toggle('active', ok);
+          if(ok) btn.textContent = 'GPS / Canlı Takip';
         });
-        document.querySelectorAll('.menu-title').forEach(t=>t.style.display='none');
         document.querySelectorAll('.menu-group').forEach(g=>{
           const hasGps = !!g.querySelector('.menu-btn[data-page="gpsLive"]');
           g.style.display = hasGps ? '' : 'none';
+          g.classList.toggle('hidden', !hasGps);
         });
-        if(state.currentPage !== 'gpsLive') showPage('gpsLive');
       }
-    }catch(e){ console.warn('v65 apply role permissions', e); }
-  };
-  const v65PrevRenderGpsLive = renderGpsLive;
-  renderGpsLive = function(){
+    }catch(e){ console.warn('v66 driver shell', e); }
+  }
+  function v66EnsureDriverGpsVisible(){
     try{
-      const out = v65PrevRenderGpsLive();
-      setTimeout(()=>{ try{ v65DriverShellCss(); if(v65IsDriver() && !document.querySelector('#gpsLive .gps-driver-view')) v65FallbackDriverGpsPage(); if(v65IsDriver() && typeof v64PatchDriverGpsDom === 'function') v64PatchDriverGpsDom(); }catch(e){} }, 650);
-      return out;
-    }catch(err){
-      console.error('v65 renderGpsLive safe catch', err);
-      if(v65IsDriver()){ v65FallbackDriverGpsPage(err); return; }
-      throw err;
+      if(!v66IsDriver()) return;
+      state.currentPage = 'gpsLive';
+      document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+      const gpsPage = document.getElementById('gpsLive');
+      if(gpsPage) gpsPage.classList.add('active');
+      document.querySelectorAll('.menu-btn').forEach(b=>b.classList.remove('active'));
+      document.querySelectorAll('.menu-btn[data-page="gpsLive"]').forEach(b=>b.classList.add('active'));
+      v66ApplyDriverShell();
+      if(gpsPage && !gpsPage.innerHTML.trim()){
+        try{ renderGpsLive(); }catch(e){
+          gpsPage.innerHTML = '<div class="card"><h2 class="section-title">GPS / Canlı Takip</h2><div class="notice">GPS ekranı yüklenirken hata oluştu. Yenile tuşuna basın.</div></div>';
+          console.warn('v66 render gps fallback', e);
+        }
+      }
+      setTimeout(()=>{
+        try{ if(typeof initGpsMap === 'function') initGpsMap(); if(typeof updateGpsMapMarkers === 'function') updateGpsMapMarkers(); }catch(e){}
+        try{ if(typeof v64PatchDriverGpsDom === 'function') v64PatchDriverGpsDom(); }catch(e){}
+      }, 250);
+    }catch(e){ console.warn('v66 ensure driver gps visible', e); }
+  }
+  const v66BaseShowPage = showPage;
+  showPage = function(id){
+    if(v66IsDriver()){
+      v66EnsureDriverGpsVisible();
+      return;
     }
+    return v66BaseShowPage(id);
   };
-  const v65PrevRenderAll = renderAll;
-  renderAll = function(){
-    const out = v65PrevRenderAll();
-    try{ applyRolePermissions(); if(v65IsDriver()) setTimeout(()=>showPage('gpsLive'), 80); }catch(e){}
+  const v66BaseApplyRolePermissions = applyRolePermissions;
+  applyRolePermissions = function(){
+    try{ v66BaseApplyRolePermissions(); }catch(e){ console.warn('v66 base role permissions', e); }
+    try{ v66ApplyDriverShell(); if(v66IsDriver()) setTimeout(v66EnsureDriverGpsVisible, 60); }catch(e){}
+  };
+  const v66BaseRenderGpsLive = renderGpsLive;
+  renderGpsLive = function(){
+    const out = v66BaseRenderGpsLive();
+    try{ setTimeout(()=>{ v66ApplyDriverShell(); if(v66IsDriver() && typeof v64PatchDriverGpsDom === 'function') v64PatchDriverGpsDom(); }, 550); }catch(e){}
     return out;
   };
-  Object.assign(window, { v65FallbackDriverGpsPage });
-  /* =================== /V65 ŞOFÖR SAYFA AÇILIŞ / GPS SAFE RENDER FIX =================== */
-
+  window.addEventListener('load', ()=>{ setTimeout(()=>{ try{ v66ApplyDriverShell(); if(v66IsDriver()) v66EnsureDriverGpsVisible(); }catch(e){} }, 900); });
+  Object.assign(window, { v66EnsureDriverGpsVisible, v66ApplyDriverShell });
+  /* =================== /V66 ŞOFÖR AÇILIŞ SAFE FIX =================== */
 
   Object.assign(window, { openModal, closeModal, fillTruckRouteFromExcavator, updateAutoMeterLabels, updateProductionStartMeterHints, updateTripProductionContext, updateFuelProductionContext, updateMeterCorrectionContext, toggleProductionEditLinkedField, refreshLogisticsEquipmentSelect, markShiftSelectManual, continueBreakdownToCurrentShift, finishBreakdownFromWarning, saveStartProductionExcavator, saveStartProductionTruck, saveStartProductionOther, saveEndProduction, saveStartBreakdown, saveEndBreakdown, saveStartRental, saveEndRental, saveNewTrip, saveNewFuel, saveNewMeter, confirmSoftDelete, restoreDeleted, deleteAllDeletedRecordsNow, deleteDeletedOlderThan30Days, saveEditRecord, saveDefinition, deleteTruckModel, toggleDefinitionTruckModelField, renderShiftConfigInputs, saveShiftConfigFromForm, renderShiftConfigCardRefresh, applyRecordFiltersFromUI, resetRecordFilters, bulkDeleteRecordTable, exportRecordsToExcel, saveUserRoleSettings, refreshData, exportDailyPdf, exportWeeklyExcel, exportShiftReport, gpsSelectFromList, assignGpsPhoneToSelectedEquipment, clearGpsPhoneAssignment, startGpsTracking, stopGpsTracking, syncOfflineGpsPositions, refreshGpsMapNow, applyGpsManagerFilter });
 
