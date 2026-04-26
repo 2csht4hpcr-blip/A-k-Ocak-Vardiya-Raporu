@@ -11743,6 +11743,84 @@ function renderUsers(){
   Object.assign(window, { v64DriverTaskInfo, v64ResolveDriverFleetEquipment, v64PatchDriverGpsDom });
   /* =================== /V64 ŞOFÖR GÖREV = CANLI FİLO KARTI İLE AYNI KAYNAK =================== */
 
+
+  /* =================== V65 ŞOFÖR SAYFA AÇILIŞ / GPS SAFE RENDER FIX =================== */
+  function v65IsDriver(){ try{ return typeof currentUserRole === 'function' && currentUserRole() === 'driver'; }catch(e){ return false; } }
+  function v65DriverShellCss(){
+    try{
+      document.body.classList.toggle('gps-driver-shell-mode', v65IsDriver());
+      const app = document.getElementById('appView');
+      if(app) app.classList.toggle('gps-driver-shell-mode', v65IsDriver());
+      const online = document.getElementById('onlineUsersCard');
+      if(online && v65IsDriver()) online.style.display = 'none';
+    }catch(e){}
+  }
+  function v65FallbackDriverGpsPage(err){
+    try{
+      const el = document.getElementById('gpsLive');
+      if(!el) return;
+      const assigned = (typeof gpsAssignedEquipment === 'function') ? gpsAssignedEquipment() : null;
+      const taskHtml = (typeof v64DriverTaskCardHtml === 'function') ? v64DriverTaskCardHtml() : '<div class="notice">Aktif görev bilgisi yükleniyor.</div>';
+      el.innerHTML = `<div class="card pro-hero"><h2 class="section-title">GPS / Canlı Takip</h2><div class="muted">Şoför ekranı güvenli modda açıldı.</div></div><div class="gps-driver-view"><div class="card gps-driver-card"><div class="gps-driver-identity"><div class="muted">Şoför</div><div class="gps-driver-big">${escapeHtml(typeof gpsCurrentDriverName === 'function' ? gpsCurrentDriverName() : (state.user?.email || 'Şoför'))}</div></div><div class="gps-status-box" style="border-color:#bfdbfe;background:#eff6ff"><div class="gps-status-title">Atanan makina</div><div class="gps-status-value">${escapeHtml(assigned?.name || assigned?.equipment_name || 'Atama yok')}</div><div class="muted" style="margin-top:5px">${assigned ? 'GPS takibi hazırlanıyor' : 'Yönetici bu şoföre makina atamalı.'}</div></div>${taskHtml}<div class="gps-status-box"><div class="gps-status-title">GPS durumu</div><div id="gpsTrackingStatus" class="gps-status-value">${assigned ? 'GPS otomatik başlatılıyor' : 'Atama bekleniyor'}</div><div class="muted" style="margin-top:5px">${err ? escapeHtml(String(err.message || err)) : 'Sayfa açık.'}</div></div></div><div class="card" style="padding:12px"><div class="toolbar" style="justify-content:space-between;align-items:center"><h3 style="margin:0">Kendi Haritam</h3><span class="pill green">Otomatik takip</span></div><div id="gpsMap" class="gps-map"></div></div></div>`;
+    }catch(e){ console.warn('v65 fallback driver gps page', e); }
+  }
+  const v65PrevShowPage = showPage;
+  showPage = function(id){
+    try{
+      if(v65IsDriver()) id = 'gpsLive';
+      else if(!canAccessPage(id)) id = 'dashboard';
+      state.currentPage = id;
+      document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+      const page = document.getElementById(id);
+      if(page) page.classList.add('active');
+      document.querySelectorAll('.menu-btn').forEach(b=>b.classList.remove('active'));
+      document.querySelectorAll(`.menu-btn[data-page="${id}"]`).forEach(b=>b.classList.add('active'));
+      v65DriverShellCss();
+      if(id === 'gpsLive') setTimeout(()=>{ try{ initGpsMap(); updateGpsMapMarkers(); }catch(e){} }, 180);
+    }catch(e){ try{ v65PrevShowPage(id); }catch(_){} }
+  };
+  const v65PrevApplyRolePermissions = applyRolePermissions;
+  applyRolePermissions = function(){
+    try{
+      v65PrevApplyRolePermissions();
+      v65DriverShellCss();
+      if(v65IsDriver()){
+        document.querySelectorAll('.menu-btn').forEach(btn=>{
+          const ok = btn.dataset.page === 'gpsLive';
+          btn.classList.toggle('hidden', !ok);
+          btn.style.display = ok ? '' : 'none';
+        });
+        document.querySelectorAll('.menu-title').forEach(t=>t.style.display='none');
+        document.querySelectorAll('.menu-group').forEach(g=>{
+          const hasGps = !!g.querySelector('.menu-btn[data-page="gpsLive"]');
+          g.style.display = hasGps ? '' : 'none';
+        });
+        if(state.currentPage !== 'gpsLive') showPage('gpsLive');
+      }
+    }catch(e){ console.warn('v65 apply role permissions', e); }
+  };
+  const v65PrevRenderGpsLive = renderGpsLive;
+  renderGpsLive = function(){
+    try{
+      const out = v65PrevRenderGpsLive();
+      setTimeout(()=>{ try{ v65DriverShellCss(); if(v65IsDriver() && !document.querySelector('#gpsLive .gps-driver-view')) v65FallbackDriverGpsPage(); if(v65IsDriver() && typeof v64PatchDriverGpsDom === 'function') v64PatchDriverGpsDom(); }catch(e){} }, 650);
+      return out;
+    }catch(err){
+      console.error('v65 renderGpsLive safe catch', err);
+      if(v65IsDriver()){ v65FallbackDriverGpsPage(err); return; }
+      throw err;
+    }
+  };
+  const v65PrevRenderAll = renderAll;
+  renderAll = function(){
+    const out = v65PrevRenderAll();
+    try{ applyRolePermissions(); if(v65IsDriver()) setTimeout(()=>showPage('gpsLive'), 80); }catch(e){}
+    return out;
+  };
+  Object.assign(window, { v65FallbackDriverGpsPage });
+  /* =================== /V65 ŞOFÖR SAYFA AÇILIŞ / GPS SAFE RENDER FIX =================== */
+
+
   Object.assign(window, { openModal, closeModal, fillTruckRouteFromExcavator, updateAutoMeterLabels, updateProductionStartMeterHints, updateTripProductionContext, updateFuelProductionContext, updateMeterCorrectionContext, toggleProductionEditLinkedField, refreshLogisticsEquipmentSelect, markShiftSelectManual, continueBreakdownToCurrentShift, finishBreakdownFromWarning, saveStartProductionExcavator, saveStartProductionTruck, saveStartProductionOther, saveEndProduction, saveStartBreakdown, saveEndBreakdown, saveStartRental, saveEndRental, saveNewTrip, saveNewFuel, saveNewMeter, confirmSoftDelete, restoreDeleted, deleteAllDeletedRecordsNow, deleteDeletedOlderThan30Days, saveEditRecord, saveDefinition, deleteTruckModel, toggleDefinitionTruckModelField, renderShiftConfigInputs, saveShiftConfigFromForm, renderShiftConfigCardRefresh, applyRecordFiltersFromUI, resetRecordFilters, bulkDeleteRecordTable, exportRecordsToExcel, saveUserRoleSettings, refreshData, exportDailyPdf, exportWeeklyExcel, exportShiftReport, gpsSelectFromList, assignGpsPhoneToSelectedEquipment, clearGpsPhoneAssignment, startGpsTracking, stopGpsTracking, syncOfflineGpsPositions, refreshGpsMapNow, applyGpsManagerFilter });
 
   (async function autoSession(){
