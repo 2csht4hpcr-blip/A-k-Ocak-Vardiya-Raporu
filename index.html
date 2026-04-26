@@ -12413,6 +12413,117 @@ function renderUsers(){
     Object.assign(window,{v72SyncAllOpenTruckProductions,v72PayloadFromProduction});
   })();
   /* =================== /V72 FULL OTOMATİK DRIVER_TASKS SENKRON =================== */
+
+  /* =================== V73 USER-DEVICE OTOMATİK BAĞLAMA =================== */
+  (function(){
+    const USER_DEVICES_TABLE = 'user_devices';
+    function v73Txt(v){ const s=String(v==null?'':v).trim(); return (!s || s==='-' || s.toLowerCase()==='null' || s.toLowerCase()==='undefined') ? '' : s; }
+    function v73Norm(v){ return v73Txt(v).toLocaleUpperCase('tr-TR').replace(/\s+/g,''); }
+    async function v73Client(){ return state.sb || await initClient(); }
+    async function v73EnsureUserDevice(){
+      try{
+        const sb=await v73Client();
+        const uid=v73Txt(state?.user?.id);
+        const device=v73Txt(typeof gpsDeviceCode==='function' ? gpsDeviceCode() : (state?.gps?.deviceCode || state?.gps?.device_code || localStorage.getItem('maden_gps_device_code')));
+        if(!sb || !uid || !device) return false;
+        const payload={ user_id:uid, device_code:device, updated_at:new Date().toISOString() };
+        let res=await sb.from(USER_DEVICES_TABLE).upsert(payload,{onConflict:'user_id'}).select();
+        if(res.error){
+          // Eski/eksik unique yapı varsa duplicate kayıt sorununu azaltmak için update+insert fallback.
+          const up=await sb.from(USER_DEVICES_TABLE).update({device_code:device,updated_at:new Date().toISOString()}).eq('user_id',uid).select();
+          if(up.error) throw up.error;
+          if(!up.data || !up.data.length){
+            const ins=await sb.from(USER_DEVICES_TABLE).insert([payload]).select();
+            if(ins.error) throw ins.error;
+          }
+        }
+        state.userDeviceCode=device;
+        return true;
+      }catch(err){ console.warn('v73 user_devices save', err); return false; }
+    }
+    async function v73DeviceForUser(userId){
+      try{
+        const uid=v73Txt(userId); if(!uid) return '';
+        const sb=await v73Client();
+        const res=await sb.from(USER_DEVICES_TABLE).select('device_code,updated_at').eq('user_id',uid).order('updated_at',{ascending:false}).limit(1);
+        if(res.error) throw res.error;
+        return v73Txt((res.data||[])[0]?.device_code);
+      }catch(err){ console.warn('v73 user device lookup', err); return ''; }
+    }
+    async function v73UserForDevice(deviceCode){
+      try{
+        const device=v73Txt(deviceCode); if(!device) return '';
+        const sb=await v73Client();
+        const res=await sb.from(USER_DEVICES_TABLE).select('user_id,device_code,updated_at').order('updated_at',{ascending:false}).limit(200);
+        if(res.error) throw res.error;
+        const found=(res.data||[]).find(r=>v73Norm(r.device_code)===v73Norm(device));
+        return v73Txt(found?.user_id);
+      }catch(err){ return ''; }
+    }
+    async function v73TaskExisting(payload){
+      const sb=await v73Client(); let existing=null;
+      try{ if(payload.source_production_id){ const r=await sb.from('driver_tasks').select('id,user_id,device_code').eq('source_production_id',payload.source_production_id).eq('status','active').limit(1); if(!r.error) existing=(r.data||[])[0]||null; } }catch(e){}
+      try{ if(!existing && payload.device_code){ const r=await sb.from('driver_tasks').select('id,user_id,device_code').eq('device_code',payload.device_code).eq('status','active').limit(1); if(!r.error) existing=(r.data||[])[0]||null; } }catch(e){}
+      try{ if(!existing && payload.user_id){ const r=await sb.from('driver_tasks').select('id,user_id,device_code').eq('user_id',payload.user_id).eq('status','active').limit(1); if(!r.error) existing=(r.data||[])[0]||null; } }catch(e){}
+      try{ if(!existing && payload.truck_name){ const r=await sb.from('driver_tasks').select('id,user_id,device_code').eq('truck_name',payload.truck_name).eq('status','active').limit(1); if(!r.error) existing=(r.data||[])[0]||null; } }catch(e){}
+      return existing;
+    }
+    async function v73InsertOrUpdateTask(payload){
+      const sb=await v73Client();
+      const existing=await v73TaskExisting(payload);
+      if(existing){
+        const p={...payload};
+        if(!p.user_id && existing.user_id) delete p.user_id;
+        if(!p.device_code && existing.device_code) delete p.device_code;
+        let res=await sb.from('driver_tasks').update(p).eq('id',existing.id).select();
+        if(res.error && String(res.error.message||'').toLowerCase().includes('equipment_id')){ delete p.equipment_id; res=await sb.from('driver_tasks').update(p).eq('id',existing.id).select(); }
+        return res;
+      }
+      let body={...payload,created_at:new Date().toISOString()};
+      let res=await sb.from('driver_tasks').insert([body]).select();
+      if(res.error && String(res.error.message||'').toLowerCase().includes('equipment_id')){ delete body.equipment_id; res=await sb.from('driver_tasks').insert([body]).select(); }
+      return res;
+    }
+    async function v73EnrichPayload(payload){
+      const p={...payload};
+      if(!p.device_code && p.user_id){
+        const device=await v73DeviceForUser(p.user_id);
+        if(device) p.device_code=device;
+      }
+      if(!p.user_id && p.device_code){
+        const uid=await v73UserForDevice(p.device_code);
+        if(uid) p.user_id=uid;
+      }
+      return p;
+    }
+    const v73PrevSync = typeof v70SyncDriverTaskFromProduction === 'function' ? v70SyncDriverTaskFromProduction : null;
+    v70SyncDriverTaskFromProduction = async function(prod, extra={}){
+      try{
+        if(typeof v72PayloadFromProduction !== 'function') return v73PrevSync ? await v73PrevSync(prod, extra) : false;
+        const payload0=v72PayloadFromProduction(prod, extra);
+        const payload=await v73EnrichPayload(payload0);
+        const res=await v73InsertOrUpdateTask(payload);
+        if(res.error) throw res.error;
+        if(typeof v70LoadDriverTasksSafe==='function') await v70LoadDriverTasksSafe();
+        return true;
+      }catch(err){ console.warn('v73 sync driver task', err); return v73PrevSync ? await v73PrevSync(prod, extra) : false; }
+    };
+    const v73PrevLoadAllSafe = loadAllSafe;
+    loadAllSafe = async function(){
+      const r=await v73PrevLoadAllSafe();
+      try{ await v73EnsureUserDevice(); }catch(e){}
+      return r;
+    };
+    const v73PrevRenderGpsLive = renderGpsLive;
+    renderGpsLive = function(){
+      const out=v73PrevRenderGpsLive();
+      try{ setTimeout(()=>v73EnsureUserDevice(), 300); }catch(e){}
+      return out;
+    };
+    Object.assign(window,{v73EnsureUserDevice,v73DeviceForUser,v73UserForDevice});
+  })();
+  /* =================== /V73 USER-DEVICE OTOMATİK BAĞLAMA =================== */
+
 })();
 </script>
 </body>
