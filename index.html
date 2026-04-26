@@ -11269,6 +11269,234 @@ function renderUsers(){
   Object.assign(window, { v60ActiveProductionForEquipment, v60TaskInfoFromActiveProduction });
   /* =================== /V60 ŞOFÖR AKTİF ÜRETİM GÖREV BİLGİSİ + GPS DİL PATCH =================== */
 
+
+
+  /* =================== V61 ŞOFÖR AKTİF ÜRETİM + MENÜ TEMİZLEME PATCH =================== */
+  function v61SetDriverShellMode(){
+    try{
+      const isDriver = (typeof currentUserRole === 'function' && currentUserRole() === 'driver');
+      document.body.classList.toggle('gps-driver-shell-mode', !!isDriver);
+      const app = document.getElementById('appView');
+      if(app) app.classList.toggle('gps-driver-shell-mode', !!isDriver);
+    }catch(e){}
+  }
+
+  const v61Style = document.createElement('style');
+  v61Style.textContent = `
+    body.gps-driver-shell-mode .menu-title,
+    .gps-driver-shell-mode .menu-title{display:none!important}
+    body.gps-driver-shell-mode .menu-btn:not([data-page="gpsLive"]),
+    .gps-driver-shell-mode .menu-btn:not([data-page="gpsLive"]){display:none!important}
+    body.gps-driver-shell-mode .menu-group,
+    .gps-driver-shell-mode .menu-group{margin-bottom:0!important}
+    body.gps-driver-shell-mode .menu-group:not(:has(.menu-btn[data-page="gpsLive"])),
+    .gps-driver-shell-mode .menu-group:not(:has(.menu-btn[data-page="gpsLive"])){display:none!important}
+    body.gps-driver-shell-mode .sidebar,
+    .gps-driver-shell-mode .sidebar{padding-bottom:10px!important}
+  `;
+  document.head.appendChild(v61Style);
+
+  const v61OldApplyRolePermissions = applyRolePermissions;
+  applyRolePermissions = function(){
+    try{ v61OldApplyRolePermissions(); }catch(e){ console.warn('v61 base role permissions', e); }
+    try{
+      const role = currentUserRole();
+      v61SetDriverShellMode();
+      if(role === 'driver'){
+        document.querySelectorAll('.menu-title').forEach(x=>x.classList.add('hidden'));
+        document.querySelectorAll('.menu-btn').forEach(btn=>{
+          const isGps = btn.dataset.page === 'gpsLive';
+          btn.classList.toggle('hidden', !isGps);
+          btn.classList.toggle('active', isGps);
+          if(isGps) btn.textContent = 'GPS / Canlı Takip';
+        });
+        document.querySelectorAll('.menu-group').forEach(group=>{
+          const hasGps = !!group.querySelector('.menu-btn[data-page="gpsLive"]');
+          group.classList.toggle('hidden', !hasGps);
+        });
+        if(state.currentPage !== 'gpsLive') showPage('gpsLive');
+      }
+    }catch(e){ console.warn('v61 driver menu', e); }
+  };
+
+  function v61NormText(v){ return String(v || '').trim().toLocaleLowerCase('tr-TR'); }
+  function v61IsOpenProduction(r){ return !!(r && !r.deleted_at && (r.start_at || r.start_time || r.created_at) && !(r.end_at || r.end_time)); }
+  function v61ProdTime(r){ return new Date(r?.start_at || r?.start_time || r?.created_at || 0).getTime() || 0; }
+  function v61CandidateEquipmentInfo(eq){
+    const assignment = (typeof gpsAssignmentForUser === 'function') ? gpsAssignmentForUser(state.user?.id) : null;
+    const ids = new Set();
+    const names = new Set();
+    if(eq?.id) ids.add(String(eq.id));
+    if(eq?.name) names.add(v61NormText(eq.name));
+    if(assignment?.equipment_id) ids.add(String(assignment.equipment_id));
+    if(assignment?.equipment_name) names.add(v61NormText(assignment.equipment_name));
+    if(state.gps?.selectedEquipmentId) ids.add(String(state.gps.selectedEquipmentId));
+    return { assignment, ids, names };
+  }
+  function v61FindProductionForEquipment(eq){
+    try{
+      if(!eq) return null;
+      const c = v61CandidateEquipmentInfo(eq);
+      const current = (typeof getCurrentShiftBucketInfo === 'function') ? getCurrentShiftBucketInfo() : null;
+      let rows = (state.productions || []).filter(r=>{
+        if(!v61IsOpenProduction(r)) return false;
+        const rid = String(r.equipment_id || '');
+        const rNames = [r.equipment_name, r.equipment_name_snapshot, r.name].map(v61NormText).filter(Boolean);
+        return (rid && c.ids.has(rid)) || rNames.some(n=>c.names.has(n));
+      });
+      if(!rows.length && c.assignment?.equipment_name){
+        const needle = v61NormText(c.assignment.equipment_name);
+        rows = (state.productions || []).filter(r=>v61IsOpenProduction(r) && [r.equipment_name, r.equipment_name_snapshot].map(v61NormText).includes(needle));
+      }
+      rows.sort((a,b)=>{
+        const ac = current && String(getRowShiftBucketKey(a)||'') === String(current.shift_key||'') ? 1 : 0;
+        const bc = current && String(getRowShiftBucketKey(b)||'') === String(current.shift_key||'') ? 1 : 0;
+        return (bc-ac) || (v61ProdTime(b)-v61ProdTime(a));
+      });
+      return rows[0] || null;
+    }catch(e){ return null; }
+  }
+
+  v60ActiveProductionForEquipment = function(eqId){
+    const eq = (typeof findEquipmentById === 'function') ? findEquipmentById(eqId) : null;
+    return v61FindProductionForEquipment(eq || { id:eqId, name:'' });
+  };
+
+  v60TaskInfoFromActiveProduction = function(eq){
+    const assignment = (typeof gpsAssignmentForUser === 'function') ? gpsAssignmentForUser(state.user?.id) : null;
+    const prod = v61FindProductionForEquipment(eq);
+    const pair = eq ? v59ZoneForEquipment(eq.id) : { assignment:null, zone:null };
+    const baseOp = eq ? (v59OriginalGpsOperationInfoForEquipment ? v59OriginalGpsOperationInfoForEquipment(eq.id) : {}) : {};
+    const linkedName = v59SafeDash(prod?.linked_excavator_name) || v59SafeDash(prod?.linked_excavator_name_snapshot) || (prod?.linked_excavator_id ? v59SafeDash(findEquipmentById(prod.linked_excavator_id)?.name) : '');
+    const selfName = v59SafeDash(prod?.equipment_name) || v59SafeDash(prod?.equipment_name_snapshot) || v59SafeDash(eq?.name) || v59SafeDash(assignment?.equipment_name);
+    const packageLabel = v59SafeDash(prod?.package_name) || v59SafeDash(prod?.package_name_snapshot) || (prod?.package_id ? v59SafeDash(packageName(prod.package_id)) : '') || v59SafeDash(pair.assignment?.route_name) || v59SafeDash(pair.zone?.route_name) || 'Aktif üretim bekleniyor';
+    const from = v59SafeDash(prod?.from_location) || v59SafeDash(pair.zone?.loading_name) || 'Yükleme';
+    const to = v59SafeDash(prod?.to_location) || v59SafeDash(pair.zone?.dump_name) || 'Döküm';
+    const routeText = prod ? `${from} → ${to}` : (v59RouteTextFromZone(pair.zone) || 'Yükleme / döküm bilgisi bekleniyor');
+    const tripCount = prod ? (typeof productionTripTotal === 'function' ? productionTripTotal(prod) : Number(prod.trip_count || 0)) : Number(baseOp?.tripCount || 0);
+    const shiftName = v59SafeDash(prod ? getShiftNameForRow(prod) : '') || v59SafeDash(baseOp?.shiftName) || 'Aktif vardiya';
+    const linkedMachineLabel = linkedName || (prod ? (selfName || 'Bağlı makina yok') : 'Aktif üretim bekleniyor');
+    return { prod, linkedMachineLabel, selfName, packageName: packageLabel, from, to, routeText, tripCount, shiftName };
+  };
+
+  const v61PreviousGpsOperationInfoForEquipment = gpsOperationInfoForEquipment;
+  gpsOperationInfoForEquipment = function(eqId){
+    const op = v61PreviousGpsOperationInfoForEquipment(eqId) || {};
+    try{
+      const eq = findEquipmentById(eqId);
+      const info = v60TaskInfoFromActiveProduction(eq || {id:eqId});
+      if(info.prod){
+        op.mode = 'Üretimde';
+        op.packageName = info.packageName;
+        op.route = info.routeText;
+        op.tripCount = info.tripCount;
+        op.shiftName = info.shiftName;
+        op.gpsLoadingName = info.from;
+        op.gpsDumpName = info.to;
+        op.linkedMachineName = info.linkedMachineLabel;
+        op.production = info.prod;
+      }
+    }catch(e){}
+    return op;
+  };
+
+  function v61DriverTaskCardHtml(assigned){
+    const info = v60TaskInfoFromActiveProduction(assigned);
+    const status = state.gps?.tracking ? 'GPS aktif' : (assigned ? 'GPS otomatik başlatılıyor' : 'Atama yok');
+    const noProdWarning = assigned && !info.prod ? '<div class="gps-v59-warning" style="margin-top:10px">Aktif üretim kaydı bulunamadı. Bu kamyon üretime alındığında paket, bağlı makina ve nereden/nereye bilgisi otomatik gelir.</div>' : '';
+    return `<div id="gpsV59TaskCard" class="gps-selected-detail gps-v59-task-card"><div class="gps-v59-task-title"><b>📋 Aktif Görev</b><span class="pill green">${escapeHtml(status)}</span></div><div class="gps-fleet-liveinfo"><div class="gps-info-mini"><div class="l">Vardiya</div><div class="d">${escapeHtml(info.shiftName)}</div></div><div class="gps-info-mini"><div class="l">Bağlı Makina</div><div class="d">${escapeHtml(info.linkedMachineLabel)}</div></div><div class="gps-info-mini"><div class="l">Paket</div><div class="d">${escapeHtml(info.packageName)}</div></div><div class="gps-info-mini"><div class="l">Sefer</div><div class="d">${Number(info.tripCount || 0)}</div></div></div><div class="gps-v59-route"><div class="gps-status-title">Nereden / Nereye</div><div class="gps-v59-route-line"><span>${escapeHtml(info.from)}</span><span class="gps-v59-arrow">→</span><span>${escapeHtml(info.to)}</span></div><div class="muted" style="margin-top:6px">${escapeHtml(info.routeText)}</div></div>${noProdWarning}<div id="gpsV59BackgroundWarning" class="${state.gps?.tracking ? 'gps-v59-ok' : 'gps-v59-warning'}" style="margin-top:10px">${state.gps?.tracking ? 'GPS verisi alınıyor. Ekran açık tutulmaya çalışılıyor; tarayıcı arka plana alınırsa veri kesilebilir.' : 'GPS takip başlatılıyor. Telefon ekranı kapanırsa web tarayıcı GPS göndermeyi durdurabilir.'}</div></div>`;
+  }
+
+  v59InjectDriverTaskCard = function(){
+    try{
+      if(currentUserRole() !== 'driver') return;
+      v60RemoveOldDriverInfoCard();
+      const assigned = gpsAssignedEquipment();
+      const host = document.querySelector('#gpsLive .gps-driver-card');
+      if(!host) return;
+      const existing = document.getElementById('gpsV59TaskCard');
+      if(existing) existing.remove();
+      const ref = host.querySelector('.gps-status-box[style*="eff6ff"]') || host.children[1];
+      if(ref) ref.insertAdjacentHTML('afterend', v61DriverTaskCardHtml(assigned)); else host.insertAdjacentHTML('afterbegin', v61DriverTaskCardHtml(assigned));
+      applyLanguage(document.getElementById('gpsV59TaskCard'));
+    }catch(e){ console.warn('v61 task inject', e); }
+  };
+
+  const v61ManagerRenderGpsLive = renderGpsLive;
+  renderGpsLive = function(){
+    try{ v61SetDriverShellMode(); }catch(e){}
+    if(currentUserRole() !== 'driver'){
+      const r = v61ManagerRenderGpsLive();
+      try{ setTimeout(()=>applyLanguage(document.getElementById('gpsLive')), 120); }catch(e){}
+      return r;
+    }
+    const el = document.getElementById('gpsLive');
+    if(!el) return;
+    const latest = latestGpsByEquipment();
+    const assigned = gpsAssignedEquipment();
+    const driverLast = assigned ? latest.get(String(assigned.id)) : null;
+    const remoteAssignment = gpsAssignmentForUser(state.user?.id);
+    el.innerHTML = `<div class="card pro-hero"><h2 class="section-title">GPS / Canlı Takip</h2><div class="muted">GPS otomatik başlar. Şoför sadece kendi görev ve konum ekranını görür.</div></div>
+      <div class="gps-driver-view"><div class="card gps-driver-card">
+        <div class="gps-driver-identity"><div class="muted">Şoför</div><div class="gps-driver-big">${escapeHtml(gpsCurrentDriverName())}</div><div class="muted" style="margin-top:8px">Cihaz kodu: ${escapeHtml(gpsDeviceCode())}</div></div>
+        <div class="gps-status-box" style="border-color:#bfdbfe;background:#eff6ff"><div class="gps-status-title">Atanan kamyon</div><div class="gps-status-value">${escapeHtml(assigned?.name || remoteAssignment?.equipment_name || 'Atama yok')}</div><div class="muted" style="margin-top:5px">${assigned ? escapeHtml(equipmentTypeLabel(v51EquipmentTypeKey(assigned))) : 'Yönetici bu şoföre kamyon atamalı.'}</div></div>
+        ${v61DriverTaskCardHtml(assigned)}
+        <div class="gps-status-box"><div class="gps-status-title">GPS durumu</div><div id="gpsTrackingStatus" class="gps-status-value">${state.gps.tracking ? 'GPS takip aktif' : (assigned ? 'GPS otomatik başlatılıyor' : 'Atama bekleniyor')}</div><div class="muted" style="margin-top:5px">Son konum: ${driverLast ? `${Number(driverLast.latitude).toFixed(6)}, ${Number(driverLast.longitude).toFixed(6)} • ${escapeHtml(fmtDate(gpsTimeValue(driverLast)))}` : 'Konum bekleniyor'}</div></div>
+        <div class="gps-status-box"><div class="gps-status-title">Offline kayıt</div><div id="gpsOfflineCount" class="gps-status-value">${loadGpsOfflineQueue().length}</div><div class="muted" style="margin-top:5px">İnternet kesilirse kayıt cihazda bekler, bağlantı gelince otomatik gönderilir.</div></div>
+        ${remoteAssignment ? '' : '<div class="notice">Aktif atama bulunamadı. Yönetici ekranından bu şoföre kamyon atanmalı.</div>'}
+      </div><div class="card" style="padding:12px"><div class="toolbar" style="justify-content:space-between;align-items:center"><h3 style="margin:0">Kendi Haritam</h3><span class="pill green">Otomatik takip</span></div><div id="gpsMap" class="gps-map"></div></div></div>`;
+    setTimeout(()=>{ try{ initGpsMap(); updateGpsMapMarkers(); applyLanguage(document.getElementById('gpsLive')); }catch(e){ console.error(e); } }, 80);
+  };
+
+  const v61OriginalBootstrap = bootstrap;
+  bootstrap = async function(){
+    const sb = await initClient();
+    const sessionRes = await withTimeout(sb.auth.getSession(), 10000, 'Session');
+    const session = sessionRes?.data?.session || null;
+    if(!session?.user) throw new Error('Oturum bulunamadı');
+    state.user = session.user;
+    let profile = null;
+    try{
+      const prof = await withTimeout(sb.from('profiles').select('*').eq('id', state.user.id).maybeSingle(), 10000, 'Profil');
+      if(!prof.error) profile = prof.data;
+      log({stage:'profile-load', error:prof.error?.message || null, profile:profile || null});
+    }catch(err){ log({stage:'profile-catch', message:String(err.message||err)}); }
+    state.profile = profile || { full_name: state.user.email, role: 'manager' };
+    v61SetDriverShellMode();
+    await loadShiftConfigRemote();
+    await loadTruckModelsRemote();
+    await loadEquipmentModelMapRemote();
+    await loadPackageTonnageFactorsRemote();
+    await loadAlertRulesRemote();
+    document.getElementById('loginView').classList.add('hidden');
+    document.getElementById('appView').classList.remove('hidden');
+    document.getElementById('userName').textContent = '1';
+    document.getElementById('userRole').textContent = roleLabelTr(state.profile?.role);
+    const onlineLabel = state.profile.full_name || state.user.email || 'Kullanıcı';
+    const roleLabel = roleLabelTr(state.profile?.role);
+    const onlineCard = document.getElementById('onlineUsersCard');
+    if(onlineCard) onlineCard.title = `${onlineLabel} • ${roleLabel}`;
+    if(currentUserRole()==='driver'){
+      state.currentPage = 'gpsLive';
+      applyRolePermissions();
+      showPage('gpsLive');
+    }
+    await loadAllSafe();
+    applyRolePermissions();
+    renderAll();
+    showPage(currentUserRole()==='driver' ? 'gpsLive' : (state.currentPage || 'dashboard'));
+    requestAnimationFrame(() => {
+      try{ renderAll(); applyRolePermissions(); showPage(currentUserRole()==='driver' ? 'gpsLive' : (state.currentPage || 'dashboard')); }catch(e){ console.error('post-login render error', e); }
+    });
+    await setupOnlinePresence();
+    await setupRealtimeSubscriptions();
+    updateOnlineUsersCard();
+    await autoStartDriverGps();
+  };
+
+  Object.assign(window, { v61FindProductionForEquipment, v61SetDriverShellMode });
+  /* =================== /V61 ŞOFÖR AKTİF ÜRETİM + MENÜ TEMİZLEME PATCH =================== */
+
   Object.assign(window, { openModal, closeModal, fillTruckRouteFromExcavator, updateAutoMeterLabels, updateProductionStartMeterHints, updateTripProductionContext, updateFuelProductionContext, updateMeterCorrectionContext, toggleProductionEditLinkedField, refreshLogisticsEquipmentSelect, markShiftSelectManual, continueBreakdownToCurrentShift, finishBreakdownFromWarning, saveStartProductionExcavator, saveStartProductionTruck, saveStartProductionOther, saveEndProduction, saveStartBreakdown, saveEndBreakdown, saveStartRental, saveEndRental, saveNewTrip, saveNewFuel, saveNewMeter, confirmSoftDelete, restoreDeleted, deleteAllDeletedRecordsNow, deleteDeletedOlderThan30Days, saveEditRecord, saveDefinition, deleteTruckModel, toggleDefinitionTruckModelField, renderShiftConfigInputs, saveShiftConfigFromForm, renderShiftConfigCardRefresh, applyRecordFiltersFromUI, resetRecordFilters, bulkDeleteRecordTable, exportRecordsToExcel, saveUserRoleSettings, refreshData, exportDailyPdf, exportWeeklyExcel, exportShiftReport, gpsSelectFromList, assignGpsPhoneToSelectedEquipment, clearGpsPhoneAssignment, startGpsTracking, stopGpsTracking, syncOfflineGpsPositions, refreshGpsMapNow, applyGpsManagerFilter });
 
   (async function autoSession(){
