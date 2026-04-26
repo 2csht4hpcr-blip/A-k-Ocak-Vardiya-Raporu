@@ -355,7 +355,7 @@
 
   <div id="appView" class="app hidden">
     <aside class="sidebar">
-      <div class="brand">⛏️ Maden Takip <span style="font-size:11px;color:#93c5fd">v46</span></div>
+      <div class="brand">⛏️ Maden Takip</div>
 
       <div class="menu-group">
         <div class="menu-title">Genel</div>
@@ -11585,6 +11585,79 @@ function renderUsers(){
   renderGpsLive = function(){ const out = v62PrevRenderGpsLive(); try{ v61SetDriverShellMode(); setTimeout(async ()=>{ try{ await v56LoadZones(); await v56LoadAssignments(); updateGpsMapMarkers(); }catch(e){} if(currentUserRole && currentUserRole() === 'driver'){ const onlineCard = document.getElementById('onlineUsersCard'); if(onlineCard) onlineCard.style.display='none'; v59InjectDriverTaskCard(); } }, 250); }catch(e){ console.warn('v62 render hook', e); } return out; };
   Object.assign(window, { v62FindProductionForAssignedTruck, v62DrawAssignedZonesOnLiveMap });
   /* =================== /V62 ŞOFÖR ÜRETİM EŞLEŞTİRME + HARİTA ALAN ETİKETLERİ PATCH =================== */
+
+
+
+  /* =================== V63 ŞOFÖR AKTİF GÖREV = GPS CANLI FİLO / ÜRETİM KAYNAĞI PATCH =================== */
+  function v63CleanText(v){ const s = String(v == null ? '' : v).trim(); return s && s !== '-' && s.toLowerCase() !== 'null' && s.toLowerCase() !== 'undefined' ? s : ''; }
+  function v63Norm(v){ return String(v == null ? '' : v).trim().toLocaleLowerCase('tr-TR').replace(/[^a-z0-9ğüşöçıİĞÜŞÖÇ]+/gi,''); }
+  function v63IsOpenProductionRow(r){ return !!(r && !r.deleted_at && !(r.end_at || r.end_time || r.finished_at || r.finish_at || r.closed_at)); }
+  function v63ProdTime(r){ return new Date(r?.start_at || r?.start_time || r?.created_at || 0).getTime() || 0; }
+  function v63ProductionForDriverAssignedTruck(assigned){
+    try{
+      const assignment = (typeof gpsAssignmentForUser === 'function') ? gpsAssignmentForUser(state.user?.id) : null;
+      const ids = new Set(); const names = new Set();
+      const addId = v => { const s = String(v || '').trim(); if(s) ids.add(s); };
+      const addName = v => { const s = v63Norm(v); if(s) names.add(s); };
+      [assigned?.id, assigned?.equipment_id, assigned?.__production?.equipment_id, assignment?.equipment_id, state.gps?.selectedEquipmentId].forEach(addId);
+      [assigned?.name, assigned?.equipment_name, assigned?.equipment_name_snapshot, assigned?.__production?.equipment_name, assignment?.equipment_name].forEach(addName);
+      for(const id of ids){ const p = (typeof v51ProductionForEquipment === 'function') ? v51ProductionForEquipment(id) : null; if(p && !p.deleted_at) return p; }
+      for(const id of ids){ const p = (typeof currentOpenProductionForEquipment === 'function') ? currentOpenProductionForEquipment(id) : null; if(p && !p.deleted_at) return p; }
+      let rows = (state.productions || []).filter(r=>r && !r.deleted_at);
+      const openRows = rows.filter(v63IsOpenProductionRow); if(openRows.length) rows = openRows;
+      const matches = rows.filter(r=>{
+        const prodIds = [r.equipment_id, r.truck_id, r.machine_id, r.vehicle_id].map(v=>String(v || '').trim()).filter(Boolean);
+        if(prodIds.some(id=>ids.has(id))) return true;
+        const prodNames = [r.equipment_name, r.equipment_name_snapshot, r.truck_name, r.machine_name, r.vehicle_name, r.plate_no, r.plate, r.equipment_code, r.name].map(v63Norm).filter(Boolean);
+        for(const pn of prodNames){ for(const cn of names){ if(!pn || !cn) continue; if(pn === cn) return true; if(pn.length >= 4 && cn.length >= 4 && (pn.includes(cn) || cn.includes(pn))) return true; } }
+        return false;
+      });
+      const current = (typeof getCurrentShiftBucketInfo === 'function') ? getCurrentShiftBucketInfo() : null;
+      matches.sort((a,b)=>{ const ac = current && String(getRowShiftBucketKey(a)||'') === String(current.shift_key||'') ? 1 : 0; const bc = current && String(getRowShiftBucketKey(b)||'') === String(current.shift_key||'') ? 1 : 0; return (bc-ac) || (v63ProdTime(b)-v63ProdTime(a)); });
+      return matches[0] || null;
+    }catch(e){ console.warn('v63 production match error', e); return null; }
+  }
+  function v63LinkedMachineName(prod){
+    try{
+      const linkedId = v63CleanText(prod?.linked_excavator_id || prod?.excavator_id || prod?.linked_equipment_id || prod?.parent_equipment_id);
+      const byId = linkedId && typeof findEquipmentById === 'function' ? findEquipmentById(linkedId) : null;
+      return v63CleanText(prod?.linked_excavator_name) || v63CleanText(prod?.linked_excavator_name_snapshot) || v63CleanText(prod?.excavator_name) || v63CleanText(prod?.excavator_name_snapshot) || v63CleanText(prod?.linked_equipment_name) || v63CleanText(prod?.linked_machine_name) || v63CleanText(byId?.name) || '';
+    }catch(e){ return ''; }
+  }
+  function v63PackageName(prod){
+    try{ return v63CleanText(prod?.package_name) || v63CleanText(prod?.package_name_snapshot) || (prod?.package_id && typeof packageName === 'function' ? v63CleanText(packageName(prod.package_id)) : '') || v63CleanText(prod?.package) || v63CleanText(prod?.work_type) || ''; }catch(e){ return ''; }
+  }
+  function v63FromTo(prod){
+    const from = v63CleanText(prod?.from_location) || v63CleanText(prod?.loading_location) || v63CleanText(prod?.source_location) || v63CleanText(prod?.start_location) || 'Yükleme';
+    const to = v63CleanText(prod?.to_location) || v63CleanText(prod?.dump_location) || v63CleanText(prod?.target_location) || v63CleanText(prod?.end_location) || 'Döküm';
+    return { from, to, routeText: `${from} → ${to}` };
+  }
+  function v63TaskInfoFromProductionSource(assigned){
+    const prod = v63ProductionForDriverAssignedTruck(assigned);
+    const op = assigned && typeof v59OriginalGpsOperationInfoForEquipment === 'function' ? v59OriginalGpsOperationInfoForEquipment(assigned.id) : (assigned && typeof gpsOperationInfoForEquipment === 'function' ? gpsOperationInfoForEquipment(assigned.id) : {});
+    const pair = assigned && typeof v59ZoneForEquipment === 'function' ? v59ZoneForEquipment(assigned.id) : { assignment:null, zone:null };
+    const ft = prod ? v63FromTo(prod) : { from: v63CleanText(op?.gpsLoadingName) || v63CleanText(pair.zone?.loading_name) || 'Yükleme', to: v63CleanText(op?.gpsDumpName) || v63CleanText(pair.zone?.dump_name) || 'Döküm', routeText: v63CleanText(op?.route) || (typeof v59RouteTextFromZone === 'function' ? v59RouteTextFromZone(pair.zone) : '') || 'Yükleme / döküm bilgisi bekleniyor' };
+    const tripCount = prod ? (typeof productionTripTotal === 'function' ? productionTripTotal(prod) : Number(prod.trip_count || prod.trips || 0)) : Number(op?.tripCount || 0);
+    return { prod, shiftName: v63CleanText(prod ? (typeof getShiftNameForRow === 'function' ? getShiftNameForRow(prod) : '') : '') || v63CleanText(op?.shiftName) || 'Aktif vardiya', linkedMachineLabel: prod ? (v63LinkedMachineName(prod) || 'Bağlı makina yok') : 'Aktif üretim bekleniyor', packageName: prod ? (v63PackageName(prod) || '-') : (v63CleanText(op?.packageName) || v63CleanText(pair.assignment?.route_name) || v63CleanText(pair.zone?.route_name) || 'Aktif üretim bekleniyor'), from: ft.from, to: ft.to, routeText: ft.routeText, tripCount };
+  }
+  v60TaskInfoFromActiveProduction = function(eq){ return v63TaskInfoFromProductionSource(eq); };
+  v61FindProductionForEquipment = function(eq){ return v63ProductionForDriverAssignedTruck(eq); };
+  v60ActiveProductionForEquipment = function(eqId){ const eq = (typeof findEquipmentById === 'function') ? findEquipmentById(eqId) : { id:eqId }; return v63ProductionForDriverAssignedTruck(eq || { id:eqId }); };
+  v61DriverTaskCardHtml = function(assigned){
+    const info = v63TaskInfoFromProductionSource(assigned);
+    const status = state.gps?.tracking ? 'GPS aktif' : (assigned ? 'GPS otomatik başlatılıyor' : 'Atama yok');
+    const noProdWarning = assigned && !info.prod ? '<div class="gps-v59-warning" style="margin-top:10px">Aktif üretim kaydı bulunamadı. Görev bilgisi GPS rotasından değil, üretimdeki kamyon kaydından alınır; yönetici bu kamyonu Üretim ekranından aktif çalışmaya almalı.</div>' : '';
+    return `<div id="gpsV59TaskCard" class="gps-selected-detail gps-v59-task-card"><div class="gps-v59-task-title"><b>📋 Aktif Görev</b><span class="pill green">${escapeHtml(status)}</span></div><div class="gps-fleet-liveinfo"><div class="gps-info-mini"><div class="l">Vardiya</div><div class="d">${escapeHtml(info.shiftName)}</div></div><div class="gps-info-mini"><div class="l">Bağlı Makina</div><div class="d">${escapeHtml(info.linkedMachineLabel)}</div></div><div class="gps-info-mini"><div class="l">Paket</div><div class="d">${escapeHtml(info.packageName)}</div></div><div class="gps-info-mini"><div class="l">Sefer</div><div class="d">${Number(info.tripCount || 0)}</div></div></div><div class="gps-v59-route"><div class="gps-status-title">Nereden / Nereye</div><div class="gps-v59-route-line"><span>${escapeHtml(info.from)}</span><span class="gps-v59-arrow">→</span><span>${escapeHtml(info.to)}</span></div><div class="muted" style="margin-top:6px">${escapeHtml(info.routeText)}</div></div>${noProdWarning}<div id="gpsV59BackgroundWarning" class="${state.gps?.tracking ? 'gps-v59-ok' : 'gps-v59-warning'}" style="margin-top:10px">${state.gps?.tracking ? 'GPS verisi alınıyor. Ekran açık tutulmaya çalışılıyor; tarayıcı arka plana alınırsa veri kesilebilir.' : 'GPS takip başlatılıyor. Telefon ekranı kapanırsa web tarayıcı GPS göndermeyi durdurabilir.'}</div></div>`;
+  };
+  const v63PrevRenderGpsLive = renderGpsLive;
+  renderGpsLive = function(){
+    const out = v63PrevRenderGpsLive();
+    try{ setTimeout(()=>{ if(typeof currentUserRole === 'function' && currentUserRole() === 'driver'){ const host = document.querySelector('#gpsLive .gps-driver-card'); const assigned = (typeof gpsAssignedEquipment === 'function') ? gpsAssignedEquipment() : null; const old = document.getElementById('gpsV59TaskCard'); if(host){ if(old) old.remove(); const ref = host.querySelector('.gps-status-box[style*="eff6ff"]') || host.children[1]; if(ref) ref.insertAdjacentHTML('afterend', v61DriverTaskCardHtml(assigned)); else host.insertAdjacentHTML('afterbegin', v61DriverTaskCardHtml(assigned)); if(typeof applyLanguage === 'function') applyLanguage(document.getElementById('gpsV59TaskCard')); } } }, 220); }catch(e){ console.warn('v63 render refresh', e); }
+    return out;
+  };
+  Object.assign(window, { v63ProductionForDriverAssignedTruck, v63TaskInfoFromProductionSource });
+  /* =================== /V63 ŞOFÖR AKTİF GÖREV = GPS CANLI FİLO / ÜRETİM KAYNAĞI PATCH =================== */
+
 
   Object.assign(window, { openModal, closeModal, fillTruckRouteFromExcavator, updateAutoMeterLabels, updateProductionStartMeterHints, updateTripProductionContext, updateFuelProductionContext, updateMeterCorrectionContext, toggleProductionEditLinkedField, refreshLogisticsEquipmentSelect, markShiftSelectManual, continueBreakdownToCurrentShift, finishBreakdownFromWarning, saveStartProductionExcavator, saveStartProductionTruck, saveStartProductionOther, saveEndProduction, saveStartBreakdown, saveEndBreakdown, saveStartRental, saveEndRental, saveNewTrip, saveNewFuel, saveNewMeter, confirmSoftDelete, restoreDeleted, deleteAllDeletedRecordsNow, deleteDeletedOlderThan30Days, saveEditRecord, saveDefinition, deleteTruckModel, toggleDefinitionTruckModelField, renderShiftConfigInputs, saveShiftConfigFromForm, renderShiftConfigCardRefresh, applyRecordFiltersFromUI, resetRecordFilters, bulkDeleteRecordTable, exportRecordsToExcel, saveUserRoleSettings, refreshData, exportDailyPdf, exportWeeklyExcel, exportShiftReport, gpsSelectFromList, assignGpsPhoneToSelectedEquipment, clearGpsPhoneAssignment, startGpsTracking, stopGpsTracking, syncOfflineGpsPositions, refreshGpsMapNow, applyGpsManagerFilter });
 
