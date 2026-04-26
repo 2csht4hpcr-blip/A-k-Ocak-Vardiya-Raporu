@@ -12054,6 +12054,63 @@ function renderUsers(){
   Object.assign(window, { v67EnsureDriverProductionRows });
   /* =================== /V67 ŞOFÖR PRODUCTION_LOGS DOĞRUDAN OKUMA FIX =================== */
 
+
+  /* =================== V68 ŞOFÖR AKTİF VARDİYA + LİSTE KALDIRMA FIX =================== */
+  function v68SafeText(v){ const s = String(v == null ? '' : v).trim(); return s && s !== '-' && s.toLowerCase() !== 'null' && s.toLowerCase() !== 'undefined' ? s : ''; }
+  function v68IsOpenProduction(row){ return !!(row && !row.deleted_at && !(row.end_at || row.end_time || row.finished_at || row.finish_at || row.closed_at)); }
+  function v68RowTimeMs(row){ const raw = row?.start_at || row?.start_time || row?.created_at || row?.updated_at || ''; const ms = raw ? new Date(raw).getTime() : 0; return Number.isFinite(ms) ? ms : 0; }
+  function v68CurrentShiftRows(rows){
+    try{
+      const current = (typeof getCurrentShiftBucketInfo === 'function') ? getCurrentShiftBucketInfo() : null;
+      if(!current) return rows || [];
+      const strict = (rows || []).filter(r=>{ try{ return String(getRowShiftBucketKey(r) || '') === String(current.shift_key || ''); }catch(e){ return false; } });
+      if(strict.length) return strict;
+      const sameDate = (rows || []).filter(r=>{ const raw = String(r?.shift_date || r?.date || r?.start_at || r?.start_time || r?.created_at || '').slice(0,10); return raw && raw === String(current.shift_date || ''); });
+      return sameDate.length ? sameDate : (rows || []);
+    }catch(e){ return rows || []; }
+  }
+  function v68EquipmentIdFromProduction(row){
+    try{ const eq = (typeof v66EquipmentFromProduction === 'function') ? v66EquipmentFromProduction(row) : (typeof v65EqFromProd === 'function' ? v65EqFromProd(row) : null); return String(eq?.id || row?.equipment_id || row?.truck_id || row?.machine_id || row?.vehicle_id || ''); }catch(e){ return String(row?.equipment_id || row?.truck_id || row?.machine_id || row?.vehicle_id || ''); }
+  }
+  function v68CurrentOpenTruckProductions(){
+    try{
+      let rows = (typeof v66AllProductionRows === 'function' ? v66AllProductionRows() : (state.productions || [])) || [];
+      rows = rows.filter(v68IsOpenProduction);
+      rows = rows.filter(r=>{ try{ return typeof v66IsTruckProduction === 'function' ? v66IsTruckProduction(r) : (typeof v65IsTruckProd === 'function' ? v65IsTruckProd(r) : true); }catch(e){ return true; } });
+      rows = v68CurrentShiftRows(rows);
+      rows.sort((a,b)=>v68RowTimeMs(b)-v68RowTimeMs(a));
+      return rows;
+    }catch(e){ return []; }
+  }
+  v65OpenCurrentShiftTruckProductions = v68CurrentOpenTruckProductions;
+  v65ProductionListHtml = function(){ return ''; };
+  v65BestDriverProduction = function(){
+    try{
+      const rows = v68CurrentOpenTruckProductions();
+      const assigned = (typeof v65PrevGpsAssignedEquipment === 'function') ? v65PrevGpsAssignedEquipment() : null;
+      if(assigned?.id){ const own = rows.find(r=>String(v68EquipmentIdFromProduction(r)) === String(assigned.id)); if(own) return own; }
+      return rows[0] || null;
+    }catch(e){ return null; }
+  };
+  gpsAssignedEquipment = function(){
+    try{ const original = (typeof v65PrevGpsAssignedEquipment === 'function') ? v65PrevGpsAssignedEquipment() : null; if(original) return original; const prod = v65BestDriverProduction(); return prod ? (typeof v66EquipmentFromProduction === 'function' ? v66EquipmentFromProduction(prod) : v65EqFromProd(prod)) : null; }catch(e){ return null; }
+  };
+  v60TaskInfoFromActiveProduction = function(eq){
+    try{
+      const prod = v65BestDriverProduction();
+      if(!prod) return {};
+      const i = typeof v65ProdInfo === 'function' ? v65ProdInfo(prod) : {};
+      const shift = v68SafeText(i.shift) || v68SafeText(typeof getShiftNameForRow === 'function' ? getShiftNameForRow(prod) : '') || 'Aktif vardiya';
+      return { prod, linkedMachineLabel:i.linked || 'Aktif üretim bekleniyor', selfName:i.name || '', packageName:i.pkg || '-', from:i.from || 'Yükleme', to:i.to || 'Döküm', routeText:`${i.from || 'Yükleme'} → ${i.to || 'Döküm'}`, tripCount:i.trips || 0, shiftName:shift };
+    }catch(e){ return {}; }
+  };
+  v61DriverTaskCardHtml = function(assigned){
+    const info = typeof v60TaskInfoFromActiveProduction === 'function' ? v60TaskInfoFromActiveProduction(assigned) : {};
+    const status = state.gps?.tracking ? 'GPS aktif' : (assigned ? 'GPS otomatik başlatılıyor' : 'Atama bekleniyor');
+    return `<div id="gpsV59TaskCard" class="gps-selected-detail gps-v59-task-card"><div class="gps-v59-task-title"><b>📋 Aktif Görev</b><span class="pill green">${escapeHtml(status)}</span></div><div class="gps-fleet-liveinfo"><div class="gps-info-mini"><div class="l">Vardiya</div><div class="d">${escapeHtml(info.shiftName || 'Aktif vardiya')}</div></div><div class="gps-info-mini"><div class="l">Bağlı Makina</div><div class="d">${escapeHtml(info.linkedMachineLabel || 'Aktif üretim bekleniyor')}</div></div><div class="gps-info-mini"><div class="l">Paket</div><div class="d">${escapeHtml(info.packageName || '-')}</div></div><div class="gps-info-mini"><div class="l">Sefer</div><div class="d">${Number(info.tripCount || 0)}</div></div></div><div class="gps-v59-route"><div class="gps-status-title">Nereden / Nereye</div><div class="gps-v59-route-line"><span>${escapeHtml(info.from || 'Yükleme')}</span><span class="gps-v59-arrow">→</span><span>${escapeHtml(info.to || 'Döküm')}</span></div><div class="muted" style="margin-top:6px">${escapeHtml(info.routeText || 'Yükleme / döküm bilgisi bekleniyor')}</div></div><div id="gpsV59BackgroundWarning" class="${state.gps?.tracking ? 'gps-v59-ok' : 'gps-v59-warning'}" style="margin-top:10px">${state.gps?.tracking ? 'GPS verisi alınıyor. Ekran açık tutulmaya çalışılıyor; tarayıcı arka plana alınırsa veri kesilebilir.' : 'GPS takip başlatılıyor. Telefon ekranı kapanırsa web tarayıcı GPS göndermeyi durdurabilir.'}</div></div>`;
+  };
+  Object.assign(window, { v68CurrentOpenTruckProductions });
+  /* =================== /V68 ŞOFÖR AKTİF VARDİYA + LİSTE KALDIRMA FIX =================== */
 })();
 </script>
 </body>
