@@ -12111,6 +12111,96 @@ function renderUsers(){
   };
   Object.assign(window, { v68CurrentOpenTruckProductions });
   /* =================== /V68 ŞOFÖR AKTİF VARDİYA + LİSTE KALDIRMA FIX =================== */
+
+  /* =================== V69 ŞOFÖR GÖREVİ OPERASYON > ÜRETİM KAYNAĞI FIX =================== */
+  function v69SafeText(v){ const s = String(v == null ? '' : v).trim(); return s && s !== '-' && s.toLowerCase() !== 'null' && s.toLowerCase() !== 'undefined' ? s : ''; }
+  function v69IsTruckProduction(row){
+    try{
+      if(typeof v66IsTruckProduction === 'function') return v66IsTruckProduction(row);
+      if(typeof v65IsTruckProd === 'function') return v65IsTruckProd(row);
+      const eq = typeof findEquipmentById === 'function' ? findEquipmentById(row?.equipment_id || row?.truck_id || row?.machine_id || row?.vehicle_id) : null;
+      const txt = `${eq?.type || ''} ${eq?.name || ''} ${row?.equipment_type || ''} ${row?.equipment_name || ''} ${row?.machine_name || ''}`.toLocaleLowerCase('tr-TR');
+      return txt.includes('kamyon') || txt.includes('truck');
+    }catch(e){ return true; }
+  }
+  function v69OperationProductionRows(){
+    try{
+      let rows = [];
+      /* İlk ve ana kaynak: Operasyon > Üretim ekranının kullandığı aynı fonksiyon */
+      if(typeof activeProductionRows === 'function') rows = activeProductionRows() || [];
+      if(!rows.length && typeof activeProductionRowsForCurrentShift === 'function') rows = activeProductionRowsForCurrentShift() || [];
+      rows = (rows || []).filter(r=>r && !r.deleted_at).filter(v69IsTruckProduction);
+      rows.sort((a,b)=>{
+        const at = new Date(a.start_at || a.start_time || a.created_at || a.updated_at || 0).getTime() || 0;
+        const bt = new Date(b.start_at || b.start_time || b.created_at || b.updated_at || 0).getTime() || 0;
+        return bt - at;
+      });
+      return rows;
+    }catch(e){ return []; }
+  }
+  function v69EquipmentFromProduction(row){
+    try{
+      if(typeof v66EquipmentFromProduction === 'function') return v66EquipmentFromProduction(row);
+      if(typeof v65EqFromProd === 'function') return v65EqFromProd(row);
+      const id = row?.equipment_id || row?.truck_id || row?.machine_id || row?.vehicle_id || '';
+      if(id && typeof findEquipmentById === 'function') return findEquipmentById(id);
+      return null;
+    }catch(e){ return null; }
+  }
+  function v69ProductionId(row){
+    try{ return String(v69EquipmentFromProduction(row)?.id || row?.equipment_id || row?.truck_id || row?.machine_id || row?.vehicle_id || ''); }catch(e){ return ''; }
+  }
+  function v69AssignedEquipmentOriginal(){
+    try{
+      if(typeof v65PrevGpsAssignedEquipment === 'function') return v65PrevGpsAssignedEquipment();
+      return null;
+    }catch(e){ return null; }
+  }
+  function v69BestOperationProduction(){
+    try{
+      const rows = v69OperationProductionRows();
+      const assigned = v69AssignedEquipmentOriginal();
+      if(assigned?.id){
+        const own = rows.find(r=>String(v69ProductionId(r)) === String(assigned.id));
+        if(own) return own;
+      }
+      return rows[0] || null;
+    }catch(e){ return null; }
+  }
+  v65OpenCurrentShiftTruckProductions = v69OperationProductionRows;
+  v68CurrentOpenTruckProductions = v69OperationProductionRows;
+  v65ProductionListHtml = function(){ return ''; };
+  v65BestDriverProduction = v69BestOperationProduction;
+  gpsAssignedEquipment = function(){
+    try{
+      const original = v69AssignedEquipmentOriginal();
+      if(original) return original;
+      const prod = v69BestOperationProduction();
+      return prod ? v69EquipmentFromProduction(prod) : null;
+    }catch(e){ return null; }
+  };
+  v60TaskInfoFromActiveProduction = function(eq){
+    try{
+      const prod = v69BestOperationProduction();
+      if(!prod) return {};
+      const i = typeof v65ProdInfo === 'function' ? v65ProdInfo(prod) : {};
+      const linked = v69SafeText(i.linked) || v69SafeText(prod.linked_excavator_name) || v69SafeText(prod.excavator_name) || 'Bağlı makina yok';
+      const pkg = v69SafeText(i.pkg) || v69SafeText(prod.package_name) || v69SafeText(prod.package_name_snapshot) || (prod.package_id && typeof packageName === 'function' ? v69SafeText(packageName(prod.package_id)) : '') || '-';
+      const from = v69SafeText(i.from) || v69SafeText(prod.from_location) || v69SafeText(prod.loading_location) || 'Yükleme';
+      const to = v69SafeText(i.to) || v69SafeText(prod.to_location) || v69SafeText(prod.dump_location) || 'Döküm';
+      const shift = v69SafeText(i.shift) || v69SafeText(typeof getShiftNameForRow === 'function' ? getShiftNameForRow(prod) : '') || 'Aktif vardiya';
+      const trips = typeof productionTripTotal === 'function' ? productionTripTotal(prod) : Number(prod.trip_count || prod.trips || 0);
+      return { prod, linkedMachineLabel: linked, selfName: v69SafeText(i.name), packageName: pkg, from, to, routeText: `${from} → ${to}`, tripCount: trips || 0, shiftName: shift };
+    }catch(e){ return {}; }
+  };
+  v61DriverTaskCardHtml = function(assigned){
+    const info = typeof v60TaskInfoFromActiveProduction === 'function' ? v60TaskInfoFromActiveProduction(assigned) : {};
+    const status = state.gps?.tracking ? 'GPS aktif' : (assigned ? 'GPS otomatik başlatılıyor' : 'Atama bekleniyor');
+    const noProd = !info?.prod ? '<div class="gps-v59-warning" style="margin-top:10px">Operasyon &gt; Üretim ekranında bu aktif vardiya için kamyon kaydı bulunamadı. Kamyon üretime alınınca görev burada görünecek.</div>' : '';
+    return `<div id="gpsV59TaskCard" class="gps-selected-detail gps-v59-task-card"><div class="gps-v59-task-title"><b>📋 Aktif Görev</b><span class="pill green">${escapeHtml(status)}</span></div><div class="gps-fleet-liveinfo"><div class="gps-info-mini"><div class="l">Vardiya</div><div class="d">${escapeHtml(info.shiftName || 'Aktif vardiya')}</div></div><div class="gps-info-mini"><div class="l">Bağlı Makina</div><div class="d">${escapeHtml(info.linkedMachineLabel || 'Aktif üretim bekleniyor')}</div></div><div class="gps-info-mini"><div class="l">Paket</div><div class="d">${escapeHtml(info.packageName || '-')}</div></div><div class="gps-info-mini"><div class="l">Sefer</div><div class="d">${Number(info.tripCount || 0)}</div></div></div><div class="gps-v59-route"><div class="gps-status-title">Nereden / Nereye</div><div class="gps-v59-route-line"><span>${escapeHtml(info.from || 'Yükleme')}</span><span class="gps-v59-arrow">→</span><span>${escapeHtml(info.to || 'Döküm')}</span></div><div class="muted" style="margin-top:6px">${escapeHtml(info.routeText || 'Yükleme / döküm bilgisi bekleniyor')}</div></div>${noProd}<div id="gpsV59BackgroundWarning" class="${state.gps?.tracking ? 'gps-v59-ok' : 'gps-v59-warning'}" style="margin-top:10px">${state.gps?.tracking ? 'GPS verisi alınıyor. Ekran açık tutulmaya çalışılıyor; tarayıcı arka plana alınırsa veri kesilebilir.' : 'GPS takip başlatılıyor. Telefon ekranı kapanırsa web tarayıcı GPS göndermeyi durdurabilir.'}</div></div>`;
+  };
+  Object.assign(window, { v69OperationProductionRows, v69BestOperationProduction });
+  /* =================== /V69 ŞOFÖR GÖREVİ OPERASYON > ÜRETİM KAYNAĞI FIX =================== */
 })();
 </script>
 </body>
