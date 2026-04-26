@@ -11678,6 +11678,138 @@ function renderUsers(){
 
   window.saveRemoteGpsAssignment = saveRemoteGpsAssignment;
   window.clearRemoteGpsAssignment = clearRemoteGpsAssignment;
+  /* =================== V64 ŞOFÖR USER ID + CİHAZ KODU + ÜRETİM KAYNAĞI PATCH =================== */
+  function v64IsOpenProductionRow(row){
+    try{
+      if(!row || row.deleted_at) return false;
+      if(row.end_at || row.end_time || row.finish_at || row.finished_at) return false;
+      const st = String(row.status || row.state || row.production_status || '').toLowerCase();
+      if(st && ['closed','finished','ended','completed','pasif','bitti','kapalı'].includes(st)) return false;
+      return true;
+    }catch(e){ return false; }
+  }
+  function v64RowMatchesCurrentDriver(row){
+    try{
+      if(!row) return false;
+      const uid = String(state.user?.id || '');
+      const email = String(state.user?.email || '').toLowerCase();
+      const dev = String(typeof gpsDeviceCode === 'function' ? gpsDeviceCode() : '').trim();
+      const idFields = ['user_id','driver_user_id','driver_id','operator_id','profile_id','assigned_user_id','gps_user_id','sofor_user_id','driver_profile_id'];
+      const mailFields = ['user_email','driver_email','operator_email','email','sofor_email'];
+      const devFields = ['device_code','gps_device_code','gps_code','device_id','gps_device_id','phone_device_code','cihaz_kodu'];
+      if(uid && idFields.some(k=>String(row[k] || '') === uid)) return true;
+      if(email && mailFields.some(k=>String(row[k] || '').toLowerCase() === email)) return true;
+      if(dev && devFields.some(k=>String(row[k] || '').trim() === dev)) return true;
+      return false;
+    }catch(e){ return false; }
+  }
+  function v64ActiveProductionForCurrentDriver(){
+    try{
+      const rows = (state.productions || state.production || []).filter(v64IsOpenProductionRow);
+      const current = (typeof getCurrentShiftBucketInfo === 'function') ? getCurrentShiftBucketInfo() : null;
+      const matched = rows.filter(v64RowMatchesCurrentDriver);
+      if(current && matched.length){
+        return matched.find(r=>String(typeof getRowShiftBucketKey === 'function' ? getRowShiftBucketKey(r) : '') === String(current.shift_key || '')) || matched[0];
+      }
+      return matched[0] || null;
+    }catch(e){ return null; }
+  }
+  function v64EquipmentFromDriverProduction(){
+    try{
+      const prod = v64ActiveProductionForCurrentDriver();
+      if(!prod) return null;
+      const eid = prod.equipment_id || prod.machine_id || prod.truck_id || prod.equipment || '';
+      if(eid && typeof findEquipmentById === 'function'){
+        const eq = findEquipmentById(eid);
+        if(eq) return eq;
+      }
+      const name = String(prod.equipment_name || prod.machine_name || prod.truck_name || '').trim();
+      if(name){
+        const eq = (state.equipments || []).find(e=>String(e.name || '').trim().toLowerCase() === name.toLowerCase());
+        if(eq) return eq;
+      }
+      return null;
+    }catch(e){ return null; }
+  }
+  const v64OriginalGpsAssignedEquipmentId = gpsAssignedEquipmentId;
+  gpsAssignedEquipmentId = function(){
+    try{
+      const originalId = v64OriginalGpsAssignedEquipmentId ? v64OriginalGpsAssignedEquipmentId() : '';
+      if(originalId) return String(originalId);
+      const eq = v64EquipmentFromDriverProduction();
+      return eq?.id ? String(eq.id) : '';
+    }catch(e){ return ''; }
+  };
+  const v64OriginalGpsAssignedEquipment = gpsAssignedEquipment;
+  gpsAssignedEquipment = function(){
+    try{
+      const original = v64OriginalGpsAssignedEquipment ? v64OriginalGpsAssignedEquipment() : null;
+      if(original) return original;
+      return v64EquipmentFromDriverProduction();
+    }catch(e){ return null; }
+  };
+  const v64PreviousTaskInfoFromActiveProduction = v60TaskInfoFromActiveProduction;
+  v60TaskInfoFromActiveProduction = function(eq){
+    try{
+      const info = v64PreviousTaskInfoFromActiveProduction ? v64PreviousTaskInfoFromActiveProduction(eq) : {};
+      if(info && info.prod) return info;
+      const driverProd = v64ActiveProductionForCurrentDriver();
+      if(driverProd && eq && String(driverProd.equipment_id || driverProd.machine_id || driverProd.truck_id || '') === String(eq.id || '')){
+        const linkedName = v59SafeDash(driverProd?.linked_excavator_name) || v59SafeDash(driverProd?.linked_excavator_name_snapshot) || (driverProd?.linked_excavator_id ? v59SafeDash(findEquipmentById(driverProd.linked_excavator_id)?.name) : '');
+        const packageLabel = v59SafeDash(driverProd?.package_name) || v59SafeDash(driverProd?.package_name_snapshot) || (driverProd?.package_id ? v59SafeDash(packageName(driverProd.package_id)) : '') || 'Aktif üretim';
+        const from = v59SafeDash(driverProd?.from_location) || v59SafeDash(driverProd?.loading_name) || 'Yükleme';
+        const to = v59SafeDash(driverProd?.to_location) || v59SafeDash(driverProd?.dump_name) || 'Döküm';
+        return {
+          prod: driverProd,
+          linkedMachineLabel: linkedName || 'Bağlı makina yok',
+          packageName: packageLabel,
+          from, to,
+          routeText: `${from} → ${to}`,
+          tripCount: (typeof productionTripTotal === 'function' ? productionTripTotal(driverProd) : Number(driverProd.trip_count || 0)),
+          shiftName: v59SafeDash(getShiftNameForRow(driverProd)) || 'Aktif vardiya'
+        };
+      }
+      return info || {};
+    }catch(e){
+      return v64PreviousTaskInfoFromActiveProduction ? v64PreviousTaskInfoFromActiveProduction(eq) : {};
+    }
+  };
+  const v64PreviousAutoStartDriverGps = autoStartDriverGps;
+  autoStartDriverGps = async function(){
+    try{
+      if(currentUserRole() !== 'driver') return;
+      await loadGpsAssignmentsSafe();
+      applyGpsAssignmentForCurrentUser();
+      const assigned = gpsAssignedEquipment();
+      if(assigned?.id){
+        state.gps.selectedEquipmentId = String(assigned.id);
+        try{ localStorage.setItem('maden_gps_equipment_id', String(assigned.id)); }catch(e){}
+      }
+      if(!assigned || state.gps.tracking) return;
+      setTimeout(()=>{ try{ startGpsTracking(true); }catch(e){ console.error('driver gps auto start v64', e); } }, 700);
+    }catch(e){
+      if(v64PreviousAutoStartDriverGps) return v64PreviousAutoStartDriverGps();
+    }
+  };
+  const v64PreviousRenderGpsLive = renderGpsLive;
+  renderGpsLive = function(){
+    const out = v64PreviousRenderGpsLive();
+    try{
+      if(currentUserRole && currentUserRole() !== 'manager'){
+        const assigned = gpsAssignedEquipment();
+        if(assigned?.id){
+          state.gps.selectedEquipmentId = String(assigned.id);
+          try{ localStorage.setItem('maden_gps_equipment_id', String(assigned.id)); }catch(e){}
+        }
+        setTimeout(()=>{ try{ v59InjectDriverTaskCard(); }catch(e){} }, 220);
+      }
+    }catch(e){ console.warn('v64 render hook', e); }
+    return out;
+  };
+  Object.assign(window, { v64ActiveProductionForCurrentDriver, v64EquipmentFromDriverProduction });
+  /* =================== /V64 ŞOFÖR USER ID + CİHAZ KODU + ÜRETİM KAYNAĞI PATCH =================== */
+
+
 })();
 </script>
 </body>
