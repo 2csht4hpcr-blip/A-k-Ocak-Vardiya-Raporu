@@ -309,6 +309,31 @@
     .dashboard-pro-pdf-mode .dashboard-scroll{max-height:none!important;overflow:visible!important}
     .dashboard-pro-pdf-mode{background:#f4f6f8!important;padding:4px}
 
+
+    /* V56 GPS Sefer Algılama - güvenli ek stil */
+    .gps-v56-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px}
+    .gps-v56-tabs button{width:auto;padding:10px 14px;border-radius:999px;background:#e2e8f0;color:#0f172a;border:1px solid #cbd5e1;font-weight:900}
+    .gps-v56-tabs button.active{background:#2563eb;color:#fff;border-color:#2563eb}
+    .gps-v56-setup-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;align-items:end}
+    .gps-v56-pill-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:center}
+    .gps-v56-pill{display:inline-flex;align-items:center;gap:6px;padding:8px 10px;border-radius:999px;font-size:12px;font-weight:800;border:1px solid #e2e8f0;background:#fff}
+    .gps-v56-pill.load{color:#1d4ed8;background:#eff6ff;border-color:#bfdbfe}
+    .gps-v56-pill.dump{color:#c2410c;background:#fff7ed;border-color:#fed7aa}
+    .gps-v56-map{height:760px;min-height:620px;border-radius:20px;border:1px solid #dbe3ef;overflow:hidden;background:#e2e8f0}
+    .gps-v56-log-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+    .gps-v56-log-card{padding:14px;border:1px solid #e2e8f0;border-radius:18px;background:linear-gradient(180deg,#ffffff 0%,#f8fafc 100%);box-shadow:0 8px 18px rgba(15,23,42,.05)}
+    @media(max-width:700px){.gps-v56-map{height:620px;min-height:520px}}
+
+    /* V59 Şoför görev ekranı + GPS süreklilik uyarıları */
+    .gps-v59-task-card{border:1px solid #bfdbfe;background:linear-gradient(180deg,#ffffff 0%,#eff6ff 100%);box-shadow:0 12px 28px rgba(37,99,235,.10)}
+    .gps-v59-task-title{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+    .gps-v59-task-title b{font-size:16px;color:#0f172a}
+    .gps-v59-route{margin-top:10px;padding:12px;border-radius:16px;background:#fff;border:1px solid #dbeafe}
+    .gps-v59-route-line{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:14px;font-weight:900;color:#0f172a}
+    .gps-v59-arrow{color:#2563eb;font-weight:950}
+    .gps-v59-warning{padding:11px 12px;border-radius:14px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;font-size:12px;font-weight:800;line-height:1.45}
+    .gps-v59-ok{padding:11px 12px;border-radius:14px;background:#ecfdf5;border:1px solid #bbf7d0;color:#166534;font-size:12px;font-weight:800;line-height:1.45}
+
   </style>
 </head>
 <body>
@@ -10607,6 +10632,533 @@ function renderUsers(){
 
   Object.assign(window, { renderGpsLive, gpsActiveProductionRows, gpsActiveFleetEquipments, gpsFilteredEquipmentsForManager, gpsAssignedEquipment, gpsOperationInfoForEquipment, clearGpsManagerFilters, applyGpsManagerTypeFilter, applyGpsManagerEquipmentFilter, applyGpsManagerStatusFilter, saveRemoteGpsAssignmentForEquipment });
   /* =================== /V51 TEMİZ GPS FİLO PANELİ PATCH =================== */
+
+
+  /* =================== V56 GPS SEFER ALGILAMA GÜVENLİ PATCH =================== */
+  function v56TripState(){
+    if(!state.gpsTripV56){
+      state.gpsTripV56 = { tab:'live', zones:[], assignments:[], logs:[], events:[], loadingPoint:null, dumpPoint:null, mode:'loading', map:null, draftLayers:[], zoneLayers:[], error:'', busy:false, engine:{} };
+    }
+    return state.gpsTripV56;
+  }
+  function setGpsTripV56Tab(tab){
+    v56TripState().tab = tab || 'live';
+    try{ renderGpsLive(); }catch(e){ console.error('GPS tab render error', e); }
+  }
+  function v56Tabs(active){
+    return `<div class="gps-v56-tabs"><button class="${active==='live'?'active':''}" type="button" onclick="setGpsTripV56Tab('live')">Canlı Filo</button><button class="${active==='trip'?'active':''}" type="button" onclick="setGpsTripV56Tab('trip')">Sefer Algılama</button></div>`;
+  }
+  function v56ShiftKey(){
+    try{ const b = getCurrentShiftBucketInfo && getCurrentShiftBucketInfo(); if(b && b.shift_key) return String(b.shift_key); }catch(e){}
+    return new Date().toISOString().slice(0,10) + '__aktif';
+  }
+  function v56NormalizeEngineState(s){
+    s = String(s || '').trim();
+    if(s === 'loaded') return 'loaded_out';
+    if(s === 'empty' || !s) return 'waiting_loading';
+    if(['waiting_loading','loading_in','loaded_out','dump_in'].includes(s)) return s;
+    return 'waiting_loading';
+  }
+  function v56StateLabel(s){
+    s = v56NormalizeEngineState(s);
+    if(s === 'loading_in') return 'Yükleme alanında';
+    if(s === 'loaded_out') return 'Yüklendi / döküm yolunda';
+    if(s === 'dump_in') return 'Döküm alanında';
+    return 'Boş / yükleme bekliyor';
+  }
+  function v56EventLabel(t){
+    return ({loading_in:'Yükleme giriş', loading_out:'Yükleme çıkış', dump_in:'Döküm giriş', dump_out:'Döküm çıkış / sefer +1'})[t] || t || '-';
+  }
+  function v56DistanceMeters(lat1,lng1,lat2,lng2){
+    const R=6371000, toRad=x=>Number(x)*Math.PI/180;
+    const dLat=toRad(Number(lat2)-Number(lat1));
+    const dLng=toRad(Number(lng2)-Number(lng1));
+    const a=Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLng/2)**2;
+    return 2*R*Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  }
+  function v56PointZone(lat,lng,z){
+    if(!z) return 'none';
+    if(v56DistanceMeters(lat,lng,z.loading_lat,z.loading_lng) <= Number(z.loading_radius || 100)) return 'loading';
+    if(v56DistanceMeters(lat,lng,z.dump_lat,z.dump_lng) <= Number(z.dump_radius || 100)) return 'dump';
+    return 'none';
+  }
+  async function v56LoadZones(){
+    const st = v56TripState(); st.error='';
+    try{
+      const sb = state.sb || await initClient();
+      const r = await sb.from('gps_trip_zones').select('*').eq('is_active', true).order('created_at', { ascending:false });
+      if(r.error) throw r.error;
+      st.zones = r.data || [];
+    }catch(e){ st.error = 'Sefer alanları okunamadı. Supabase SQL çalıştırılmalı: ' + String(e.message || e); st.zones = []; }
+    return st.zones;
+  }
+  async function v56LoadLogs(){
+    const st = v56TripState();
+    try{
+      const sb = state.sb || await initClient();
+      const r = await sb.from('gps_trip_logs').select('*').eq('shift_key', v56ShiftKey()).order('updated_at', { ascending:false });
+      if(r.error) throw r.error;
+      st.logs = r.data || [];
+    }catch(e){ st.logs = st.logs || []; if(!st.error) st.error = 'Sefer logları okunamadı. Supabase SQL çalıştırılmalı: ' + String(e.message || e); }
+    return st.logs;
+  }
+  async function v56LoadAssignments(){
+    const st = v56TripState();
+    try{
+      const sb = state.sb || await initClient();
+      const r = await sb.from('gps_truck_assignments').select('*').eq('is_active', true).order('updated_at', { ascending:false });
+      if(r.error) throw r.error;
+      st.assignments = r.data || [];
+    }catch(e){
+      st.assignments = st.assignments || [];
+      if(!st.error) st.error = 'Kamyon rota atamaları okunamadı. Supabase SQL çalıştırılmalı: ' + String(e.message || e);
+    }
+    return st.assignments;
+  }
+  function v56TruckOptionsHtml(selectedId){
+    const trucks = (state.equipments || []).filter(e=>!e.deleted_at && (typeof isTruckEquipment !== 'function' || isTruckEquipment(e)));
+    if(!trucks.length) return '<option value="">Kamyon tanımı yok</option>';
+    return '<option value="">Kamyon seç</option>' + trucks.map(e=>`<option value="${escapeHtml(String(e.id || ''))}" ${String(selectedId||'')===String(e.id||'')?'selected':''}>${escapeHtml(e.name || '-')}</option>`).join('');
+  }
+  function v56ZoneOptionsHtml(selectedId){
+    const zones = v56TripState().zones || [];
+    if(!zones.length) return '<option value="">Önce alan oluştur</option>';
+    return '<option value="">Rota / alan seç</option>' + zones.map(z=>`<option value="${escapeHtml(String(z.id || ''))}" ${String(selectedId||'')===String(z.id||'')?'selected':''}>${escapeHtml(z.route_name || '-')}</option>`).join('');
+  }
+  function v56AssignmentForEquipment(eqId){
+    return (v56TripState().assignments || []).find(a=>String(a.equipment_id || '') === String(eqId || '') && a.is_active !== false) || null;
+  }
+  function v56AssignmentListHtml(){
+    const rows = v56TripState().assignments || [];
+    if(!rows.length) return '<div class="empty">Henüz kamyon rota/alan ataması yok. Atanmayan kamyonlar sefer sayımına dahil edilmez.</div>';
+    return `<div style="display:grid;gap:8px;margin-top:10px">${rows.map(a=>`<div class="gps-assignment-item"><div><b>${escapeHtml(a.equipment_name || '-')}</b><div class="muted">${escapeHtml(a.route_name || '-')}</div></div><button class="danger" style="width:auto;padding:8px 11px" type="button" onclick="removeV56TruckAssignment('${escapeHtml(String(a.equipment_id || ''))}')">Kaldır</button></div>`).join('')}</div>`;
+  }
+  function v56AssignmentPanelHtml(){
+    return `<div class="card" style="margin-top:14px"><h3 style="margin-top:0">Kamyon → Rota / Alan Atama</h3><div class="muted">Her kamyon sadece atandığı yükleme/döküm alanına göre sefer sayar.</div><div class="gps-v56-setup-grid" style="margin-top:10px"><div class="form-field"><label>Kamyon</label><select id="v56AssignTruck">${v56TruckOptionsHtml('')}</select></div><div class="form-field"><label>Rota / Alan</label><select id="v56AssignZone">${v56ZoneOptionsHtml('')}</select></div><div class="form-field"><label>İşlem</label><button type="button" onclick="saveV56TruckAssignment()">Ata / Güncelle</button></div></div><div id="v56Assignments">${v56AssignmentListHtml()}</div></div>`;
+  }
+  async function saveV56TruckAssignment(){
+    try{
+      const eqId = String(document.getElementById('v56AssignTruck')?.value || '').trim();
+      const zoneId = String(document.getElementById('v56AssignZone')?.value || '').trim();
+      if(!eqId) throw new Error('Kamyon seç');
+      if(!zoneId) throw new Error('Rota / alan seç');
+      const eq = findEquipmentById(eqId) || {};
+      const zone = (v56TripState().zones || []).find(z=>String(z.id || '')===zoneId) || {};
+      const sb = state.sb || await initClient();
+      const payload = { equipment_id:eqId, equipment_name:eq.name || '', zone_id:zoneId, route_name:zone.route_name || '', is_active:true, updated_at:new Date().toISOString(), created_by:state.user?.id || null };
+      const r = await sb.from('gps_truck_assignments').upsert(payload, { onConflict:'equipment_id' }).select('*').single();
+      if(r.error) throw r.error;
+      if(typeof showToast === 'function') showToast('Kamyon rota ataması kaydedildi');
+      await refreshV56TripData();
+    }catch(e){ alert('Atama kaydedilemedi: ' + String(e.message || e)); }
+  }
+  async function removeV56TruckAssignment(eqId){
+    try{
+      if(!eqId) return;
+      if(!confirm('Bu kamyonun GPS rota ataması kaldırılsın mı?')) return;
+      const sb = state.sb || await initClient();
+      const r = await sb.from('gps_truck_assignments').update({ is_active:false, updated_at:new Date().toISOString() }).eq('equipment_id', eqId);
+      if(r.error) throw r.error;
+      if(typeof showToast === 'function') showToast('Kamyon ataması kaldırıldı');
+      await refreshV56TripData();
+    }catch(e){ alert('Atama kaldırılamadı: ' + String(e.message || e)); }
+  }
+  function v56RefreshAssignmentDom(){
+    const a=document.getElementById('v56Assignments'); if(a) a.innerHTML=v56AssignmentListHtml();
+    const z=document.getElementById('v56AssignZone'); if(z) z.innerHTML=v56ZoneOptionsHtml(z.value);
+    const t=document.getElementById('v56AssignTruck'); if(t) t.innerHTML=v56TruckOptionsHtml(t.value);
+  }
+  async function v56SaveTripEvent(eqId, eqName, zone, eventType, lat, lng, stateAfter){
+    try{
+      const st = v56TripState();
+      const payload = {
+        equipment_id:eqId || null,
+        equipment_name:eqName || '',
+        zone_id:zone?.id || null,
+        route_name:zone?.route_name || '',
+        shift_key:v56ShiftKey(),
+        event_type:eventType,
+        state_after:stateAfter || '',
+        latitude:Number(lat),
+        longitude:Number(lng),
+        created_at:new Date().toISOString()
+      };
+      st.events = [payload].concat(st.events || []).slice(0,80);
+      const sb = state.sb || await initClient();
+      const r = await sb.from('gps_trip_events').insert(payload);
+      if(r.error) throw r.error;
+    }catch(e){ console.warn('gps_trip_events kayıt atlandı:', e); }
+  }
+  async function v56SaveTripLog(eqId, eqName, zone, nextState, addTrip, eventType, lat, lng){
+    const st = v56TripState();
+    const old = (st.logs || []).find(x => String(x.equipment_id || '')===String(eqId || '') && String(x.zone_id || '')===String(zone.id || '') && String(x.shift_key || '')===v56ShiftKey());
+    const payload = {
+      equipment_id: eqId || null,
+      equipment_name: eqName || '',
+      zone_id: zone.id,
+      route_name: zone.route_name || '',
+      shift_key: v56ShiftKey(),
+      trip_count: Number(old?.trip_count || 0) + (addTrip ? 1 : 0),
+      last_state: nextState,
+      last_event: eventType || '',
+      updated_at: new Date().toISOString()
+    };
+    const sb = state.sb || await initClient();
+    const r = await sb.from('gps_trip_logs').upsert(payload, { onConflict:'equipment_id,zone_id,shift_key' }).select('*').single();
+    if(r.error) throw r.error;
+    st.logs = (st.logs || []).filter(x => !(String(x.equipment_id || '')===String(eqId || '') && String(x.zone_id || '')===String(zone.id || '') && String(x.shift_key || '')===v56ShiftKey()));
+    st.logs.unshift(r.data || payload);
+    st.engine[String(eqId)+'__'+String(zone.id)] = nextState;
+    await v56SaveTripEvent(eqId, eqName, zone, eventType, lat, lng, nextState);
+    if(addTrip && typeof showToast === 'function') showToast(`🚛 ${eqName || 'Kamyon'} sefer +1`);
+  }
+  function v56NextTransition(currentState, nowZone){
+    const s = v56NormalizeEngineState(currentState);
+    if(nowZone === 'loading' && (s === 'waiting_loading')) return { state:'loading_in', event:'loading_in', addTrip:false };
+    if(nowZone === 'none' && s === 'loading_in') return { state:'loaded_out', event:'loading_out', addTrip:false };
+    if(nowZone === 'dump' && s === 'loaded_out') return { state:'dump_in', event:'dump_in', addTrip:false };
+    if(nowZone === 'none' && s === 'dump_in') return { state:'waiting_loading', event:'dump_out', addTrip:true };
+    return null;
+  }
+  async function v56ProcessTripEngine(){
+    const st = v56TripState();
+    if(st.busy) return;
+    st.busy = true;
+    try{
+      const zones = (st.zones && st.zones.length) ? st.zones : await v56LoadZones();
+      if(!zones.length) return;
+      if(!st.logs || !st.logs.length) await v56LoadLogs();
+      await v56LoadAssignments();
+      const zoneById = new Map((zones || []).map(z=>[String(z.id || ''), z]));
+      const latest = latestGpsByEquipment();
+      for(const [eqId,pos] of latest.entries()){
+        const eq = findEquipmentById(eqId);
+        if(eq && typeof isTruckEquipment === 'function' && !isTruckEquipment(eq)) continue;
+        const assignment = v56AssignmentForEquipment(eqId);
+        if(!assignment) continue;
+        const zone = zoneById.get(String(assignment.zone_id || ''));
+        if(!zone) continue;
+        const lat = Number(pos.latitude), lng = Number(pos.longitude);
+        if(!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+        const key = String(eqId)+'__'+String(zone.id);
+        const oldLog = (st.logs || []).find(x => String(x.equipment_id || '')===String(eqId || '') && String(x.zone_id || '')===String(zone.id || '') && String(x.shift_key || '')===v56ShiftKey());
+        const currentState = v56NormalizeEngineState(st.engine[key] || oldLog?.last_state || 'waiting_loading');
+        const nowZone = v56PointZone(lat, lng, zone);
+        const transition = v56NextTransition(currentState, nowZone);
+        if(transition){
+          await v56SaveTripLog(eqId, pos.equipment_name || eq?.name || assignment.equipment_name || '', zone, transition.state, transition.addTrip, transition.event, lat, lng);
+        }else{
+          st.engine[key] = currentState;
+        }
+      }
+    }catch(e){ st.error = 'Sefer algılama çalışırken hata: ' + String(e.message || e); console.warn(e); }
+    finally{ st.busy = false; }
+  }
+  function v56LogHtml(){
+    const logs = v56TripState().logs || [];
+    if(!logs.length) return '<div class="empty">Henüz algılanan sefer yok.</div>';
+    return `<div class="gps-v56-log-grid">${logs.map(l=>`<div class="gps-v56-log-card"><b>${escapeHtml(l.equipment_name || '-')}</b><div class="muted">${escapeHtml(l.route_name || '-')}</div><div class="stat" style="font-size:26px">${Number(l.trip_count || 0)} sefer</div><div class="muted">${escapeHtml(v56StateLabel(l.last_state))}</div><div class="muted">Son event: ${escapeHtml(v56EventLabel(l.last_event))}</div></div>`).join('')}</div>`;
+  }
+  function v56ZoneListHtml(){
+    const zones = v56TripState().zones || [];
+    if(!zones.length) return '<div class="empty">Kayıtlı yükleme / döküm alanı yok.</div>';
+    return `<div style="display:grid;gap:8px;margin-top:10px">${zones.map(z=>`<div class="gps-assignment-item"><div><b>${escapeHtml(z.route_name || '-')}</b><div class="muted">Yükleme: ${Number(z.loading_radius || 100)} m • Döküm: ${Number(z.dump_radius || 100)} m</div></div><button class="danger" style="width:auto;padding:8px 11px" type="button" onclick="deleteV56TripZone('${escapeHtml(String(z.id || ''))}')">Sil</button></div>`).join('')}</div>`;
+  }
+  function v56EventHtml(){
+    const ev = v56TripState().events || [];
+    if(!ev.length) return '<div class="empty">Bu ekranda henüz yeni event oluşmadı.</div>';
+    return `<div style="display:grid;gap:7px">${ev.slice(0,20).map(x=>`<div class="gps-assignment-item"><div><b>${escapeHtml(x.equipment_name || '-')}</b><div class="muted">${escapeHtml(x.route_name || '-')} • ${escapeHtml(v56EventLabel(x.event_type))}</div></div><span class="pill">${escapeHtml(v56StateLabel(x.state_after))}</span></div>`).join('')}</div>`;
+  }
+  function v56TripHtml(){
+    const st = v56TripState();
+    const err = st.error ? `<div class="notice" style="margin-bottom:12px">${escapeHtml(st.error)}</div>` : '';
+    return `${v56Tabs('trip')}
+      <div class="card pro-hero"><h2 class="section-title">Sefer Algılama</h2><div class="muted">GPS akışı → alan kontrol → event → state → sefer++. Her kamyon ayrı takip edilir.</div></div>
+      ${err}
+      <div class="card"><div class="gps-v56-setup-grid">
+        <div class="form-field"><label>Paket / rota</label><input id="v56RouteName" placeholder="Örn: Dekapaj / Ocak → Döküm"></div>
+        <div class="form-field"><label>Yükleme adı</label><input id="v56LoadingName" placeholder="Örn: Ocak A / Yükleme 1"></div>
+        <div class="form-field"><label>Döküm adı</label><input id="v56DumpName" placeholder="Örn: Döküm Sahası 1"></div>
+        <div class="form-field"><label>Yarıçap (m)</label><input id="v56Radius" type="number" value="100"></div>
+        <div class="form-field"><label>Seçim modu</label><select id="v56Mode" onchange="v56TripState().mode=this.value"><option value="loading">Yükleme alanı</option><option value="dump">Döküm alanı</option></select></div>
+        <div class="form-field"><label>İşlem</label><button type="button" onclick="saveV56TripZone()">Kaydet</button></div>
+      </div>
+      <div class="gps-v56-pill-row"><span class="gps-v56-pill load">🔵 Yükleme: <span id="v56LoadTxt">Seçilmedi</span></span><span class="gps-v56-pill dump">🟠 Döküm: <span id="v56DumpTxt">Seçilmedi</span></span><button class="secondary" style="width:auto" type="button" onclick="resetV56TripDraft()">Seçimi temizle</button><button class="secondary" style="width:auto" type="button" onclick="refreshV56TripData()">Yenile</button><button class="danger" style="width:auto" type="button" onclick="clearAllV56TripZones()">Tüm alanları temizle</button></div>
+      </div>
+      ${v56AssignmentPanelHtml()}
+      <div class="grid g2" style="margin-top:14px"><div class="card"><h3 style="margin-top:0">Kayıtlı Alanlar</h3><div id="v56Zones">${v56ZoneListHtml()}</div></div><div class="card"><h3 style="margin-top:0">Son Eventler</h3><div id="v56Events">${v56EventHtml()}</div></div></div>
+      <div class="card" style="padding:12px;margin-top:14px"><h3 style="margin-top:0">Alan Haritası</h3><div id="gpsTripMapV56" class="gps-v56-map"></div></div>
+      <div class="card" style="margin-top:14px"><h3>Algılanan Seferler</h3><div id="v56Logs">${v56LogHtml()}</div></div>`;
+  }
+  function v56RefreshTripDom(){
+    const l=document.getElementById('v56Logs'); if(l) l.innerHTML=v56LogHtml();
+    const z=document.getElementById('v56Zones'); if(z) z.innerHTML=v56ZoneListHtml();
+    const e=document.getElementById('v56Events'); if(e) e.innerHTML=v56EventHtml();
+    v56RefreshAssignmentDom();
+  }
+  function v56DrawZones(){
+    const st = v56TripState(); const map = st.map;
+    if(!map || typeof L === 'undefined') return;
+    (st.zoneLayers || []).forEach(x=>{ try{ map.removeLayer(x); }catch(e){} }); st.zoneLayers=[];
+    const bounds=[];
+    (st.zones || []).forEach(z=>{
+      if(!Number.isFinite(Number(z.loading_lat)) || !Number.isFinite(Number(z.loading_lng)) || !Number.isFinite(Number(z.dump_lat)) || !Number.isFinite(Number(z.dump_lng))) return;
+      const a=L.circle([z.loading_lat,z.loading_lng],{radius:Number(z.loading_radius||100),color:'#2563eb',fillColor:'#93c5fd',fillOpacity:.20}).addTo(map).bindPopup(`${escapeHtml(z.route_name || 'Rota')} - Yükleme`);
+      const d=L.circle([z.dump_lat,z.dump_lng],{radius:Number(z.dump_radius||100),color:'#f97316',fillColor:'#fdba74',fillOpacity:.20}).addTo(map).bindPopup(`${escapeHtml(z.route_name || 'Rota')} - Döküm`);
+      st.zoneLayers.push(a,d); bounds.push([Number(z.loading_lat),Number(z.loading_lng)],[Number(z.dump_lat),Number(z.dump_lng)]);
+    });
+    if(bounds.length) try{ map.fitBounds(bounds, { padding:[35,35], maxZoom:15 }); }catch(e){}
+  }
+  async function initV56TripMap(){
+    const st = v56TripState();
+    try{ await v56LoadZones(); await v56LoadAssignments(); await v56LoadLogs(); await v56ProcessTripEngine(); }catch(e){ st.error=String(e.message||e); }
+    const el = document.getElementById('gpsTripMapV56');
+    if(!el || typeof L === 'undefined') return;
+    if(st.map) try{ st.map.remove(); }catch(e){}
+    let center=[41.2995,69.2401];
+    if(st.zones && st.zones[0]) center=[Number(st.zones[0].loading_lat), Number(st.zones[0].loading_lng)];
+    if(!Number.isFinite(center[0]) || !Number.isFinite(center[1])) center=[41.2995,69.2401];
+    const map = L.map('gpsTripMapV56').setView(center, 13); st.map=map;
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19, attribution:'&copy; OpenStreetMap'}).addTo(map);
+    v56DrawZones();
+    map.on('click', e=>{
+      const radius = Number(document.getElementById('v56Radius')?.value || 100);
+      const mode = st.mode || 'loading';
+      const color = mode === 'loading' ? '#2563eb' : '#f97316';
+      if(mode === 'loading'){
+        st.loadingPoint = e.latlng;
+        const tx = document.getElementById('v56LoadTxt'); if(tx) tx.textContent = e.latlng.lat.toFixed(6)+', '+e.latlng.lng.toFixed(6);
+        st.mode = 'dump'; const md=document.getElementById('v56Mode'); if(md) md.value='dump';
+      }else{
+        st.dumpPoint = e.latlng;
+        const tx = document.getElementById('v56DumpTxt'); if(tx) tx.textContent = e.latlng.lat.toFixed(6)+', '+e.latlng.lng.toFixed(6);
+      }
+      st.draftLayers.push(L.circle(e.latlng,{radius:radius || 100, color, fillOpacity:.22}).addTo(map));
+    });
+    setTimeout(()=>{ try{ map.invalidateSize(); }catch(e){} }, 250);
+    v56RefreshTripDom();
+  }
+  function resetV56TripDraft(){
+    const st = v56TripState(); st.loadingPoint=null; st.dumpPoint=null; st.mode='loading';
+    (st.draftLayers || []).forEach(x=>{ try{ st.map.removeLayer(x); }catch(e){} }); st.draftLayers=[];
+    const a=document.getElementById('v56LoadTxt'); if(a) a.textContent='Seçilmedi';
+    const b=document.getElementById('v56DumpTxt'); if(b) b.textContent='Seçilmedi';
+    const m=document.getElementById('v56Mode'); if(m) m.value='loading';
+  }
+  async function saveV56TripZone(){
+    try{
+      const st = v56TripState();
+      const name = String(document.getElementById('v56RouteName')?.value || '').trim();
+      const loadingName = String(document.getElementById('v56LoadingName')?.value || '').trim();
+      const dumpName = String(document.getElementById('v56DumpName')?.value || '').trim();
+      const radius = Number(document.getElementById('v56Radius')?.value || 100);
+      if(!name) throw new Error('Paket / rota adı gir');
+      if(!st.loadingPoint || !st.dumpPoint) throw new Error('Yükleme ve döküm alanlarını haritadan seç');
+      const sb = state.sb || await initClient();
+      const r = await sb.from('gps_trip_zones').insert({
+        route_name:name, loading_name:loadingName || 'Yükleme', dump_name:dumpName || 'Döküm', loading_lat:st.loadingPoint.lat, loading_lng:st.loadingPoint.lng,
+        dump_lat:st.dumpPoint.lat, dump_lng:st.dumpPoint.lng,
+        loading_radius:radius || 100, dump_radius:radius || 100, is_active:true, created_by:state.user?.id || null
+      }).select('*').single();
+      if(r.error) throw r.error;
+      if(typeof showToast === 'function') showToast('Sefer alanı kaydedildi'); else alert('Kaydedildi');
+      resetV56TripDraft(); await refreshV56TripData();
+    }catch(e){ alert(String(e.message || e)); }
+  }
+  async function deleteV56TripZone(zoneId){
+    try{
+      if(!zoneId) return;
+      if(!confirm('Bu yükleme / döküm alanı silinsin mi?')) return;
+      const sb = state.sb || await initClient();
+      let r = await sb.from('gps_trip_zones').update({ is_active:false }).eq('id', zoneId);
+      if(r.error) throw r.error;
+      if(typeof showToast === 'function') showToast('Alan silindi');
+      await refreshV56TripData();
+    }catch(e){ alert('Alan silinemedi: ' + String(e.message || e)); }
+  }
+  async function clearAllV56TripZones(){
+    try{
+      if(!confirm('Tüm aktif yükleme / döküm alanları temizlensin mi?')) return;
+      const sb = state.sb || await initClient();
+      const ids = (v56TripState().zones || []).map(z=>z.id).filter(Boolean);
+      if(!ids.length) return;
+      const r = await sb.from('gps_trip_zones').update({ is_active:false }).in('id', ids);
+      if(r.error) throw r.error;
+      if(typeof showToast === 'function') showToast('Tüm alanlar temizlendi');
+      await refreshV56TripData();
+    }catch(e){ alert('Alanlar temizlenemedi: ' + String(e.message || e)); }
+  }
+  async function refreshV56TripData(){
+    await v56LoadZones(); await v56LoadAssignments(); await v56LoadLogs(); await v56ProcessTripEngine();
+    v56RefreshTripDom();
+    v56DrawZones();
+  }
+  const v56OriginalRenderGpsLive = renderGpsLive;
+  renderGpsLive = function(){
+    try{
+      const role = currentUserRole();
+      if(role !== 'manager') return v56OriginalRenderGpsLive();
+      const st = v56TripState();
+      if(st.tab === 'trip'){
+        const el = document.getElementById('gpsLive'); if(!el) return;
+        el.innerHTML = v56TripHtml();
+        setTimeout(()=>{ initV56TripMap().catch(e=>console.error(e)); try{ if(typeof applyLanguage==='function') applyLanguage(); }catch(e){} }, 120);
+        return;
+      }
+      v56OriginalRenderGpsLive();
+      setTimeout(()=>{ try{ const el=document.getElementById('gpsLive'); if(el && !el.querySelector('.gps-v56-tabs')) el.insertAdjacentHTML('afterbegin', v56Tabs('live')); }catch(e){ console.warn(e); } }, 80);
+    }catch(e){
+      console.error('GPS render wrapper error', e);
+      try{ v56OriginalRenderGpsLive(); }catch(inner){ renderPageError('gpsLive', 'GPS / Canlı Takip', inner); }
+    }
+  };
+  Object.assign(window, { setGpsTripV56Tab, saveV56TripZone, resetV56TripDraft, refreshV56TripData, v56TripState, deleteV56TripZone, clearAllV56TripZones, saveV56TruckAssignment, removeV56TruckAssignment });
+  /* =================== /V56 GPS SEFER ALGILAMA GÜVENLİ PATCH =================== */
+
+
+  /* =================== V59 ŞOFÖR GÖREV EKRANI + WAKE LOCK GÜVENLİ PATCH =================== */
+  function v59SafeDash(v){
+    const s = String(v == null ? '' : v).trim();
+    return s && s !== '-' && s.toLowerCase() !== 'null' && s.toLowerCase() !== 'undefined' ? s : '';
+  }
+  function v59ZoneForEquipment(eqId){
+    try{
+      const st = v56TripState && v56TripState();
+      const assignment = v56AssignmentForEquipment ? v56AssignmentForEquipment(eqId) : null;
+      if(!assignment) return { assignment:null, zone:null };
+      const zone = (st.zones || []).find(z=>String(z.id || '') === String(assignment.zone_id || '')) || null;
+      return { assignment, zone };
+    }catch(e){ return { assignment:null, zone:null }; }
+  }
+  function v59RouteTextFromZone(zone){
+    if(!zone) return '';
+    const from = v59SafeDash(zone.loading_name) || (Number.isFinite(Number(zone.loading_lat)) ? `Yükleme (${Number(zone.loading_lat).toFixed(5)}, ${Number(zone.loading_lng).toFixed(5)})` : 'Yükleme');
+    const to = v59SafeDash(zone.dump_name) || (Number.isFinite(Number(zone.dump_lat)) ? `Döküm (${Number(zone.dump_lat).toFixed(5)}, ${Number(zone.dump_lng).toFixed(5)})` : 'Döküm');
+    return `${from} → ${to}`;
+  }
+  const v59OriginalGpsOperationInfoForEquipment = gpsOperationInfoForEquipment;
+  gpsOperationInfoForEquipment = function(eqId){
+    const op = v59OriginalGpsOperationInfoForEquipment(eqId) || {};
+    try{
+      const pair = v59ZoneForEquipment(eqId);
+      const routeName = v59SafeDash(pair.assignment?.route_name) || v59SafeDash(pair.zone?.route_name);
+      const zoneRoute = v59RouteTextFromZone(pair.zone);
+      if(routeName && !v59SafeDash(op.packageName)) op.packageName = routeName;
+      if(zoneRoute && (!v59SafeDash(op.route) || op.route === '-')) op.route = zoneRoute;
+      op.gpsRouteName = routeName || '';
+      op.gpsLoadingName = v59SafeDash(pair.zone?.loading_name) || 'Yükleme';
+      op.gpsDumpName = v59SafeDash(pair.zone?.dump_name) || 'Döküm';
+      op.gpsZoneId = pair.zone?.id || pair.assignment?.zone_id || '';
+    }catch(e){}
+    return op;
+  };
+  async function v59EnsureDriverTripData(){
+    try{
+      if(currentUserRole && currentUserRole() === 'manager') return;
+      const st = v56TripState && v56TripState();
+      if(!st || st.v59Loading) return;
+      if((st.zones && st.zones.length) && (st.assignments && st.assignments.length)) return;
+      st.v59Loading = true;
+      await v56LoadZones();
+      await v56LoadAssignments();
+      await v56LoadLogs();
+      st.v59Loading = false;
+      if(state.currentPage === 'gpsLive') renderGpsLive();
+    }catch(e){ try{ v56TripState().v59Loading = false; }catch(_){} console.warn('v59 driver data load', e); }
+  }
+  function v59InjectDriverTaskCard(){
+    try{
+      if(currentUserRole() === 'manager') return;
+      const assigned = gpsAssignedEquipment();
+      const host = document.querySelector('#gpsLive .gps-driver-card');
+      if(!host || document.getElementById('gpsV59TaskCard')) return;
+      const op = assigned ? gpsOperationInfoForEquipment(assigned.id) : null;
+      const pair = assigned ? v59ZoneForEquipment(assigned.id) : { assignment:null, zone:null };
+      const packageName = v59SafeDash(op?.packageName) || v59SafeDash(op?.gpsRouteName) || v59SafeDash(pair.assignment?.route_name) || 'Atama bekleniyor';
+      const routeText = v59SafeDash(op?.route) || v59RouteTextFromZone(pair.zone) || 'Yükleme / döküm bilgisi bekleniyor';
+      const shiftName = v59SafeDash(op?.shiftName) || 'Aktif vardiya';
+      const status = state.gps?.tracking ? 'GPS aktif' : (assigned ? 'GPS otomatik başlatılıyor' : 'Atama yok');
+      const html = `<div id="gpsV59TaskCard" class="gps-selected-detail gps-v59-task-card">
+        <div class="gps-v59-task-title"><b>📋 Aktif Görev Bilgisi</b><span class="pill green">${escapeHtml(status)}</span></div>
+        <div class="gps-fleet-liveinfo">
+          <div class="gps-info-mini"><div class="l">Vardiya</div><div class="d">${escapeHtml(shiftName)}</div></div>
+          <div class="gps-info-mini"><div class="l">Makina</div><div class="d">${escapeHtml(assigned?.name || 'Atama yok')}</div></div>
+          <div class="gps-info-mini"><div class="l">Paket</div><div class="d">${escapeHtml(packageName)}</div></div>
+          <div class="gps-info-mini"><div class="l">Sefer</div><div class="d">${Number(op?.tripCount || 0)}</div></div>
+        </div>
+        <div class="gps-v59-route"><div class="gps-status-title">Nereden / Nereye</div><div class="gps-v59-route-line"><span>${escapeHtml((op?.gpsLoadingName || '').trim() || 'Yükleme')}</span><span class="gps-v59-arrow">→</span><span>${escapeHtml((op?.gpsDumpName || '').trim() || 'Döküm')}</span></div><div class="muted" style="margin-top:6px">${escapeHtml(routeText)}</div></div>
+        <div id="gpsV59BackgroundWarning" class="${state.gps?.tracking ? 'gps-v59-ok' : 'gps-v59-warning'}" style="margin-top:10px">${state.gps?.tracking ? 'Ekran açık tutma deneniyor. Tarayıcı arka plana alınırsa telefon GPS verisini yine kısıtlayabilir.' : 'GPS takip başlatılıyor. Telefon ekranı kapanırsa web tarayıcı GPS göndermeyi durdurabilir.'}</div>
+      </div>`;
+      const ref = host.querySelector('.gps-status-box[style*="eff6ff"]') || host.children[1];
+      if(ref) ref.insertAdjacentHTML('afterend', html); else host.insertAdjacentHTML('afterbegin', html);
+    }catch(e){ console.warn('v59 task inject', e); }
+  }
+  let gpsV59WakeLock = null;
+  let gpsV59LastPositionAt = 0;
+  async function gpsV59RequestWakeLock(){
+    try{
+      if(!('wakeLock' in navigator)) return false;
+      if(gpsV59WakeLock) return true;
+      gpsV59WakeLock = await navigator.wakeLock.request('screen');
+      gpsV59WakeLock.addEventListener('release', ()=>{ gpsV59WakeLock = null; const w=document.getElementById('gpsV59BackgroundWarning'); if(w && state.gps?.tracking){ w.className='gps-v59-warning'; w.textContent='Ekran açık tutma pasif oldu. Sayfayı önde ve ekranı açık tutun.'; } });
+      return true;
+    }catch(e){ console.warn('Wake Lock çalışmadı', e); return false; }
+  }
+  async function gpsV59ReleaseWakeLock(){
+    try{ if(gpsV59WakeLock){ await gpsV59WakeLock.release(); gpsV59WakeLock = null; } }catch(e){}
+  }
+  const v59OriginalSaveGpsPosition = saveGpsPosition;
+  saveGpsPosition = async function(payload){
+    gpsV59LastPositionAt = Date.now();
+    const r = await v59OriginalSaveGpsPosition(payload);
+    const w=document.getElementById('gpsV59BackgroundWarning');
+    if(w){ w.className='gps-v59-ok'; w.textContent='GPS verisi alınıyor. Ekran açık tutulmaya çalışılıyor; tarayıcı arka plana alınırsa veri kesilebilir.'; }
+    return r;
+  };
+  const v59OriginalStartGpsTracking = startGpsTracking;
+  startGpsTracking = async function(autoStarted=false){
+    const result = await v59OriginalStartGpsTracking(autoStarted);
+    try{ await gpsV59RequestWakeLock(); }catch(e){}
+    gpsV59LastPositionAt = Date.now();
+    setTimeout(v59InjectDriverTaskCard, 300);
+    return result;
+  };
+  const v59OriginalStopGpsTracking = stopGpsTracking;
+  stopGpsTracking = function(rerender=true){
+    gpsV59ReleaseWakeLock();
+    return v59OriginalStopGpsTracking(rerender);
+  };
+  const v59OriginalRenderGpsLive = renderGpsLive;
+  renderGpsLive = function(){
+    const out = v59OriginalRenderGpsLive();
+    try{
+      if(currentUserRole && currentUserRole() !== 'manager'){
+        setTimeout(()=>{ v59EnsureDriverTripData(); v59InjectDriverTaskCard(); }, 120);
+      }
+    }catch(e){ console.warn('v59 render hook', e); }
+    return out;
+  };
+  document.addEventListener('visibilitychange', async ()=>{
+    try{
+      if(document.visibilityState === 'visible' && state.gps?.tracking){ await gpsV59RequestWakeLock(); }
+      const w=document.getElementById('gpsV59BackgroundWarning');
+      if(w && state.gps?.tracking && document.visibilityState !== 'visible'){
+        w.className='gps-v59-warning';
+        w.textContent='Sayfa arka plana alındı. Mobil tarayıcılar arka planda GPS göndermeyi durdurabilir.';
+      }
+    }catch(e){}
+  });
+  setInterval(()=>{
+    try{
+      if(!state.gps?.tracking) return;
+      const w=document.getElementById('gpsV59BackgroundWarning');
+      if(!w) return;
+      const age = gpsV59LastPositionAt ? Date.now() - gpsV59LastPositionAt : 0;
+      if(age > 70000){ w.className='gps-v59-warning'; w.textContent='Son 70 saniyedir GPS verisi gelmedi. Telefon ekranı kapandıysa veya tarayıcı arka plandaysa GPS kesilmiş olabilir.'; }
+    }catch(e){}
+  }, 15000);
+  Object.assign(window, { gpsV59RequestWakeLock, v59EnsureDriverTripData });
+  /* =================== /V59 ŞOFÖR GÖREV EKRANI + WAKE LOCK GÜVENLİ PATCH =================== */
 
   Object.assign(window, { openModal, closeModal, fillTruckRouteFromExcavator, updateAutoMeterLabels, updateProductionStartMeterHints, updateTripProductionContext, updateFuelProductionContext, updateMeterCorrectionContext, toggleProductionEditLinkedField, refreshLogisticsEquipmentSelect, markShiftSelectManual, continueBreakdownToCurrentShift, finishBreakdownFromWarning, saveStartProductionExcavator, saveStartProductionTruck, saveStartProductionOther, saveEndProduction, saveStartBreakdown, saveEndBreakdown, saveStartRental, saveEndRental, saveNewTrip, saveNewFuel, saveNewMeter, confirmSoftDelete, restoreDeleted, deleteAllDeletedRecordsNow, deleteDeletedOlderThan30Days, saveEditRecord, saveDefinition, deleteTruckModel, toggleDefinitionTruckModelField, renderShiftConfigInputs, saveShiftConfigFromForm, renderShiftConfigCardRefresh, applyRecordFiltersFromUI, resetRecordFilters, bulkDeleteRecordTable, exportRecordsToExcel, saveUserRoleSettings, refreshData, exportDailyPdf, exportWeeklyExcel, exportShiftReport, gpsSelectFromList, assignGpsPhoneToSelectedEquipment, clearGpsPhoneAssignment, startGpsTracking, stopGpsTracking, syncOfflineGpsPositions, refreshGpsMapNow, applyGpsManagerFilter });
 
