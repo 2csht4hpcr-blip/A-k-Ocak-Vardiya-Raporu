@@ -11497,6 +11497,95 @@ function renderUsers(){
   Object.assign(window, { v61FindProductionForEquipment, v61SetDriverShellMode });
   /* =================== /V61 ŞOFÖR AKTİF ÜRETİM + MENÜ TEMİZLEME PATCH =================== */
 
+
+  /* =================== V62 ŞOFÖR ÜRETİM EŞLEŞTİRME + HARİTA ALAN ETİKETLERİ PATCH =================== */
+  const v62Style = document.createElement('style');
+  v62Style.textContent = `
+    body.gps-driver-shell-mode #onlineUsersCard,
+    .gps-driver-shell-mode #onlineUsersCard{display:none!important}
+    .gps-zone-label{background:rgba(15,23,42,.88);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:999px;padding:5px 9px;font-size:11px;font-weight:900;white-space:nowrap;box-shadow:0 8px 18px rgba(15,23,42,.25)}
+    .gps-zone-label.load{background:rgba(37,99,235,.92)}
+    .gps-zone-label.dump{background:rgba(249,115,22,.92)}
+  `;
+  document.head.appendChild(v62Style);
+
+  function v62Norm(v){ return String(v == null ? '' : v).trim().toLocaleLowerCase('tr-TR').replace(/[^a-z0-9ğüşöçıİĞÜŞÖÇ]+/gi,''); }
+  function v62IsOpenProd(r){ return !!(r && !r.deleted_at && !(r.end_at || r.end_time || r.finished_at || r.finish_at || r.closed_at)); }
+  function v62ProdTime(r){ return new Date(r?.start_at || r?.start_time || r?.created_at || 0).getTime() || 0; }
+  function v62CollectCandidateKeys(eq){
+    const assignment = (typeof gpsAssignmentForUser === 'function') ? gpsAssignmentForUser(state.user?.id) : null;
+    const ids = new Set(); const names = new Set();
+    const addId = v=>{ const s=String(v||'').trim(); if(s) ids.add(s); };
+    const addName = v=>{ const s=v62Norm(v); if(s) names.add(s); };
+    [eq?.id, eq?.equipment_id, assignment?.equipment_id, state.gps?.selectedEquipmentId].forEach(addId);
+    [eq?.name, eq?.equipment_name, eq?.equipment_name_snapshot, eq?.plate_no, eq?.plate, eq?.code, assignment?.equipment_name, assignment?.plate_no, assignment?.device_code].forEach(addName);
+    return { assignment, ids, names };
+  }
+  function v62ProdMatchesCandidate(prod, c){
+    const prodIds = [prod?.equipment_id, prod?.truck_id, prod?.machine_id, prod?.vehicle_id].map(v=>String(v||'').trim()).filter(Boolean);
+    if(prodIds.some(id=>c.ids.has(id))) return true;
+    const prodNames = [prod?.equipment_name, prod?.equipment_name_snapshot, prod?.truck_name, prod?.machine_name, prod?.vehicle_name, prod?.plate_no, prod?.plate, prod?.equipment_code, prod?.name].map(v62Norm).filter(Boolean);
+    for(const pn of prodNames){ for(const cn of c.names){ if(pn === cn) return true; if(pn.length >= 4 && cn.length >= 4 && (pn.includes(cn) || cn.includes(pn))) return true; } }
+    return false;
+  }
+  function v62FindProductionForAssignedTruck(eq){
+    try{
+      const c = v62CollectCandidateKeys(eq || {});
+      const rows = (state.productions || []).filter(v62IsOpenProd).filter(r=>v62ProdMatchesCandidate(r, c));
+      const current = (typeof getCurrentShiftBucketInfo === 'function') ? getCurrentShiftBucketInfo() : null;
+      rows.sort((a,b)=>{ const ac = current && String(getRowShiftBucketKey(a)||'') === String(current.shift_key||'') ? 1 : 0; const bc = current && String(getRowShiftBucketKey(b)||'') === String(current.shift_key||'') ? 1 : 0; return (bc-ac) || (v62ProdTime(b)-v62ProdTime(a)); });
+      return rows[0] || null;
+    }catch(e){ return null; }
+  }
+
+  v61FindProductionForEquipment = function(eq){ return v62FindProductionForAssignedTruck(eq); };
+  v60ActiveProductionForEquipment = function(eqId){ const eq = (typeof findEquipmentById === 'function') ? findEquipmentById(eqId) : null; return v62FindProductionForAssignedTruck(eq || { id:eqId, name:'' }); };
+  v60TaskInfoFromActiveProduction = function(eq){
+    const assignment = (typeof gpsAssignmentForUser === 'function') ? gpsAssignmentForUser(state.user?.id) : null;
+    const prod = v62FindProductionForAssignedTruck(eq || { id: assignment?.equipment_id, name: assignment?.equipment_name });
+    const pair = eq ? v59ZoneForEquipment(eq.id) : { assignment:null, zone:null };
+    const baseOp = eq ? (v59OriginalGpsOperationInfoForEquipment ? v59OriginalGpsOperationInfoForEquipment(eq.id) : {}) : {};
+    const linkedName = v59SafeDash(prod?.linked_excavator_name) || v59SafeDash(prod?.linked_excavator_name_snapshot) || (prod?.linked_excavator_id ? v59SafeDash(findEquipmentById(prod.linked_excavator_id)?.name) : '');
+    const packageLabel = v59SafeDash(prod?.package_name) || v59SafeDash(prod?.package_name_snapshot) || (prod?.package_id ? v59SafeDash(packageName(prod.package_id)) : '') || v59SafeDash(pair.assignment?.route_name) || v59SafeDash(pair.zone?.route_name) || 'Aktif üretim bekleniyor';
+    const from = v59SafeDash(prod?.from_location) || v59SafeDash(prod?.loading_location) || v59SafeDash(pair.zone?.loading_name) || 'Yükleme';
+    const to = v59SafeDash(prod?.to_location) || v59SafeDash(prod?.dump_location) || v59SafeDash(pair.zone?.dump_name) || 'Döküm';
+    const routeText = prod ? `${from} → ${to}` : (v59RouteTextFromZone(pair.zone) || 'Yükleme / döküm bilgisi bekleniyor');
+    const tripCount = prod ? (typeof productionTripTotal === 'function' ? productionTripTotal(prod) : Number(prod.trip_count || 0)) : Number(baseOp?.tripCount || 0);
+    const shiftName = v59SafeDash(prod ? getShiftNameForRow(prod) : '') || v59SafeDash(baseOp?.shiftName) || 'Aktif vardiya';
+    const linkedMachineLabel = prod ? (linkedName || 'Bağlı makina yok') : 'Aktif üretim bekleniyor';
+    return { prod, linkedMachineLabel, packageName: packageLabel, from, to, routeText, tripCount, shiftName };
+  };
+
+  function v62ZoneLabel(text, cls){ return L.divIcon({ className:'', html:`<div class="gps-zone-label ${cls||''}">${escapeHtml(text)}</div>`, iconSize:null, iconAnchor:[20,12] }); }
+  function v62DrawZonePair(map, z, targetLayers){
+    if(!map || !z || typeof L === 'undefined') return [];
+    const pts=[]; const route = String(z.route_name || z.name || 'Rota'); const loadName = String(z.loading_name || 'Yükleme'); const dumpName = String(z.dump_name || 'Döküm');
+    const loadLat = Number(z.loading_lat), loadLng = Number(z.loading_lng), dumpLat = Number(z.dump_lat), dumpLng = Number(z.dump_lng);
+    if(Number.isFinite(loadLat) && Number.isFinite(loadLng)){ const c=L.circle([loadLat,loadLng],{radius:Number(z.loading_radius||z.radius||100),color:'#2563eb',fillColor:'#93c5fd',fillOpacity:.20}).addTo(map).bindPopup(`${escapeHtml(route)} - ${escapeHtml(loadName)}`); const m=L.marker([loadLat,loadLng],{icon:v62ZoneLabel(`${route} • ${loadName}`,'load'), interactive:false}).addTo(map); targetLayers.push(c,m); pts.push([loadLat,loadLng]); }
+    if(Number.isFinite(dumpLat) && Number.isFinite(dumpLng)){ const c=L.circle([dumpLat,dumpLng],{radius:Number(z.dump_radius||z.radius||100),color:'#f97316',fillColor:'#fdba74',fillOpacity:.20}).addTo(map).bindPopup(`${escapeHtml(route)} - ${escapeHtml(dumpName)}`); const m=L.marker([dumpLat,dumpLng],{icon:v62ZoneLabel(`${route} • ${dumpName}`,'dump'), interactive:false}).addTo(map); targetLayers.push(c,m); pts.push([dumpLat,dumpLng]); }
+    return pts;
+  }
+
+  v56DrawZones = function(){ const st = v56TripState(); const map = st.map; if(!map || typeof L === 'undefined') return; (st.zoneLayers || []).forEach(x=>{ try{ map.removeLayer(x); }catch(e){} }); st.zoneLayers=[]; const bounds=[]; (st.zones || []).forEach(z=>{ v62DrawZonePair(map, z, st.zoneLayers).forEach(p=>bounds.push(p)); }); if(bounds.length) try{ map.fitBounds(bounds, { padding:[35,35], maxZoom:15 }); }catch(e){} };
+
+  initV56TripMap = async function(){
+    const st = v56TripState(); try{ await v56LoadZones(); await v56LoadAssignments(); await v56LoadLogs(); await v56ProcessTripEngine(); }catch(e){ st.error=String(e.message||e); }
+    const el = document.getElementById('gpsTripMapV56'); if(!el || typeof L === 'undefined') return; if(st.map) try{ st.map.remove(); }catch(e){}
+    let center=[41.2995,69.2401]; if(st.zones && st.zones[0]) center=[Number(st.zones[0].loading_lat), Number(st.zones[0].loading_lng)]; if(!Number.isFinite(center[0]) || !Number.isFinite(center[1])) center=[41.2995,69.2401];
+    const map = L.map('gpsTripMapV56').setView(center, 13); st.map=map; L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19, attribution:'&copy; OpenStreetMap'}).addTo(map); v56DrawZones();
+    map.on('click', e=>{ const radius = Number(document.getElementById('v56Radius')?.value || 100); const mode = st.mode || 'loading'; const routeName = String(document.getElementById('v56RouteName')?.value || 'Yeni Rota').trim() || 'Yeni Rota'; const loadName = String(document.getElementById('v56LoadingName')?.value || 'Yükleme').trim() || 'Yükleme'; const dumpName = String(document.getElementById('v56DumpName')?.value || 'Döküm').trim() || 'Döküm'; if(mode === 'loading'){ st.loadingPoint = e.latlng; const tx = document.getElementById('v56LoadTxt'); if(tx) tx.textContent = e.latlng.lat.toFixed(6)+', '+e.latlng.lng.toFixed(6); const c=L.circle(e.latlng,{radius:radius || 100,color:'#2563eb',fillColor:'#93c5fd',fillOpacity:.22}).addTo(map); const m=L.marker(e.latlng,{icon:v62ZoneLabel(`${routeName} • ${loadName}`,'load'), interactive:false}).addTo(map); st.draftLayers.push(c,m); st.mode = 'dump'; const md=document.getElementById('v56Mode'); if(md) md.value='dump'; }else{ st.dumpPoint = e.latlng; const tx = document.getElementById('v56DumpTxt'); if(tx) tx.textContent = e.latlng.lat.toFixed(6)+', '+e.latlng.lng.toFixed(6); const c=L.circle(e.latlng,{radius:radius || 100,color:'#f97316',fillColor:'#fdba74',fillOpacity:.22}).addTo(map); const m=L.marker(e.latlng,{icon:v62ZoneLabel(`${routeName} • ${dumpName}`,'dump'), interactive:false}).addTo(map); st.draftLayers.push(c,m); } });
+    setTimeout(()=>{ try{ map.invalidateSize(); }catch(e){} }, 250); v56RefreshTripDom();
+  };
+
+  function v62AssignedZoneIdsForCurrentMap(){ const ids = new Set(); if(currentUserRole && currentUserRole() === 'driver'){ const eq = gpsAssignedEquipment && gpsAssignedEquipment(); const a = eq ? v56AssignmentForEquipment(eq.id) : null; if(a?.zone_id) ids.add(String(a.zone_id)); }else{ const latest = latestGpsByEquipment ? latestGpsByEquipment() : new Map(); const visible = gpsFilteredEquipmentsForManager ? gpsFilteredEquipmentsForManager(latest) : []; visible.forEach(eq=>{ const a = v56AssignmentForEquipment ? v56AssignmentForEquipment(eq.id) : null; if(a?.zone_id) ids.add(String(a.zone_id)); }); } return ids; }
+  function v62DrawAssignedZonesOnLiveMap(){ try{ const map = state.gps?.map; if(!map || typeof L === 'undefined') return []; (state.gps.v62ZoneLayers || []).forEach(x=>{ try{ map.removeLayer(x); }catch(e){} }); state.gps.v62ZoneLayers = []; const st = v56TripState(); const ids = v62AssignedZoneIdsForCurrentMap(); const bounds=[]; (st.zones || []).forEach(z=>{ if(!ids.size || ids.has(String(z.id))) v62DrawZonePair(map, z, state.gps.v62ZoneLayers).forEach(p=>bounds.push(p)); }); return bounds; }catch(e){ console.warn('v62 live zone draw', e); return []; } }
+  const v62PrevUpdateGpsMapMarkers = updateGpsMapMarkers;
+  updateGpsMapMarkers = function(){ v62PrevUpdateGpsMapMarkers(); const zoneBounds = v62DrawAssignedZonesOnLiveMap(); if(zoneBounds && zoneBounds.length && state.gps?.map){ try{ state.gps.map.fitBounds(zoneBounds, { padding:[35,35], maxZoom:15 }); }catch(e){} } };
+  const v62PrevRenderGpsLive = renderGpsLive;
+  renderGpsLive = function(){ const out = v62PrevRenderGpsLive(); try{ v61SetDriverShellMode(); setTimeout(async ()=>{ try{ await v56LoadZones(); await v56LoadAssignments(); updateGpsMapMarkers(); }catch(e){} if(currentUserRole && currentUserRole() === 'driver'){ const onlineCard = document.getElementById('onlineUsersCard'); if(onlineCard) onlineCard.style.display='none'; v59InjectDriverTaskCard(); } }, 250); }catch(e){ console.warn('v62 render hook', e); } return out; };
+  Object.assign(window, { v62FindProductionForAssignedTruck, v62DrawAssignedZonesOnLiveMap });
+  /* =================== /V62 ŞOFÖR ÜRETİM EŞLEŞTİRME + HARİTA ALAN ETİKETLERİ PATCH =================== */
+
   Object.assign(window, { openModal, closeModal, fillTruckRouteFromExcavator, updateAutoMeterLabels, updateProductionStartMeterHints, updateTripProductionContext, updateFuelProductionContext, updateMeterCorrectionContext, toggleProductionEditLinkedField, refreshLogisticsEquipmentSelect, markShiftSelectManual, continueBreakdownToCurrentShift, finishBreakdownFromWarning, saveStartProductionExcavator, saveStartProductionTruck, saveStartProductionOther, saveEndProduction, saveStartBreakdown, saveEndBreakdown, saveStartRental, saveEndRental, saveNewTrip, saveNewFuel, saveNewMeter, confirmSoftDelete, restoreDeleted, deleteAllDeletedRecordsNow, deleteDeletedOlderThan30Days, saveEditRecord, saveDefinition, deleteTruckModel, toggleDefinitionTruckModelField, renderShiftConfigInputs, saveShiftConfigFromForm, renderShiftConfigCardRefresh, applyRecordFiltersFromUI, resetRecordFilters, bulkDeleteRecordTable, exportRecordsToExcel, saveUserRoleSettings, refreshData, exportDailyPdf, exportWeeklyExcel, exportShiftReport, gpsSelectFromList, assignGpsPhoneToSelectedEquipment, clearGpsPhoneAssignment, startGpsTracking, stopGpsTracking, syncOfflineGpsPositions, refreshGpsMapNow, applyGpsManagerFilter });
 
   (async function autoSession(){
