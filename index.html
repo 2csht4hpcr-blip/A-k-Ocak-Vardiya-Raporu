@@ -11160,6 +11160,115 @@ function renderUsers(){
   Object.assign(window, { gpsV59RequestWakeLock, v59EnsureDriverTripData });
   /* =================== /V59 ŞOFÖR GÖREV EKRANI + WAKE LOCK GÜVENLİ PATCH =================== */
 
+
+
+  /* =================== V60 ŞOFÖR AKTİF ÜRETİM GÖREV BİLGİSİ + GPS DİL PATCH =================== */
+  function v60ExtendGpsTranslations(){
+    try{
+      I18N.en = Object.assign(I18N.en || {}, {
+        "GPS / Şoför Takip":"GPS / Driver Tracking", "Şoför":"Driver", "Cihaz kodu:":"Device code:", "Atanan makina":"Assigned machine", "GPS durumu":"GPS status", "GPS takip aktif":"GPS tracking active", "GPS otomatik başlatılıyor":"GPS starts automatically", "Atama bekleniyor":"Waiting for assignment", "Son konum:":"Last position:", "Konum bekleniyor":"Waiting for position", "Offline kayıt":"Offline records", "Kendi Haritam":"My Map", "Otomatik takip":"Automatic tracking",
+        "Aktif Görev":"Active Task", "Aktif Görev Bilgisi":"Active Task Information", "Vardiya":"Shift", "Makina":"Machine", "Bağlı Makina":"Linked Machine", "Paket":"Package", "Paket/İş":"Package/Job", "Sefer":"Trips", "Nereden / Nereye":"From / To", "Yükleme":"Loading", "Döküm":"Dump", "Atama yok":"No assignment", "Aktif üretim bekleniyor":"Waiting for active production", "Bağlı makina yok":"No linked machine",
+        "Aktif üretim kaydı yok. Yönetici üretime kamyonu aldıktan sonra görev bilgisi buraya otomatik gelir.":"No active production record. After the manager starts production for the truck, task information appears here automatically.",
+        "Ekran açık tutma deneniyor. Tarayıcı arka plana alınırsa telefon GPS verisini yine kısıtlayabilir.":"Screen wake lock is being attempted. If the browser goes to the background, the phone may still restrict GPS data.",
+        "GPS takip başlatılıyor. Telefon ekranı kapanırsa web tarayıcı GPS göndermeyi durdurabilir.":"GPS tracking is starting. If the phone screen turns off, the web browser may stop sending GPS.",
+        "GPS verisi alınıyor. Ekran açık tutulmaya çalışılıyor; tarayıcı arka plana alınırsa veri kesilebilir.":"GPS data is being received. The screen is being kept awake; data may stop if the browser goes to the background.",
+        "Son 70 saniyedir GPS verisi gelmedi. Telefon ekranı kapandıysa veya tarayıcı arka plandaysa GPS kesilmiş olabilir.":"No GPS data has arrived for the last 70 seconds. If the screen is off or the browser is in the background, GPS may have stopped.",
+        "GPS / Filo Kontrol Paneli":"GPS / Fleet Control Panel", "Filo Filtreleri":"Fleet Filters", "Ekipman tipi":"Equipment type", "Ekipman":"Equipment", "Liste":"List", "Tüm aktif üretim makinalarını göster":"Show all active production machines", "Aktif Vardiya Üretimdeki Makinalar":"Machines in Active Shift Production", "Canlı Harita":"Live Map", "Haritayı Yenile":"Refresh Map", "Rota Göster/Gizle":"Show/Hide Route", "Üretimde":"In Production", "Online":"Online", "GPS Sorun":"GPS Issue", "Offline / Veri Yok":"Offline / No Data", "Atamasız":"Unassigned", "Tüm ekipman tipleri":"All equipment types", "Tüm makinalar":"All machines", "Tüm durumlar":"All statuses", "Seç":"Select", "Ata":"Assign", "Kaldır":"Remove", "Sil":"Delete", "Tümünü Temizle":"Clear All", "Alanı Kaydet":"Save Zone", "Yükleme seç":"Select Loading", "Döküm seç":"Select Dump", "Test Sefer":"Test Trip"
+      });
+      I18N.ru = Object.assign(I18N.ru || {}, {
+        "GPS / Şoför Takip":"GPS / отслеживание водителя", "Şoför":"Водитель", "Cihaz kodu:":"Код устройства:", "Atanan makina":"Назначенная техника", "GPS durumu":"Статус GPS", "GPS takip aktif":"GPS отслеживание активно", "GPS otomatik başlatılıyor":"GPS запускается автоматически", "Atama bekleniyor":"Ожидается назначение", "Son konum:":"Последняя позиция:", "Konum bekleniyor":"Ожидается позиция", "Offline kayıt":"Офлайн записи", "Kendi Haritam":"Моя карта", "Otomatik takip":"Автоматическое отслеживание",
+        "Aktif Görev":"Активное задание", "Aktif Görev Bilgisi":"Информация об активном задании", "Vardiya":"Смена", "Makina":"Техника", "Bağlı Makina":"Связанная техника", "Paket":"Пакет", "Paket/İş":"Пакет/работа", "Sefer":"Рейсы", "Nereden / Nereye":"Откуда / Куда", "Yükleme":"Погрузка", "Döküm":"Разгрузка", "Atama yok":"Нет назначения", "Aktif üretim bekleniyor":"Ожидается активная работа", "Bağlı makina yok":"Связанная техника отсутствует",
+        "Aktif üretim kaydı yok. Yönetici üretime kamyonu aldıktan sonra görev bilgisi buraya otomatik gelir.":"Нет активной производственной записи. После запуска самосвала в производство руководителем данные задания появятся здесь автоматически.",
+        "Ekran açık tutma deneniyor. Tarayıcı arka plana alınırsa telefon GPS verisini yine kısıtlayabilir.":"Выполняется попытка удерживать экран включенным. Если браузер уйдет в фон, телефон может ограничить GPS.",
+        "GPS takip başlatılıyor. Telefon ekranı kapanırsa web tarayıcı GPS göndermeyi durdurabilir.":"Запускается GPS отслеживание. Если экран телефона выключится, браузер может перестать отправлять GPS.",
+        "GPS verisi alınıyor. Ekran açık tutulmaya çalışılıyor; tarayıcı arka plana alınırsa veri kesilebilir.":"GPS данные поступают. Экран удерживается включенным; при уходе браузера в фон данные могут прекратиться.",
+        "Son 70 saniyedir GPS verisi gelmedi. Telefon ekranı kapandıysa veya tarayıcı arka plandaysa GPS kesilmiş olabilir.":"GPS данные не поступали последние 70 секунд. Если экран выключен или браузер в фоне, GPS мог остановиться.",
+        "GPS / Filo Kontrol Paneli":"GPS / панель контроля парка", "Filo Filtreleri":"Фильтры парка", "Ekipman tipi":"Тип техники", "Ekipman":"Техника", "Liste":"Список", "Tüm aktif üretim makinalarını göster":"Показать всю активную технику", "Aktif Vardiya Üretimdeki Makinalar":"Техника в работе активной смены", "Canlı Harita":"Живая карта", "Haritayı Yenile":"Обновить карту", "Rota Göster/Gizle":"Показать/скрыть маршрут", "Üretimde":"В работе", "Online":"Онлайн", "GPS Sorun":"Проблема GPS", "Offline / Veri Yok":"Офлайн / нет данных", "Atamasız":"Без назначения", "Tüm ekipman tipleri":"Все типы техники", "Tüm makinalar":"Вся техника", "Tüm durumlar":"Все статусы", "Seç":"Выбрать", "Ata":"Назначить", "Kaldır":"Удалить", "Sil":"Удалить", "Tümünü Temizle":"Очистить все", "Alanı Kaydet":"Сохранить зону", "Yükleme seç":"Выбрать погрузку", "Döküm seç":"Выбрать разгрузку", "Test Sefer":"Тестовый рейс"
+      });
+    }catch(e){ console.warn('v60 translations skipped', e); }
+  }
+  v60ExtendGpsTranslations();
+
+  function v60ActiveProductionForEquipment(eqId){
+    try{
+      if(!eqId) return null;
+      const open = (typeof currentOpenProductionForEquipment === 'function') ? currentOpenProductionForEquipment(eqId) : null;
+      if(open && !open.deleted_at) return open;
+      const current = (typeof getCurrentShiftBucketInfo === 'function') ? getCurrentShiftBucketInfo() : null;
+      const rows = (state.productions || []).filter(r=>!r.deleted_at && !(r.end_at || r.end_time) && String(r.equipment_id || '') === String(eqId || ''));
+      if(current && rows.length){ return rows.find(r=>String(getRowShiftBucketKey(r) || '') === String(current.shift_key || '')) || rows[0]; }
+      return rows[0] || null;
+    }catch(e){ return null; }
+  }
+  function v60TaskInfoFromActiveProduction(eq){
+    const prod = eq ? v60ActiveProductionForEquipment(eq.id) : null;
+    const pair = eq ? v59ZoneForEquipment(eq.id) : { assignment:null, zone:null };
+    const baseOp = eq ? (v59OriginalGpsOperationInfoForEquipment ? v59OriginalGpsOperationInfoForEquipment(eq.id) : {}) : {};
+    const linkedName = v59SafeDash(prod?.linked_excavator_name) || v59SafeDash(prod?.linked_excavator_name_snapshot) || (prod?.linked_excavator_id ? v59SafeDash(findEquipmentById(prod.linked_excavator_id)?.name) : '');
+    const packageLabel = v59SafeDash(prod?.package_name) || v59SafeDash(prod?.package_name_snapshot) || (prod?.package_id ? v59SafeDash(packageName(prod.package_id)) : '') || v59SafeDash(pair.assignment?.route_name) || v59SafeDash(pair.zone?.route_name) || 'Aktif üretim bekleniyor';
+    const from = v59SafeDash(prod?.from_location) || v59SafeDash(pair.zone?.loading_name) || 'Yükleme';
+    const to = v59SafeDash(prod?.to_location) || v59SafeDash(pair.zone?.dump_name) || 'Döküm';
+    const routeText = prod ? `${from} → ${to}` : (v59RouteTextFromZone(pair.zone) || 'Yükleme / döküm bilgisi bekleniyor');
+    const tripCount = prod ? (typeof productionTripTotal === 'function' ? productionTripTotal(prod) : Number(prod.trip_count || 0)) : Number(baseOp?.tripCount || 0);
+    const shiftName = v59SafeDash(prod ? getShiftNameForRow(prod) : '') || v59SafeDash(baseOp?.shiftName) || 'Aktif vardiya';
+    const linkedMachineLabel = linkedName || (prod ? 'Bağlı makina yok' : 'Aktif üretim bekleniyor');
+    return { prod, linkedMachineLabel, packageName: packageLabel, from, to, routeText, tripCount, shiftName };
+  }
+
+  const v60PreviousGpsOperationInfoForEquipment = gpsOperationInfoForEquipment;
+  gpsOperationInfoForEquipment = function(eqId){
+    const op = v60PreviousGpsOperationInfoForEquipment(eqId) || {};
+    try{
+      const eq = findEquipmentById(eqId);
+      const info = v60TaskInfoFromActiveProduction(eq);
+      if(info.prod){
+        op.mode = 'Üretimde'; op.packageName = info.packageName; op.route = info.routeText; op.tripCount = info.tripCount; op.shiftName = info.shiftName; op.gpsLoadingName = info.from; op.gpsDumpName = info.to; op.linkedMachineName = info.linkedMachineLabel; op.production = info.prod;
+      }
+    }catch(e){}
+    return op;
+  };
+
+  function v60RemoveOldDriverInfoCard(){
+    try{
+      document.querySelectorAll('#gpsLive .gps-selected-detail').forEach(card=>{
+        if(card.id === 'gpsV59TaskCard') return;
+        const txt = String(card.querySelector('b')?.textContent || card.textContent || '').trim();
+        if(txt.includes('Anlık vardiya ve iş bilgisi') || txt.includes('Instant shift') || txt.includes('текущ')) card.remove();
+      });
+    }catch(e){}
+  }
+
+  v59InjectDriverTaskCard = function(){
+    try{
+      if(currentUserRole() === 'manager') return;
+      v60RemoveOldDriverInfoCard();
+      const assigned = gpsAssignedEquipment();
+      const host = document.querySelector('#gpsLive .gps-driver-card');
+      if(!host) return;
+      const existing = document.getElementById('gpsV59TaskCard');
+      if(existing) existing.remove();
+      const info = v60TaskInfoFromActiveProduction(assigned);
+      const status = state.gps?.tracking ? 'GPS aktif' : (assigned ? 'GPS otomatik başlatılıyor' : 'Atama yok');
+      const noProdWarning = assigned && !info.prod ? '<div class="gps-v59-warning" style="margin-top:10px">Aktif üretim kaydı yok. Yönetici üretime kamyonu aldıktan sonra görev bilgisi buraya otomatik gelir.</div>' : '';
+      const html = `<div id="gpsV59TaskCard" class="gps-selected-detail gps-v59-task-card"><div class="gps-v59-task-title"><b>📋 Aktif Görev</b><span class="pill green">${escapeHtml(status)}</span></div><div class="gps-fleet-liveinfo"><div class="gps-info-mini"><div class="l">Vardiya</div><div class="d">${escapeHtml(info.shiftName)}</div></div><div class="gps-info-mini"><div class="l">Bağlı Makina</div><div class="d">${escapeHtml(info.linkedMachineLabel)}</div></div><div class="gps-info-mini"><div class="l">Paket</div><div class="d">${escapeHtml(info.packageName)}</div></div><div class="gps-info-mini"><div class="l">Sefer</div><div class="d">${Number(info.tripCount || 0)}</div></div></div><div class="gps-v59-route"><div class="gps-status-title">Nereden / Nereye</div><div class="gps-v59-route-line"><span>${escapeHtml(info.from)}</span><span class="gps-v59-arrow">→</span><span>${escapeHtml(info.to)}</span></div><div class="muted" style="margin-top:6px">${escapeHtml(info.routeText)}</div></div>${noProdWarning}<div id="gpsV59BackgroundWarning" class="${state.gps?.tracking ? 'gps-v59-ok' : 'gps-v59-warning'}" style="margin-top:10px">${state.gps?.tracking ? 'Ekran açık tutma deneniyor. Tarayıcı arka plana alınırsa telefon GPS verisini yine kısıtlayabilir.' : 'GPS takip başlatılıyor. Telefon ekranı kapanırsa web tarayıcı GPS göndermeyi durdurabilir.'}</div></div>`;
+      const ref = host.querySelector('.gps-status-box[style*="eff6ff"]') || host.children[1];
+      if(ref) ref.insertAdjacentHTML('afterend', html); else host.insertAdjacentHTML('afterbegin', html);
+      applyLanguage(document.getElementById('gpsV59TaskCard'));
+    }catch(e){ console.warn('v60 task inject', e); }
+  };
+
+  const v60OriginalRenderGpsLive = renderGpsLive;
+  renderGpsLive = function(){
+    const out = v60OriginalRenderGpsLive();
+    try{
+      if(currentUserRole && currentUserRole() !== 'manager') setTimeout(()=>{ v60RemoveOldDriverInfoCard(); v59InjectDriverTaskCard(); applyLanguage(document.getElementById('gpsLive')); }, 160);
+      else setTimeout(()=>{ applyLanguage(document.getElementById('gpsLive')); }, 160);
+    }catch(e){ console.warn('v60 render hook', e); }
+    return out;
+  };
+  Object.assign(window, { v60ActiveProductionForEquipment, v60TaskInfoFromActiveProduction });
+  /* =================== /V60 ŞOFÖR AKTİF ÜRETİM GÖREV BİLGİSİ + GPS DİL PATCH =================== */
+
   Object.assign(window, { openModal, closeModal, fillTruckRouteFromExcavator, updateAutoMeterLabels, updateProductionStartMeterHints, updateTripProductionContext, updateFuelProductionContext, updateMeterCorrectionContext, toggleProductionEditLinkedField, refreshLogisticsEquipmentSelect, markShiftSelectManual, continueBreakdownToCurrentShift, finishBreakdownFromWarning, saveStartProductionExcavator, saveStartProductionTruck, saveStartProductionOther, saveEndProduction, saveStartBreakdown, saveEndBreakdown, saveStartRental, saveEndRental, saveNewTrip, saveNewFuel, saveNewMeter, confirmSoftDelete, restoreDeleted, deleteAllDeletedRecordsNow, deleteDeletedOlderThan30Days, saveEditRecord, saveDefinition, deleteTruckModel, toggleDefinitionTruckModelField, renderShiftConfigInputs, saveShiftConfigFromForm, renderShiftConfigCardRefresh, applyRecordFiltersFromUI, resetRecordFilters, bulkDeleteRecordTable, exportRecordsToExcel, saveUserRoleSettings, refreshData, exportDailyPdf, exportWeeklyExcel, exportShiftReport, gpsSelectFromList, assignGpsPhoneToSelectedEquipment, clearGpsPhoneAssignment, startGpsTracking, stopGpsTracking, syncOfflineGpsPositions, refreshGpsMapNow, applyGpsManagerFilter });
 
   (async function autoSession(){
