@@ -334,6 +334,21 @@
     .gps-v59-warning{padding:11px 12px;border-radius:14px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;font-size:12px;font-weight:800;line-height:1.45}
     .gps-v59-ok{padding:11px 12px;border-radius:14px;background:#ecfdf5;border:1px solid #bbf7d0;color:#166534;font-size:12px;font-weight:800;line-height:1.45}
 
+
+    /* V74 Atama Yönetimi */
+    .v74-assign-card{border:1px solid #dbeafe;background:linear-gradient(180deg,#ffffff 0%,#f8fbff 100%);box-shadow:0 12px 28px rgba(37,99,235,.08)}
+    .v74-assign-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+    .v74-assign-grid{display:grid;gap:10px}
+    .v74-assign-row{display:grid;grid-template-columns:1.05fr 1fr 1fr auto;gap:10px;align-items:end;padding:12px;border-radius:18px;background:#fff;border:1px solid #e2e8f0;box-shadow:0 8px 18px rgba(15,23,42,.04)}
+    .v74-assign-name{font-size:15px;font-weight:950;color:#0f172a;line-height:1.2}
+    .v74-assign-sub{font-size:11px;color:#64748b;margin-top:4px;word-break:break-all}
+    .v74-assign-actions{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end}
+    .v74-assign-actions button{width:auto;padding:9px 11px;border-radius:10px;font-size:12px}
+    .v74-status{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border-radius:999px;font-size:11px;font-weight:900;border:1px solid #e2e8f0;background:#f8fafc;color:#475569;margin-top:7px}
+    .v74-status.ok{background:#ecfdf5;color:#166534;border-color:#bbf7d0}.v74-status.warn{background:#fff7ed;color:#c2410c;border-color:#fed7aa}
+    .v74-mini-note{font-size:12px;color:#64748b;line-height:1.45}
+    @media(max-width:1100px){.v74-assign-row{grid-template-columns:1fr}.v74-assign-actions{justify-content:flex-start}}
+
   </style>
 </head>
 <body>
@@ -12523,6 +12538,69 @@ function renderUsers(){
     Object.assign(window,{v73EnsureUserDevice,v73DeviceForUser,v73UserForDevice});
   })();
   /* =================== /V73 USER-DEVICE OTOMATİK BAĞLAMA =================== */
+
+
+  /* =================== V74 ATAMA YÖNETİMİ =================== */
+  (function(){
+    state.v74_user_devices = state.v74_user_devices || [];
+    function v74Txt(v){ const s=String(v==null?'':v).trim(); return (!s || s==='-' || s.toLowerCase()==='null' || s.toLowerCase()==='undefined') ? '' : s; }
+    function v74Norm(v){ return v74Txt(v).toLocaleUpperCase('tr-TR').replace(/\s+/g,''); }
+    function v74Dom(v){ return String(v||'x').replace(/[^a-zA-Z0-9_-]/g,'_'); }
+    async function v74Sb(){ return state.sb || await initClient(); }
+    function v74IsManager(){ try{ return currentUserRole && currentUserRole()==='manager'; }catch(e){ return false; } }
+    function v74DriverRows(){ return (state.userProfiles||[]).filter(u=>{ const r=String((typeof normalizeRole==='function'?normalizeRole(u.role):u.role)||'').toLowerCase(); return r==='driver' || r==='shift_lead' || /şof|sofor|driver/i.test(`${u.role||''} ${u.full_name||''}`); }); }
+    function v74TruckRows(){ return (state.equipments||[]).filter(e=>{ try{ if(typeof isTruckEquipment==='function') return isTruckEquipment(e); }catch(x){} return /kamyon|truck/i.test(`${e.type||''} ${e.name||''}`); }); }
+    function v74OpenProdForTruck(eid){ const id=String(eid||''); return (state.productions||[]).find(p=>String(p.equipment_id||p.machine_id||p.truck_id||'')===id && (!p.end_at && !p.end_time && !p.finish_at && !p.finished_at) && !p.deleted_at); }
+    async function v74LoadUserDevices(){ try{ const sb=await v74Sb(); const r=await sb.from('user_devices').select('*').order('updated_at',{ascending:false}).limit(500); if(r.error) throw r.error; state.v74_user_devices=r.data||[]; state.v74_user_devices_error=''; return state.v74_user_devices; }catch(err){ state.v74_user_devices=state.v74_user_devices||[]; state.v74_user_devices_error=String(err.message||err); return state.v74_user_devices; } }
+    function v74DeviceForUser(uid){ uid=String(uid||''); const row=(state.v74_user_devices||[]).find(r=>String(r.user_id||'')===uid); return v74Txt(row?.device_code); }
+    function v74GpsAssignmentForUser(uid){ return (typeof activeGpsAssignments==='function'?activeGpsAssignments():(state.gps_assignments||[])).find(a=>String(a.user_id||'')===String(uid||'')); }
+    function v74GpsAssignmentForTruck(eid){ return (typeof activeGpsAssignments==='function'?activeGpsAssignments():(state.gps_assignments||[])).find(a=>String(a.equipment_id||'')===String(eid||'')); }
+    function v74ActiveTaskForUser(uid){ uid=String(uid||''); const device=v74DeviceForUser(uid); const tasks=(state.driver_tasks||[]).filter(t=>String(t.status||'active').toLowerCase()==='active' && !t.deleted_at); return tasks.find(t=>String(t.user_id||'')===uid) || (device?tasks.find(t=>v74Norm(t.device_code)===v74Norm(device)):null) || null; }
+    function v74TruckName(eid){ const e=(typeof findEquipmentById==='function'?findEquipmentById(eid):null); return e?.name||''; }
+    function v74TruckOptions(selected){ return '<option value="">Kamyon seç</option>'+v74TruckRows().map(e=>`<option value="${escapeHtml(e.id)}" ${String(e.id)===String(selected||'')?'selected':''}>${escapeHtml(e.name||'-')}</option>`).join(''); }
+    async function v74RefreshAssignmentData(){ try{ if(typeof loadGpsAssignmentsSafe==='function') await loadGpsAssignmentsSafe(); }catch(e){} try{ if(typeof v70LoadDriverTasksSafe==='function') await v70LoadDriverTasksSafe(); }catch(e){} await v74LoadUserDevices(); return true; }
+    function v74AssignmentPanelHtml(){
+      const drivers=v74DriverRows();
+      const rows=drivers.map(u=>{
+        const uid=String(u.id||''); const dev=v74DeviceForUser(uid); const gpsA=v74GpsAssignmentForUser(uid); const task=v74ActiveTaskForUser(uid); const selectedTruck=gpsA?.equipment_id || task?.equipment_id || ''; const activeText=task?`${task.truck_name||v74TruckName(task.equipment_id)||'Görev'} • ${task.package_name||'-'}`:(gpsA?`${gpsA.equipment_name||v74TruckName(gpsA.equipment_id)||'Atama'} • görev bekliyor`:'Atama yok');
+        const statusCls=task?'ok':(gpsA?'warn':'');
+        return `<div class="v74-assign-row">
+          <div><div class="v74-assign-name">${escapeHtml(u.full_name||u.email||uid||'-')}</div><div class="v74-assign-sub">${escapeHtml(u.email||uid||'-')}</div><span class="v74-status ${statusCls}">${escapeHtml(activeText)}</span></div>
+          <div><label class="muted">Cihaz kodu</label><input id="v74_dev_${v74Dom(uid)}" value="${escapeHtml(dev)}" placeholder="GPS-..." /></div>
+          <div><label class="muted">Atanacak kamyon</label><select id="v74_truck_${v74Dom(uid)}">${v74TruckOptions(selectedTruck)}</select></div>
+          <div class="v74-assign-actions"><button onclick="v74SaveAssignment('${escapeHtml(uid)}')">Kaydet</button><button class="warning" onclick="v74CloseDriverTask('${escapeHtml(uid)}')">Görevi Kapat</button><button class="secondary" onclick="v74ClearAssignment('${escapeHtml(uid)}')">Atamayı Kaldır</button></div>
+        </div>`;
+      }).join('') || '<div class="empty">Şoför rolünde kullanıcı bulunamadı. Kullanıcılar ekranından rolü Şoför yapın.</div>';
+      const err=state.v74_user_devices_error?`<div class="notice" style="margin-bottom:10px">user_devices okunamadı: ${escapeHtml(state.v74_user_devices_error)}</div>`:'';
+      return `<div id="v74AssignmentPanel" class="card v74-assign-card" style="margin-bottom:14px">
+        <div class="v74-assign-head"><div><h2 class="section-title" style="margin-bottom:4px">🧩 Atama Yönetimi</h2><div class="v74-mini-note">Şoför → cihaz → kamyon eşleşmesini buradan yönet. Kamyon üretimde açıksa görev otomatik driver_tasks tarafına bağlanır.</div></div><div class="inline" style="width:auto"><button class="secondary" style="width:auto" onclick="v74ManualRefreshAssignments()">Atamaları Yenile</button><button class="secondary" style="width:auto" onclick="v72SyncAllOpenTruckProductions && v72SyncAllOpenTruckProductions().then(()=>v74ManualRefreshAssignments())">Açık Üretimleri Senkronla</button></div></div>
+        ${err}<div class="v74-assign-grid">${rows}</div>
+      </div>`;
+    }
+    async function v74InjectAssignmentPanel(){ try{ if(!v74IsManager()) return; const host=document.getElementById('gpsLive'); if(!host) return; await v74RefreshAssignmentData(); const old=document.getElementById('v74AssignmentPanel'); if(old) old.remove(); host.insertAdjacentHTML('afterbegin', v74AssignmentPanelHtml()); if(typeof applyLanguage==='function') applyLanguage(document.getElementById('v74AssignmentPanel')); }catch(err){ console.warn('v74 panel', err); } }
+    async function v74ManualRefreshAssignments(){ await v74InjectAssignmentPanel(); showToast('Atama listesi yenilendi'); }
+    async function v74SaveAssignment(uid){
+      try{
+        if(!v74IsManager()) throw new Error('Atama yalnızca yönetici tarafından yapılabilir');
+        uid=String(uid||''); const safe=v74Dom(uid); const device=v74Txt(document.getElementById('v74_dev_'+safe)?.value); const truckId=v74Txt(document.getElementById('v74_truck_'+safe)?.value); if(!uid) throw new Error('Şoför bulunamadı'); if(!truckId) throw new Error('Kamyon seçiniz');
+        await v74RefreshAssignmentData();
+        if(device){ const sameDev=(state.v74_user_devices||[]).find(r=>v74Norm(r.device_code)===v74Norm(device) && String(r.user_id||'')!==uid); if(sameDev) throw new Error('Bu cihaz kodu başka kullanıcıya bağlı. Önce o kullanıcıdan kaldırın.'); }
+        const truckAss=v74GpsAssignmentForTruck(truckId); if(truckAss && String(truckAss.user_id||'')!==uid) throw new Error('Bu kamyon başka şoföre atanmış. Önce eski atamayı kaldırın.');
+        const profile=(state.userProfiles||[]).find(u=>String(u.id||'')===uid) || {}; const eq=(typeof findEquipmentById==='function'?findEquipmentById(truckId):null); if(!eq) throw new Error('Kamyon bulunamadı'); const sb=await v74Sb();
+        if(device){ const ud={user_id:uid,device_code:device,updated_at:new Date().toISOString()}; let ures=await sb.from('user_devices').upsert(ud,{onConflict:'user_id'}).select(); if(ures.error){ const up=await sb.from('user_devices').update({device_code:device,updated_at:new Date().toISOString()}).eq('user_id',uid).select(); if(up.error) throw up.error; if(!up.data||!up.data.length){ const ins=await sb.from('user_devices').insert([ud]).select(); if(ins.error) throw ins.error; } } }
+        const gpsPayload={user_id:uid,user_email:profile.email||'',user_name:profile.full_name||profile.email||'',equipment_id:truckId,equipment_name:eq.name||'',equipment_type:(typeof equipmentTypeKey==='function'?equipmentTypeKey(eq):'kamyon'),assigned_by:state.user?.id||null,assigned_at:new Date().toISOString(),updated_at:new Date().toISOString(),is_active:true,deleted_at:null};
+        const gres=await sb.from(TABLES.GPS_ASSIGNMENTS).upsert(gpsPayload,{onConflict:'user_id'}).select('*'); if(gres.error) throw gres.error;
+        await v74RefreshAssignmentData(); const prod=v74OpenProdForTruck(truckId); if(prod && typeof v70SyncDriverTaskFromProduction==='function'){ await v70SyncDriverTaskFromProduction(prod); await sb.from('driver_tasks').update({user_id:uid,device_code:device||v74DeviceForUser(uid),updated_at:new Date().toISOString()}).eq('source_production_id',String(prod.id||'')).eq('status','active'); }
+        await v74InjectAssignmentPanel(); showToast((profile.full_name||profile.email||'Şoför')+' → '+(eq.name||'Kamyon')+' atandı');
+      }catch(err){ alert('Atama kaydedilemedi: '+(err.message||err)); }
+    }
+    async function v74CloseDriverTask(uid){ try{ if(!v74IsManager()) throw new Error('Yetki yok'); if(!confirm('Bu şoförün aktif görevi kapatılsın mı?')) return; await v74RefreshAssignmentData(); const device=v74DeviceForUser(uid); const sb=await v74Sb(); let q=sb.from('driver_tasks').update({status:'inactive',updated_at:new Date().toISOString()}).eq('status','active'); if(device) q=q.or(`user_id.eq.${uid},device_code.eq.${device}`); else q=q.eq('user_id',uid); const r=await q; if(r.error) throw r.error; await v74InjectAssignmentPanel(); showToast('Aktif görev kapatıldı'); }catch(err){ alert('Görev kapatılamadı: '+(err.message||err)); } }
+    async function v74ClearAssignment(uid){ try{ if(!v74IsManager()) throw new Error('Yetki yok'); if(!confirm('Şoförün kamyon ataması kaldırılsın mı? Cihaz kaydı kalır.')) return; const sb=await v74Sb(); const r=await sb.from(TABLES.GPS_ASSIGNMENTS).update({is_active:false,deleted_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq('user_id',uid).is('deleted_at',null); if(r.error) throw r.error; await v74CloseDriverTaskNoConfirm(uid); await v74InjectAssignmentPanel(); showToast('Atama kaldırıldı'); }catch(err){ alert('Atama kaldırılamadı: '+(err.message||err)); } }
+    async function v74CloseDriverTaskNoConfirm(uid){ const device=v74DeviceForUser(uid); const sb=await v74Sb(); let q=sb.from('driver_tasks').update({status:'inactive',updated_at:new Date().toISOString()}).eq('status','active'); if(device) q=q.or(`user_id.eq.${uid},device_code.eq.${device}`); else q=q.eq('user_id',uid); await q; }
+    const v74PrevRenderGpsLive=renderGpsLive; renderGpsLive=function(){ const out=v74PrevRenderGpsLive(); try{ if(v74IsManager()) setTimeout(()=>v74InjectAssignmentPanel(),350); }catch(e){} return out; };
+    Object.assign(window,{v74ManualRefreshAssignments,v74SaveAssignment,v74CloseDriverTask,v74ClearAssignment,v74InjectAssignmentPanel});
+  })();
+  /* =================== /V74 ATAMA YÖNETİMİ =================== */
 
 })();
 </script>
