@@ -11974,6 +11974,86 @@ function renderUsers(){
   /* =================== /V66 ŞOFÖR ÜRETİM FİLTRESİZ AKTİF KAMYON FIX =================== */
 
 
+
+  /* =================== V67 ŞOFÖR PRODUCTION_LOGS DOĞRUDAN OKUMA FIX =================== */
+  async function v67SelectProductionTable(tableName){
+    try{
+      const sb = state.sb || await initClient();
+      if(!sb) return { table: tableName, data: [], error: 'Supabase hazır değil' };
+      const res = await withTimeout(sb.from(tableName).select('*'), 12000, tableName);
+      return { table: tableName, data: res.data || [], error: res.error ? (res.error.message || String(res.error)) : '' };
+    }catch(err){ return { table: tableName, data: [], error: String(err.message || err) }; }
+  }
+  function v67HydrateProductionRows(rows){
+    return (rows || []).map(r=>({ ...r,
+      equipment_name: r.equipment_name || r.equipment_name_snapshot || (typeof findEquipmentById === 'function' ? (findEquipmentById(r.equipment_id)?.name || '') : ''),
+      package_name: r.package_name || r.package_name_snapshot || (typeof packageName === 'function' ? (packageName(r.package_id) || '') : ''),
+      linked_excavator_name: r.linked_excavator_name || r.linked_excavator_name_snapshot || (typeof findEquipmentById === 'function' ? (findEquipmentById(r.linked_excavator_id)?.name || '') : '')
+    }));
+  }
+  async function v67EnsureDriverProductionRows(){
+    try{
+      if((state.productions || []).filter(r=>!r?.deleted_at).length) return true;
+      if(state._v67ProductionReloading) return false;
+      state._v67ProductionReloading = true;
+      const names = [];
+      if(typeof TABLES !== 'undefined' && TABLES.PRODUCTIONS) names.push(TABLES.PRODUCTIONS);
+      ['production_logs','productions','production'].forEach(n=>{ if(!names.includes(n)) names.push(n); });
+      const diagnostics = [];
+      for(const tableName of names){
+        const res = await v67SelectProductionTable(tableName);
+        diagnostics.push({ table: res.table, count: (res.data || []).length, error: res.error || '' });
+        if((res.data || []).length){
+          state.productions = v67HydrateProductionRows(res.data || []);
+          state._v67ProductionSource = tableName;
+          state._v67ProductionDiagnostics = diagnostics;
+          state._v67ProductionReloading = false;
+          return true;
+        }
+      }
+      state._v67ProductionDiagnostics = diagnostics;
+      state._v67ProductionReloading = false;
+      return false;
+    }catch(e){
+      state._v67ProductionReloading = false;
+      state._v67ProductionDiagnostics = [{ table:'v67', count:0, error:String(e.message || e) }];
+      return false;
+    }
+  }
+  const v67PrevProductionListHtml = v65ProductionListHtml;
+  v65ProductionListHtml = function(){
+    const rows = (typeof v66OpenTruckProductionsRobust === 'function' ? v66OpenTruckProductionsRobust() : []);
+    if(rows.length) return v67PrevProductionListHtml();
+    const total = (state.productions || []).filter(r=>!r?.deleted_at).length;
+    const diag = (state._v67ProductionDiagnostics || []).map(d=>`${d.table}: ${d.count}${d.error ? ' / ' + d.error : ''}`).join(' | ');
+    return `<div class="gps-v59-warning" style="margin-top:10px">Üretim kaydı şoför ekranına ulaşmadı. Okunan üretim toplam: ${Number(total || 0)}. Denenen tablolar: ${escapeHtml(diag || 'production_logs / productions / production')}. Not: Bu sistemde ana üretim tablosu çoğunlukla <b>production_logs</b> adıdır.</div>`;
+  };
+  const v67PrevRenderGpsLive = renderGpsLive;
+  renderGpsLive = function(){
+    const out = v67PrevRenderGpsLive();
+    try{
+      if(typeof currentUserRole === 'function' && currentUserRole() === 'driver'){
+        setTimeout(async ()=>{
+          try{
+            await v67EnsureDriverProductionRows();
+            const host = document.querySelector('#gpsLive .gps-driver-card');
+            if(!host) return;
+            const old = document.getElementById('gpsV59TaskCard');
+            if(old) old.remove();
+            const assigned = typeof gpsAssignedEquipment === 'function' ? gpsAssignedEquipment() : null;
+            const ref = host.querySelector('.gps-status-box[style*="eff6ff"]') || host.children[1];
+            if(ref) ref.insertAdjacentHTML('afterend', v61DriverTaskCardHtml(assigned));
+            else host.insertAdjacentHTML('afterbegin', v61DriverTaskCardHtml(assigned));
+            if(typeof applyLanguage === 'function') applyLanguage(document.getElementById('gpsV59TaskCard'));
+          }catch(e){ console.warn('v67 driver production reload', e); }
+        }, 900);
+      }
+    }catch(e){ console.warn('v67 render hook', e); }
+    return out;
+  };
+  Object.assign(window, { v67EnsureDriverProductionRows });
+  /* =================== /V67 ŞOFÖR PRODUCTION_LOGS DOĞRUDAN OKUMA FIX =================== */
+
 })();
 </script>
 </body>
