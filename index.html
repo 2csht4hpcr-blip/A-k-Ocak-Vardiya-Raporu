@@ -12726,6 +12726,81 @@ function renderUsers(){
     Object.assign(window,{v765CurrentShift:ctx,v765CloseOldDriverTasks:cleanup,v765SelectedDriverTask:task,v765InjectDriverTaskCard:v59InjectDriverTaskCard});
   })();
   /* =================== /V76.5 ŞOFÖR EKRANI TEK KAYNAK KİLİDİ =================== */
+
+  /* =================== V76.6 ŞOFÖR EKRANI SERT KİLİT - SADECE DRIVER_TASKS =================== */
+  (function(){
+    const TAG='V76.6 SERT KİLİT - SADECE DRIVER_TASKS';
+    const S=v=>String(v==null?'':v).trim();
+    const L=v=>S(v).toLocaleLowerCase('tr-TR');
+    const N=v=>L(v).replace(/\s+/g,'').replace(/[-_]/g,'');
+    const E=v=>{try{return escapeHtml(S(v));}catch(e){return S(v);}};
+    const isDriver=()=>{try{return typeof currentUserRole==='function' && currentUserRole()==='driver';}catch(e){return false;}};
+    function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+    function activeShift(){try{const x=typeof getCurrentShiftInfo==='function'?getCurrentShiftInfo():null;if(x&&x.name)return S(x.name);}catch(e){}try{const x=typeof resolveShiftNameForDateTime==='function'?resolveShiftNameForDateTime(new Date()):'';if(x)return S(x);}catch(e){}return '';}
+    function uid(){try{return S(state&&state.user&&state.user.id);}catch(e){return '';}}
+    function deviceCode(){
+      try{if(state&&state.gps){const d=S(state.gps.device_code||state.gps.deviceCode||state.gps.code);if(d)return d;}}catch(e){}
+      try{const keys=['maden_gps_device_code','gps_device_code','device_code'];for(const k of keys){const v=S(localStorage.getItem(k));if(v)return v;}}catch(e){}
+      try{const u=uid();const a=(state.gps_assignments||[]).find(x=>S(x.user_id)===u && L(x.is_active)!=='false');if(a){const v=S(a.device_code||a.deviceCode||a.gps_device_code);if(v)return v;}}catch(e){}
+      return '';
+    }
+    function currentCtx(){return{date:today(),shift:activeShift(),uid:uid(),device:deviceCode()};}
+    function rowActive(r){return !!(r && L(r.status||'active')==='active' && !r.deleted_at && !r.ended_at);}
+    function rowTodayShift(r,c){
+      if(!rowActive(r))return false;
+      const rd=S(r.shift_date||r.task_date||'');
+      if(rd && rd!==c.date)return false;
+      if(c.shift){const rs=S(r.shift_name||r.vardiya||r.shift||''); if(rs && rs!==c.shift)return false;}
+      return true;
+    }
+    function rowMine(r,c){
+      const ru=S(r.user_id||r.driver_user_id||r.driver_id);
+      const rd=S(r.device_code||r.gps_device_code||r.device);
+      return !!((c.uid&&ru===c.uid)||(c.device&&N(rd)===N(c.device)));
+    }
+    function filterRows(rows){const c=currentCtx();return (Array.isArray(rows)?rows:[]).filter(r=>rowTodayShift(r,c)&&rowMine(r,c)).sort((a,b)=>new Date(b.updated_at||b.created_at||0)-new Date(a.updated_at||a.created_at||0));}
+    async function cleanupOld(){
+      try{
+        const sb=state.sb||await initClient(); if(!sb||!state.user)return;
+        const c=currentCtx(); const now=new Date().toISOString();
+        try{ await sb.rpc('cleanup_driver_tasks_current_shift',{p_shift_name:c.shift,p_shift_date:c.date}); }catch(e){}
+        try{ await sb.from('driver_tasks').update({status:'inactive',ended_at:now,updated_at:now}).eq('status','active').neq('shift_date',c.date); }catch(e){}
+        if(c.shift){ try{ await sb.from('driver_tasks').update({status:'inactive',ended_at:now,updated_at:now}).eq('status','active').neq('shift_name',c.shift); }catch(e){} }
+      }catch(e){}
+    }
+    async function loadStrict(){
+      const c=currentCtx(); let rows=[], errs=[];
+      try{
+        const sb=state.sb||await initClient(); if(!sb||!state.user)throw new Error('Supabase hazır değil');
+        await cleanupOld();
+        async function run(q,label){try{const r=await q;if(r.error)errs.push(label+': '+r.error.message);else rows=rows.concat(r.data||[]);}catch(e){errs.push(label+': '+(e.message||e));}}
+        if(c.uid){let q=sb.from('driver_tasks').select('*').eq('status','active').eq('shift_date',c.date).eq('user_id',c.uid).order('updated_at',{ascending:false}).limit(10); if(c.shift)q=q.eq('shift_name',c.shift); await run(q,'user');}
+        if(c.device){let q=sb.from('driver_tasks').select('*').eq('status','active').eq('shift_date',c.date).eq('device_code',c.device).order('updated_at',{ascending:false}).limit(10); if(c.shift)q=q.eq('shift_name',c.shift); await run(q,'device');}
+        const seen=new Set(); rows=filterRows(rows).filter(r=>{const id=S(r.id)||JSON.stringify(r); if(seen.has(id))return false; seen.add(id); return true;});
+        state.driver_tasks=rows;
+        state.driverTaskDebug={version:TAG,total:rows.length,active:rows.length,uid:c.uid,device:c.device,shift:c.shift,shift_date:c.date,error:errs.join(' | ')};
+        return rows;
+      }catch(e){state.driver_tasks=[];state.driverTaskDebug={version:TAG,total:0,active:0,uid:c.uid,device:c.device,shift:c.shift,shift_date:c.date,error:S(e.message||e)};return[];}
+    }
+    function selectedTask(){return filterRows(state.driver_tasks||[])[0]||null;}
+    function info(t){t=t||{};const f=S(t.from_location||t.loading_location||t.from),to=S(t.to_location||t.dumping_location||t.to);return{shift:S(t.shift_name||activeShift()||'Aktif vardiya'),exc:S(t.excavator_name||t.linked_machine_name||t.excavator||'Bağlı makina yok'),pack:S(t.package_name||t.package_code||t.package||'-'),trip:Number(t.trip_count||t.trips||0)||0,from:f||'Yükleme',to:to||'Döküm',route:(f||'Yükleme')+' → '+(to||'Döküm')};}
+    function debug(t){const c=currentCtx(),d=state.driverTaskDebug||{};return '<div class="gps-v59-ok" style="margin-top:10px;font-size:11px;line-height:1.45;background:#f8fafc;border-color:#cbd5e1;color:#334155"><b>'+E(TAG)+'</b><br>Vardiya: '+E(c.shift||'-')+' / '+E(c.date)+'<br>Okunan driver_tasks: '+Number(d.total||0)+'<br>Kullanıcı: '+E(c.uid||'-')+'<br>Cihaz: '+E(c.device||'-')+'<br>Seçilen: '+E(t?(S(t.truck_name||t.equipment_name||'-')+' / '+S(t.package_name||'-')):'Seçilen görev yok')+'<br>Kaynak: sadece driver_tasks. Production/paket fallback kapalı.'+(d.error?'<br>Hata: '+E(d.error):'')+'</div>';}
+    function removeOldCards(){document.querySelectorAll('#gpsV59TaskCard').forEach(x=>x.remove());}
+    async function injectStrict(){
+      try{ if(!isDriver())return; await loadStrict(); if(typeof v60RemoveOldDriverInfoCard==='function')v60RemoveOldDriverInfoCard(); removeOldCards(); const host=document.querySelector('#gpsLive .gps-driver-card'); if(!host)return; const t=selectedTask(),i=info(t); const st=(state.gps&&state.gps.tracking)?'GPS aktif':(t?'Görev aktif':'Görev bekleniyor'); const warn=!t?'<div class="gps-v59-warning" style="margin-top:10px">Bugünün aktif vardiyasında bu şoför/cihaz için driver_tasks kaydı yok. Eski kayıt veya production kaydı gösterilmedi.</div>':''; const html='<div id="gpsV59TaskCard" data-version="v76.6" class="gps-selected-detail gps-v59-task-card"><div class="gps-v59-task-title"><b>📋 Aktif Görev</b><span class="pill green">'+E(st)+'</span></div><div class="gps-fleet-liveinfo"><div class="gps-info-mini"><div class="l">Vardiya</div><div class="d">'+E(i.shift)+'</div></div><div class="gps-info-mini"><div class="l">Bağlı Makina</div><div class="d">'+E(i.exc)+'</div></div><div class="gps-info-mini"><div class="l">Paket</div><div class="d">'+E(i.pack)+'</div></div><div class="gps-info-mini"><div class="l">Sefer</div><div class="d">'+Number(i.trip||0)+'</div></div></div><div class="gps-v59-route"><div class="gps-status-title">Nereden / Nereye</div><div class="gps-v59-route-line"><span>'+E(i.from)+'</span><span class="gps-v59-arrow">→</span><span>'+E(i.to)+'</span></div><div class="muted" style="margin-top:6px">'+E(i.route)+'</div></div>'+warn+debug(t)+'<div id="gpsV59BackgroundWarning" class="'+((state.gps&&state.gps.tracking)?'gps-v59-ok':'gps-v59-warning')+'" style="margin-top:10px">'+((state.gps&&state.gps.tracking)?'GPS verisi alınıyor.':'GPS takip başlatılıyor.')+'</div></div>'; const ref=host.querySelector('.gps-status-box[style*="eff6ff"]')||host.children[1]; if(ref)ref.insertAdjacentHTML('afterend',html); else host.insertAdjacentHTML('afterbegin',html); if(typeof applyLanguage==='function')applyLanguage(document.getElementById('gpsV59TaskCard'));
+      }catch(e){console.warn('v76.6 strict inject',e);}
+    }
+    v70LoadDriverTasksSafe=loadStrict;
+    v70DriverTaskForCurrentUser=selectedTask;
+    v60TaskInfoFromActiveProduction=function(){return isDriver()?info(selectedTask()):{};};
+    v59InjectDriverTaskCard=injectStrict;
+    const prevRender=typeof renderGpsLive==='function'?renderGpsLive:null;
+    if(prevRender){renderGpsLive=function(){const out=prevRender.apply(this,arguments);try{if(isDriver()){[80,350,900,1800,3000].forEach(ms=>setTimeout(injectStrict,ms));}}catch(e){}return out;};}
+    try{const obs=new MutationObserver(()=>{try{if(!isDriver())return;const card=document.getElementById('gpsV59TaskCard');if(card && card.getAttribute('data-version')!=='v76.6'){card.remove();setTimeout(injectStrict,60);}}catch(e){}});obs.observe(document.body,{childList:true,subtree:true});}catch(e){}
+    Object.assign(window,{v766LoadDriverTasksStrict:loadStrict,v766SelectedDriverTask:selectedTask,v766InjectDriverTaskCard:injectStrict});
+  })();
+  /* =================== /V76.6 ŞOFÖR EKRANI SERT KİLİT =================== */
+
 </script>
 </body>
 </html>
