@@ -12876,12 +12876,12 @@ function renderUsers(){
       try{if(!isDriver())return;await loadStrict();if(typeof v60RemoveOldDriverInfoCard==='function')v60RemoveOldDriverInfoCard();removeCards();const host=document.querySelector('#gpsLive .gps-driver-card');if(!host)return;const t=selectedTask(),i=info(t);const st=(state.gps&&state.gps.tracking)?'GPS aktif':(t?'Görev aktif':'Görev bekleniyor');const warn=!t?'<div class="gps-v59-warning" style="margin-top:10px">Bugünün aktif vardiyasında bu şoför/cihaz için driver_tasks kaydı yok. Eski production kaydı ve eski paket gösterilmedi.</div>':'';const html='<div id="gpsV59TaskCard" data-version="v76.7" class="gps-selected-detail gps-v59-task-card"><div class="gps-v59-task-title"><b>📋 Aktif Görev</b><span class="pill green">'+E(st)+'</span></div><div class="gps-fleet-liveinfo"><div class="gps-info-mini"><div class="l">Vardiya</div><div class="d">'+E(i.shift)+'</div></div><div class="gps-info-mini"><div class="l">Bağlı Makina</div><div class="d">'+E(i.exc)+'</div></div><div class="gps-info-mini"><div class="l">Paket</div><div class="d">'+E(i.pack)+'</div></div><div class="gps-info-mini"><div class="l">Sefer</div><div class="d">'+Number(i.trip||0)+'</div></div></div><div class="gps-v59-route"><div class="gps-status-title">Nereden / Nereye</div><div class="gps-v59-route-line"><span>'+E(i.from)+'</span><span class="gps-v59-arrow">→</span><span>'+E(i.to)+'</span></div><div class="muted" style="margin-top:6px">'+E(i.route)+'</div></div>'+warn+debug(t)+'<div id="gpsV59BackgroundWarning" class="'+((state.gps&&state.gps.tracking)?'gps-v59-ok':'gps-v59-warning')+'" style="margin-top:10px">'+((state.gps&&state.gps.tracking)?'GPS verisi alınıyor.':'GPS takip başlatılıyor.')+'</div></div>';const ref=host.querySelector('.gps-status-box[style*="eff6ff"]')||host.children[1];if(ref)ref.insertAdjacentHTML('afterend',html);else host.insertAdjacentHTML('afterbegin',html);if(typeof applyLanguage==='function')applyLanguage(document.getElementById('gpsV59TaskCard'));}catch(e){console.warn('v76.7 inject',e);}
     }
     // Eski üretim-fallback fonksiyonlarını sadece şoför rolünde devre dışı bırak.
-    try{v63ProductionForDriverAssignedTruck=function(){return isDriver()?null:null;};}catch(e){}
-    try{v65BestDriverProduction=function(){return isDriver()?null:null;};}catch(e){}
-    try{v60ActiveProductionForEquipment=function(eqId){if(isDriver())return null;return null;};}catch(e){}
-    try{v61FindProductionForEquipment=function(eq){if(isDriver())return null;return null;};}catch(e){}
-    try{v60TaskInfoFromActiveProduction=function(){return isDriver()?info(selectedTask()):{};};}catch(e){}
-    try{v61DriverTaskCardHtml=function(){return '<div id="gpsV59TaskCard" data-version="v76.7" class="gps-selected-detail gps-v59-task-card"><div class="gps-v59-task-title"><b>📋 Aktif Görev</b><span class="pill green">Görev bekleniyor</span></div>'+debug(selectedTask())+'</div>';};}catch(e){}
+    // V80 CLEAN: eski üretim fonksiyonları artık burada override edilmiyor; başka ekranların işlevleri korunur.
+    // V80 CLEAN: eski üretim fonksiyonları artık burada override edilmiyor; başka ekranların işlevleri korunur.
+    // V80 CLEAN: eski üretim fonksiyonları artık burada override edilmiyor; başka ekranların işlevleri korunur.
+    // V80 CLEAN: eski üretim fonksiyonları artık burada override edilmiyor; başka ekranların işlevleri korunur.
+    // V80 CLEAN: eski üretim fonksiyonları artık burada override edilmiyor; başka ekranların işlevleri korunur.
+    // V80 CLEAN: eski üretim fonksiyonları artık burada override edilmiyor; başka ekranların işlevleri korunur.
     try{v70LoadDriverTasksSafe=loadStrict;v70DriverTaskForCurrentUser=selectedTask;v59InjectDriverTaskCard=inject;}catch(e){}
     const prevRender=typeof renderGpsLive==='function'?renderGpsLive:null;
     if(prevRender){renderGpsLive=function(){const out=prevRender.apply(this,arguments);try{if(isDriver()){[50,150,350,750,1500,3000].forEach(ms=>setTimeout(inject,ms));}}catch(e){}return out;};}
@@ -12890,6 +12890,143 @@ function renderUsers(){
     Object.assign(window,{v767LoadDriverTasksStrict:loadStrict,v767InjectDriverTaskCard:inject,v767IsOpenProdTodayShift:isOpenProdTodayShift,v767CleanupServer:cleanupServer});
   })();
   /* =================== /V76.7 ŞOFÖR EKRANI KİLİDİ =================== */
+
+
+  /* =================== V80 CLEAN DRIVER SCREEN - TEK KAYNAK DRIVER_TASKS =================== */
+  (function(){
+    const TAG = 'V80 CLEAN - SADECE DRIVER_TASKS';
+    const S = v => String(v == null ? '' : v).trim();
+    const L = v => S(v).toLocaleLowerCase('tr-TR');
+    const N = v => L(v).replace(/\s+/g,'').replace(/[-_]/g,'');
+    const E = v => { try { return escapeHtml(S(v)); } catch(e) { return S(v); } };
+    const isDriver = () => { try { return typeof currentUserRole === 'function' && currentUserRole() === 'driver'; } catch(e) { return false; } };
+    function todayLocal(){ const d = new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+    function activeShiftName(){
+      try { const x = typeof getCurrentShiftInfo === 'function' ? getCurrentShiftInfo() : null; if(x && x.name) return S(x.name); } catch(e) {}
+      try { const x = typeof resolveShiftNameForDateTime === 'function' ? resolveShiftNameForDateTime(new Date()) : ''; if(x) return S(x); } catch(e) {}
+      return '';
+    }
+    function userId(){ try { return S(state && state.user && state.user.id); } catch(e) { return ''; } }
+    function assignedEquipment(){ try { return typeof gpsAssignedEquipment === 'function' ? gpsAssignedEquipment() : null; } catch(e) { return null; } }
+    function deviceCode(){
+      try { if(state && state.gps){ const d=S(state.gps.device_code||state.gps.deviceCode||state.gps.code); if(d) return d; } } catch(e) {}
+      try { for(const k of ['maden_gps_device_code','gps_device_code','device_code']){ const v=S(localStorage.getItem(k)); if(v) return v; } } catch(e) {}
+      try { const u=userId(); const a=(state.gps_assignments||[]).find(x=>S(x.user_id)===u && L(x.is_active)!=='false'); if(a){ const v=S(a.device_code||a.deviceCode||a.gps_device_code); if(v) return v; } } catch(e) {}
+      return '';
+    }
+    function ctx(){ const eq=assignedEquipment(); return { date:todayLocal(), shift:activeShiftName(), uid:userId(), device:deviceCode(), eqId:S(eq && eq.id), eqName:S(eq && eq.name) }; }
+    function rowActive(r){ return !!(r && L(r.status || 'active') === 'active' && !r.deleted_at && !r.ended_at); }
+    function rowTodayShift(r,c){
+      if(!rowActive(r)) return false;
+      const rd = S(r.shift_date || r.task_date || ''); if(rd && rd !== c.date) return false;
+      const rs = S(r.shift_name || r.vardiya || r.shift || ''); if(c.shift && rs && rs !== c.shift) return false;
+      return true;
+    }
+    function rowMine(r,c){
+      const ru=S(r.user_id||r.driver_user_id||r.driver_id);
+      const rd=S(r.device_code||r.gps_device_code||r.device);
+      const re=S(r.equipment_id||r.assigned_equipment_id||r.truck_id);
+      const rn=S(r.truck_name||r.equipment_name||r.machine_name);
+      if(c.uid && ru && ru === c.uid) return true;
+      if(c.device && rd && N(rd) === N(c.device)) return true;
+      if(c.eqId && re && re === c.eqId) return true;
+      if(c.eqName && rn && N(rn) === N(c.eqName)) return true;
+      return false;
+    }
+    function sortRows(rows){ return (Array.isArray(rows)?rows:[]).slice().sort((a,b)=>new Date(b.updated_at||b.created_at||0)-new Date(a.updated_at||a.created_at||0)); }
+    function filterRows(rows){ const c=ctx(); return sortRows(rows).filter(r=>rowTodayShift(r,c) && rowMine(r,c)); }
+    async function cleanupServer(){
+      try{
+        const sb = state.sb || await initClient(); if(!sb || !state.user) return;
+        const c = ctx();
+        try { await sb.rpc('cleanup_old_open_productions', { p_keep_date:c.date }); } catch(e) {}
+        try { await sb.rpc('cleanup_driver_tasks_current_shift', { p_shift_name:c.shift, p_shift_date:c.date }); } catch(e) {}
+      } catch(e) {}
+    }
+    async function runQuery(q,label,out){
+      try { const r = await q; if(r.error) out.errors.push(label+': '+r.error.message); else out.rows = out.rows.concat(r.data||[]); }
+      catch(e){ out.errors.push(label+': '+(e.message||e)); }
+    }
+    async function loadTasks(){
+      const c=ctx(); const out={rows:[],errors:[]};
+      try{
+        const sb = state.sb || await initClient(); if(!sb || !state.user) throw new Error('Supabase hazır değil');
+        await cleanupServer();
+        if(c.uid){ let q=sb.from('driver_tasks').select('*').eq('status','active').eq('shift_date',c.date).eq('user_id',c.uid).order('updated_at',{ascending:false}).limit(20); if(c.shift) q=q.eq('shift_name',c.shift); await runQuery(q,'user_id',out); }
+        if(c.eqName){ let q=sb.from('driver_tasks').select('*').eq('status','active').eq('shift_date',c.date).eq('truck_name',c.eqName).order('updated_at',{ascending:false}).limit(20); if(c.shift) q=q.eq('shift_name',c.shift); await runQuery(q,'truck_name',out); }
+        if(c.device){ let q=sb.from('driver_tasks').select('*').eq('status','active').eq('shift_date',c.date).eq('device_code',c.device).order('updated_at',{ascending:false}).limit(20); if(c.shift) q=q.eq('shift_name',c.shift); await runQuery(q,'device_code',out); }
+        if(!out.rows.length){ let q=sb.from('driver_tasks').select('*').eq('status','active').eq('shift_date',c.date).order('updated_at',{ascending:false}).limit(80); if(c.shift) q=q.eq('shift_name',c.shift); await runQuery(q,'active_shift_scan',out); }
+        const seen=new Set();
+        const rows=filterRows(out.rows).filter(r=>{ const id=S(r.id)||JSON.stringify(r); if(seen.has(id)) return false; seen.add(id); return true; });
+        state.driver_tasks = rows;
+        state.driverTaskDebug = { version:TAG, total:rows.length, scanned:out.rows.length, uid:c.uid, device:c.device, eqName:c.eqName, shift:c.shift, shift_date:c.date, error:out.errors.join(' | ') };
+        return rows;
+      } catch(e) {
+        state.driver_tasks=[]; state.driverTaskDebug={version:TAG,total:0,scanned:0,uid:c.uid,device:c.device,eqName:c.eqName,shift:c.shift,shift_date:c.date,error:S(e.message||e)}; return [];
+      }
+    }
+    function selectedTask(){ return filterRows(state.driver_tasks || [])[0] || null; }
+    function taskInfo(t){
+      t=t||{}; const c=ctx();
+      const f=S(t.from_location||t.loading_location||t.loading_name||t.from);
+      const to=S(t.to_location||t.dumping_location||t.dump_location||t.dump_name||t.to);
+      return {
+        shift:S(t.shift_name||c.shift||'Aktif vardiya'),
+        machine:S(t.truck_name||t.equipment_name||c.eqName||'Atanmış kamyon'),
+        linked:S(t.excavator_name||t.linked_machine_name||t.linked_excavator_name||t.excavator||'Bağlı makina yok'),
+        pack:S(t.package_name||t.package_code||t.package||'-'),
+        trip:Number(t.trip_count||t.trips||t.trip||0)||0,
+        from:f||'Yükleme', to:to||'Döküm', route:(f||'Yükleme')+' → '+(to||'Döküm')
+      };
+    }
+    function debugHtml(t){
+      const c=ctx(), d=state.driverTaskDebug||{};
+      return '<div class="gps-v59-ok" style="margin-top:10px;font-size:11px;line-height:1.45;background:#f8fafc;border-color:#cbd5e1;color:#334155"><b>'+E(TAG)+'</b><br>Vardiya: '+E(c.shift||'-')+' / '+E(c.date)+'<br>Atanmış kamyon: '+E(c.eqName||'-')+'<br>Okunan driver_tasks: '+Number(d.total||0)+' / taranan '+Number(d.scanned||0)+'<br>Kullanıcı: '+E(c.uid||'-')+'<br>Cihaz: '+E(c.device||'-')+'<br>Seçilen: '+E(t?(S(t.truck_name||t.equipment_name||'-')+' / '+S(t.package_name||'-')):'Seçilen görev yok')+'<br>Kaynak: sadece driver_tasks. Eski production fallback tamamen kapalı.'+(d.error?'<br>Not: '+E(d.error):'')+'</div>';
+    }
+    function removeOldDriverCards(){
+      try { document.querySelectorAll('#gpsV59TaskCard,#gpsV80TaskCard').forEach(x=>x.remove()); } catch(e) {}
+      try { if(typeof v60RemoveOldDriverInfoCard === 'function') v60RemoveOldDriverInfoCard(); } catch(e) {}
+    }
+    async function injectV80(){
+      try{
+        if(!isDriver()) return;
+        await loadTasks();
+        removeOldDriverCards();
+        const host=document.querySelector('#gpsLive .gps-driver-card'); if(!host) return;
+        const t=selectedTask(), i=taskInfo(t);
+        const status=(state.gps&&state.gps.tracking)?'GPS aktif':(t?'Görev aktif':'Görev bekleniyor');
+        const warn=!t?'<div class="gps-v59-warning" style="margin-top:10px">Bugünün aktif vardiyasında bu şoför/atanmış kamyon için driver_tasks kaydı yok. Eski production veya eski paket gösterilmedi.</div>':'';
+        const html='<div id="gpsV80TaskCard" data-version="v80-clean" class="gps-selected-detail gps-v59-task-card"><div class="gps-v59-task-title"><b>📋 Aktif Görev</b><span class="pill green">'+E(status)+'</span></div><div class="gps-fleet-liveinfo"><div class="gps-info-mini"><div class="l">Vardiya</div><div class="d">'+E(i.shift)+'</div></div><div class="gps-info-mini"><div class="l">Bağlı Makina</div><div class="d">'+E(i.linked)+'</div></div><div class="gps-info-mini"><div class="l">Paket</div><div class="d">'+E(i.pack)+'</div></div><div class="gps-info-mini"><div class="l">Sefer</div><div class="d">'+Number(i.trip||0)+'</div></div></div><div class="gps-v59-route"><div class="gps-status-title">Nereden / Nereye</div><div class="gps-v59-route-line"><span>'+E(i.from)+'</span><span class="gps-v59-arrow">→</span><span>'+E(i.to)+'</span></div><div class="muted" style="margin-top:6px">'+E(i.route)+'</div></div>'+warn+debugHtml(t)+'<div id="gpsV59BackgroundWarning" class="'+((state.gps&&state.gps.tracking)?'gps-v59-ok':'gps-v59-warning')+'" style="margin-top:10px">'+((state.gps&&state.gps.tracking)?'GPS verisi alınıyor.':'GPS takip başlatılıyor.')+'</div></div>';
+        const ref=host.querySelector('.gps-status-box[style*="eff6ff"]')||host.children[1];
+        if(ref) ref.insertAdjacentHTML('afterend',html); else host.insertAdjacentHTML('afterbegin',html);
+        try { if(typeof applyLanguage==='function') applyLanguage(document.getElementById('gpsV80TaskCard')); } catch(e) {}
+      } catch(e) { console.warn('v80 driver inject', e); }
+    }
+    // Eski şoför kartı fonksiyonlarının son çıktısını V80'e yönlendir. Diğer ekranların üretim fonksiyonlarına dokunulmaz.
+    try { v59InjectDriverTaskCard = injectV80; } catch(e) {}
+    try { v70LoadDriverTasksSafe = loadTasks; v70DriverTaskForCurrentUser = selectedTask; } catch(e) {}
+    try { window.v80LoadDriverTasks = loadTasks; window.v80InjectDriverTaskCard = injectV80; window.v80SelectedDriverTask = selectedTask; } catch(e) {}
+    const prevRender = typeof renderGpsLive === 'function' ? renderGpsLive : null;
+    if(prevRender){
+      renderGpsLive = function(){
+        const out = prevRender.apply(this, arguments);
+        try { if(isDriver()) [40,120,260,600,1200,2500,4500].forEach(ms=>setTimeout(injectV80,ms)); } catch(e) {}
+        return out;
+      };
+    }
+    try {
+      const obs = new MutationObserver(()=>{
+        try{
+          if(!isDriver()) return;
+          const old = document.getElementById('gpsV59TaskCard'); if(old) { old.remove(); setTimeout(injectV80,30); }
+          const card = document.getElementById('gpsV80TaskCard'); if(!card && document.querySelector('#gpsLive .gps-driver-card')) setTimeout(injectV80,80);
+        } catch(e) {}
+      });
+      obs.observe(document.body,{childList:true,subtree:true});
+    } catch(e) {}
+    try { setTimeout(cleanupServer,700); } catch(e) {}
+  })();
+  /* =================== /V80 CLEAN DRIVER SCREEN =================== */
 
 </script>
 </body>
