@@ -6509,12 +6509,12 @@
           <div class="pro-stat-sub" id="proFuelSub"></div>
         </div>
         <div class="pro-stat-card">
-          <div class="pro-stat-head"><div class="pro-stat-title">Toplam Tüketilen Yakıt</div><div class="pro-stat-chip">Tüketim</div></div>
+          <div class="pro-stat-head"><div class="pro-stat-title">Toplam Yakıt Tüketimi</div><div class="pro-stat-chip">Tüketim</div></div>
           <div class="pro-stat-value" id="proConsumedFuelStat">-</div>
           <div class="pro-stat-sub" id="proConsumedFuelSub"></div>
         </div>
         <div class="pro-stat-card">
-          <div class="pro-stat-head"><div class="pro-stat-title">Kamyon Km Yakıt Tüketimi</div><div class="pro-stat-chip">L/km</div></div>
+          <div class="pro-stat-head"><div class="pro-stat-title">Kamyon Yakıt Tüketimi</div><div class="pro-stat-chip">L/km</div></div>
           <div class="pro-stat-value" id="proTruckKmFuelStat">-</div>
           <div class="pro-stat-sub" id="proTruckKmFuelSub"></div>
         </div>
@@ -6989,7 +6989,7 @@
     const truckFuelPerKm = truckConsumedMeterDiff > 0 ? (truckConsumedFuelLiters / truckConsumedMeterDiff) : 0;
     const consumedFuelCoverageCount = fuelConsumptionItems.filter(item=>item.shift?.validCount).length;
 
-    const fuelPerTon = filteredTonnage > 0 ? (filteredFuelLiters / filteredTonnage) : 0;
+    const fuelPerTon = filteredTonnage > 0 ? (totalConsumedFuelLiters / filteredTonnage) : 0;
 
     document.getElementById('proTripsStat').textContent = String(filteredTripCount);
     document.getElementById('proTripsSub').innerHTML = `Seçilen aralık: <b>${escapeHtml(summary.label)}</b> • Kapsam: <b>${selectedBuckets.length}</b> vardiya`;
@@ -7002,7 +7002,7 @@
     document.getElementById('proMeterStat').textContent = `${filteredTonnage.toFixed(1)} ton`;
     document.getElementById('proMeterSub').innerHTML = `Tonaj, filtre aralığındaki seferlerden paket faktörü ile hesaplanır.`;
     document.getElementById('proFuelPerTonStat').textContent = filteredTonnage > 0 ? `${fuelPerTon.toFixed(2)} L/ton` : '-';
-    document.getElementById('proFuelPerTonSub').innerHTML = `Tüm üretim ekipmanları dahil: kamyon + ekskavatör + yardımcı verilen yakıt / toplam tonaj.`;
+    document.getElementById('proFuelPerTonSub').innerHTML = `Tüm üretim ekipmanları dahil: toplam yakıt tüketimi / toplam tonaj.`;
 
     const alertRules = { ...DEFAULT_ALERT_RULES, ...(state.alertRules || {}) };
     const alerts = [];
@@ -7124,7 +7124,9 @@
         { 'Kalem': 'Seçilen Vardiya', 'Değer': summary.label },
         { 'Kalem': 'Toplam Sefer', 'Değer': filteredTripCount },
         { 'Kalem': 'Toplam Verilen Yakıt (L)', 'Değer': Number(filteredFuelLiters.toFixed(1)) },
-        { 'Kalem': 'Kamyon Yakıtı (L)', 'Değer': Number(filteredTruckFuelLiters.toFixed(1)) },
+        { 'Kalem': 'Toplam Yakıt Tüketimi (L)', 'Değer': Number(totalConsumedFuelLiters.toFixed(1)) },
+        { 'Kalem': 'Kamyon Verilen Yakıt (L)', 'Değer': Number(filteredTruckFuelLiters.toFixed(1)) },
+        { 'Kalem': 'Kamyon Yakıt Tüketimi (L/km)', 'Değer': Number((truckFuelPerKm || 0).toFixed(3)) },
         { 'Kalem': 'Ekskavatör Yakıtı (L)', 'Değer': Number(filteredExcFuelLiters.toFixed(1)) },
         { 'Kalem': 'Yardımcı Makina Yakıtı (L)', 'Değer': Number(filteredHelperFuelLiters.toFixed(1)) },
         { 'Kalem': 'Yakıt Almayan Ekipman', 'Değer': fuelConsumptionNoFuelCount },
@@ -7133,7 +7135,7 @@
         { 'Kalem': 'Toplam Tonaj', 'Değer': Number(filteredTonnage.toFixed(1)) },
         { 'Kalem': 'Aktif Kamyon', 'Değer': filteredTruckCount },
         { 'Kalem': 'Aktif Ekskavatör', 'Değer': filteredExcCount },
-        { 'Kalem': 'Ton Başına Yakılan Yakıt (L/ton)', 'Değer': Number((filteredTonnage > 0 ? (filteredFuelLiters / filteredTonnage) : 0).toFixed(3)) },
+        { 'Kalem': 'Ton Başına Yakılan Yakıt (L/ton)', 'Değer': Number((filteredTonnage > 0 ? (totalConsumedFuelLiters / filteredTonnage) : 0).toFixed(3)) },
         { 'Kalem': 'Toplam Arıza Dakikası', 'Değer': filteredBreakdownMinutes },
         { 'Kalem': 'Uzun Arıza Sayısı', 'Değer': filteredLongBreakdowns }
       ],
