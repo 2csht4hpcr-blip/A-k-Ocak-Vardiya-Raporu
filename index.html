@@ -1658,7 +1658,7 @@
     recordPages: {},
     recordsServer: {},
     recordsLoading: false,
-    dashboardProFilters: { day:'', shift_name:'', equipment_type:'', equipment_id:'', sort:'trip_desc' },
+    dashboardProFilters: { day:'', date_start:'', date_end:'', shift_name:'', equipment_type:'', equipment_id:'', sort:'trip_desc' },
     definitionsFilters: { equipment_type:'', package_material:'' },
     truckModels: loadTruckModels(),
     equipmentModelMap: loadEquipmentModelMap(),
@@ -6296,6 +6296,129 @@
     let list = buckets.filter(b=>(!day || String(b.shift_date || '') === day) && (!shiftName || String(b.shift_name || '') === shiftName));
     return list[0] || buckets[0] || null;
   }
+
+  function dashboardProNormalizeRangeFilters(){
+    const filters = state.dashboardProFilters || (state.dashboardProFilters = {});
+    const dayOptions = getDashboardProDayOptions();
+    if(!filters.date_start && filters.day) filters.date_start = filters.day;
+    if(!filters.date_end && filters.day) filters.date_end = filters.day;
+    if(!filters.date_start && dayOptions.length) filters.date_start = dayOptions[0];
+    if(!filters.date_end && filters.date_start) filters.date_end = filters.date_start;
+    if(filters.date_start && filters.date_end && String(filters.date_start) > String(filters.date_end)){
+      const tmp = filters.date_start;
+      filters.date_start = filters.date_end;
+      filters.date_end = tmp;
+    }
+    filters.day = filters.date_start || filters.day || '';
+    return filters;
+  }
+  function getDashboardProShiftOptionsForRange(startDate, endDate){
+    const configured = (state.shiftConfig?.shifts || []).map(s=>String(s?.name || '').trim()).filter(Boolean);
+    const completed = getCompletedShiftBuckets()
+      .filter(b=>(!startDate || String(b.shift_date || '') >= String(startDate)) && (!endDate || String(b.shift_date || '') <= String(endDate)))
+      .map(b=>String(b.shift_name || '').trim()).filter(Boolean);
+    const seen = new Set();
+    return [...configured, ...completed].filter(name=>{
+      if(!name || seen.has(name)) return false;
+      seen.add(name);
+      return true;
+    });
+  }
+  function getDashboardProSelectedBuckets(){
+    const filters = dashboardProNormalizeRangeFilters();
+    const startDate = String(filters.date_start || filters.day || '');
+    const endDate = String(filters.date_end || filters.day || startDate || '');
+    const shiftName = String(filters.shift_name || '');
+    return getCompletedShiftBuckets().filter(b=>{
+      const d = String(b.shift_date || '');
+      if(startDate && d < startDate) return false;
+      if(endDate && d > endDate) return false;
+      if(shiftName && String(b.shift_name || '') !== shiftName) return false;
+      return true;
+    });
+  }
+  function mergeDashboardProAnalysisItems(items, type){
+    const map = new Map();
+    (items || []).forEach(item=>{
+      const id = String(item?.id || '');
+      if(!id) return;
+      if(!map.has(id)) map.set(id, { ...item, type, tripCount:0, fuelLiters:0, tonnage:0, meterDiff:0, workHours:0, linkedTruckCount:0 });
+      const target = map.get(id);
+      target.tripCount += Number(item.tripCount || 0) || 0;
+      target.fuelLiters += Number(item.fuelLiters || 0) || 0;
+      target.tonnage += Number(item.tonnage || 0) || 0;
+      target.meterDiff += Number(item.meterDiff || 0) || 0;
+      target.workHours += Number(item.workHours || 0) || 0;
+      target.linkedTruckCount = Math.max(Number(target.linkedTruckCount || 0), Number(item.linkedTruckCount || 0));
+      ['name','zone','route','packageName','linkedName','linkedExcavatorId'].forEach(k=>{ if(!target[k] || target[k] === '-') target[k] = item[k] || target[k]; });
+    });
+    return Array.from(map.values()).map(item=>({
+      ...item,
+      efficiency: item.workHours ? (item.tripCount / item.workHours) : 0,
+      fuelPerTrip: item.tripCount ? (item.fuelLiters / item.tripCount) : 0,
+      kmPerTrip: item.tripCount ? (item.meterDiff / item.tripCount) : 0,
+      tonPerTrip: item.tripCount ? (item.tonnage / item.tripCount) : 0,
+      tonPerKm: item.meterDiff ? (item.tonnage / item.meterDiff) : 0,
+      tonPerHour: item.workHours ? (item.tonnage / item.workHours) : 0
+    }));
+  }
+  function buildDashboardProRangeSummary(buckets){
+    const selectedBuckets = Array.isArray(buckets) ? buckets : [];
+    if(!selectedBuckets.length) return null;
+    const summaries = selectedBuckets.map(b=>buildShiftSummary(b.shift_name, b.shift_date));
+    const productions = summaries.flatMap(s=>s.productions || []);
+    const closedProductions = summaries.flatMap(s=>s.closedProductions || []);
+    const trips = summaries.flatMap(s=>s.trips || []);
+    const fuels = summaries.flatMap(s=>s.fuels || []);
+    const breakdowns = summaries.flatMap(s=>s.breakdowns || []);
+    const meters = summaries.flatMap(s=>s.meters || []);
+    const truckAnalysis = mergeDashboardProAnalysisItems(summaries.flatMap(s=>s.truck_analysis || []), 'truck');
+    const excavatorAnalysis = mergeDashboardProAnalysisItems(summaries.flatMap(s=>s.excavator_analysis || []), 'excavator');
+    const totalTripCount = sumField(trips, r=>r.trip_count);
+    const totalTonnage = sumField(trips, r=>getTripRowTonnage(r));
+    const totalFuelLiters = sumField(fuels, r=>r.liters);
+    const totalWorkHours = closedProductions.reduce((sum,row)=>sum + productionDurationHours(row), 0);
+    const totalKm = truckAnalysis.reduce((sum,item)=>sum + (Number(item.meterDiff || 0) || 0), 0);
+    const totalEngineHours = excavatorAnalysis.reduce((sum,item)=>sum + (Number(item.workHours || 0) || 0), 0);
+    const first = selectedBuckets[selectedBuckets.length - 1] || selectedBuckets[0];
+    const last = selectedBuckets[0] || first;
+    const label = selectedBuckets.length === 1 ? `${first.shift_date} • ${first.shift_name}` : `${first.shift_date} - ${last.shift_date}${state.dashboardProFilters?.shift_name ? ' • ' + state.dashboardProFilters.shift_name : ' • Tüm vardiyalar'}`;
+    return {
+      shift_key: selectedBuckets.map(b=>b.shift_key).join(','),
+      shift_name: state.dashboardProFilters?.shift_name || 'Tüm vardiyalar',
+      shift_date: first.shift_date,
+      label,
+      buckets:selectedBuckets,
+      productions,
+      closedProductions,
+      trips,
+      fuels,
+      breakdowns,
+      meters,
+      total_trip_count:totalTripCount,
+      total_tonnage:totalTonnage,
+      total_fuel_liters:totalFuelLiters,
+      total_work_hours:totalWorkHours,
+      total_km:totalKm,
+      total_engine_hours:totalEngineHours,
+      active_truck_count:truckAnalysis.length,
+      active_excavator_count:excavatorAnalysis.length,
+      avg_trip_per_truck:truckAnalysis.length ? totalTripCount / truckAnalysis.length : 0,
+      avg_fuel_per_trip:totalTripCount ? totalFuelLiters / totalTripCount : 0,
+      truck_analysis:truckAnalysis,
+      excavator_analysis:excavatorAnalysis,
+      total_breakdown_minutes:breakdowns.reduce((s,r)=>{
+        const start = new Date(r.start_at || r.start_time || r.created_at || 0).getTime();
+        const end = new Date(r.end_at || r.end_time || r.updated_at || 0).getTime();
+        return (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) ? s : s + Math.round((end - start) / 60000);
+      }, 0),
+      long_breakdown_count:breakdowns.filter(r=>{
+        const start = new Date(r.start_at || r.start_time || r.created_at || 0).getTime();
+        const end = new Date(r.end_at || r.end_time || r.updated_at || 0).getTime();
+        return Number.isFinite(start) && Number.isFinite(end) && end > start && Math.round((end - start) / 60000) >= 120;
+      }).length
+    };
+  }
   function dashboardProEquipmentTypeKeyForItem(item){
     return String(item?.type || '').trim().toLowerCase();
   }
@@ -6320,20 +6443,10 @@
 
 
   function renderDashboardPro(){
-    const buckets = getCompletedShiftBuckets();
-    const dayOptions = getDashboardProDayOptions();
-    const filters = state.dashboardProFilters || {};
-    if(!filters.day && dayOptions.length) filters.day = dayOptions[0];
-    const shiftOptionsForDay = getDashboardProShiftOptionsForDay(filters.day);
-    if(filters.shift_name && !shiftOptionsForDay.includes(filters.shift_name)) filters.shift_name = '';
-    if(!filters.shift_name && shiftOptionsForDay.length) filters.shift_name = shiftOptionsForDay[0];
-    const selectedBucket = getSelectedDashboardProBucket();
-    if(selectedBucket){
-      filters.day = selectedBucket.shift_date || filters.day || '';
-      filters.shift_name = selectedBucket.shift_name || filters.shift_name || '';
-    }
-    const daySelectOptions = dayOptions.map(day=>`<option value="${escapeHtml(day)}" ${String(filters.day||'')===String(day)?'selected':''}>${escapeHtml(day)}</option>`).join('');
-    const shiftSelectOptions = getDashboardProShiftOptionsForDay(filters.day).map(name=>`<option value="${escapeHtml(name)}" ${String(filters.shift_name||'')===String(name)?'selected':''}>${escapeHtml(name)}</option>`).join('');
+    const filters = dashboardProNormalizeRangeFilters();
+    const shiftOptionsForRange = getDashboardProShiftOptionsForRange(filters.date_start, filters.date_end);
+    if(filters.shift_name && !shiftOptionsForRange.includes(filters.shift_name)) filters.shift_name = '';
+    const shiftSelectOptions = shiftOptionsForRange.map(name=>`<option value="${escapeHtml(name)}" ${String(filters.shift_name||'')===String(name)?'selected':''}>${escapeHtml(name)}</option>`).join('');
     document.getElementById('dashboardPro').innerHTML = `
       <h2 class="section-title">Dashboard Pro</h2>
       <div class="card pro-hero" style="margin-bottom:16px">
@@ -6344,12 +6457,16 @@
       <div class="card" style="margin-bottom:16px">
         <div class="filter-bar">
           <div>
-            <label class="muted">Gün</label>
-            <select id="dashboardProDayFilter"><option value="">Gün seç</option>${daySelectOptions}</select>
+            <label class="muted">Başlangıç Tarihi</label>
+            <input id="dashboardProStartDateFilter" type="date" value="${escapeHtml(filters.date_start || '')}" />
+          </div>
+          <div>
+            <label class="muted">Bitiş Tarihi</label>
+            <input id="dashboardProEndDateFilter" type="date" value="${escapeHtml(filters.date_end || filters.date_start || '')}" />
           </div>
           <div>
             <label class="muted">Vardiya</label>
-            <select id="dashboardProShiftNameFilter"><option value="">Vardiya seç</option>${shiftSelectOptions}</select>
+            <select id="dashboardProShiftNameFilter"><option value="">Tüm vardiyalar</option>${shiftSelectOptions}</select>
           </div>
           <div>
             <label class="muted">Ekipman Tipi</label>
@@ -6397,19 +6514,9 @@
           <div class="pro-stat-sub" id="proMeterSub"></div>
         </div>
         <div class="pro-stat-card">
-          <div class="pro-stat-head"><div class="pro-stat-title">Kamyon Başına Ort. Sefer</div><div class="pro-stat-chip">Filo</div></div>
-          <div class="pro-stat-value" id="proAvgTripStat">-</div>
-          <div class="pro-stat-sub" id="proAvgTripSub"></div>
-        </div>
-        <div class="pro-stat-card">
-          <div class="pro-stat-head"><div class="pro-stat-title">Sefer Başına Kamyon Yakıtı</div><div class="pro-stat-chip">Verim</div></div>
-          <div class="pro-stat-value" id="proFuelPerTripStat">-</div>
-          <div class="pro-stat-sub" id="proFuelPerTripSub"></div>
-        </div>
-        <div class="pro-stat-card">
-          <div class="pro-stat-head"><div class="pro-stat-title">Önceki Vardiya Kıyası</div><div class="pro-stat-chip">Trend</div></div>
-          <div class="pro-stat-value" id="proCompareStat">-</div>
-          <div class="pro-stat-sub" id="proCompareSub"></div>
+          <div class="pro-stat-head"><div class="pro-stat-title">Ton Başına Yakılan Yakıt</div><div class="pro-stat-chip">Tüm Ekipman</div></div>
+          <div class="pro-stat-value" id="proFuelPerTonStat">-</div>
+          <div class="pro-stat-sub" id="proFuelPerTonSub"></div>
         </div>
       </div>
       <div class="grid g2" style="margin-top:16px">
@@ -6459,7 +6566,8 @@
 
 
   function attachDashboardProEvents(){
-    const day = document.getElementById('dashboardProDayFilter');
+    const startDate = document.getElementById('dashboardProStartDateFilter');
+    const endDate = document.getElementById('dashboardProEndDateFilter');
     const shift = document.getElementById('dashboardProShiftNameFilter');
     const equipmentType = document.getElementById('dashboardProEquipmentTypeFilter');
     const equipment = document.getElementById('dashboardProEquipmentFilter');
@@ -6468,15 +6576,25 @@
     const exportBtn = document.getElementById('dashboardProExportBtn');
     const pdfBtn = document.getElementById('dashboardProPdfBtn');
 
-    if(day && day.dataset.bound !== '1'){
-      day.value = state.dashboardProFilters.day || '';
-      day.addEventListener('change', ()=>{
-        state.dashboardProFilters.day = day.value || '';
-        state.dashboardProFilters.shift_name = '';
+    if(startDate && startDate.dataset.bound !== '1'){
+      startDate.value = state.dashboardProFilters.date_start || state.dashboardProFilters.day || '';
+      startDate.addEventListener('change', ()=>{
+        state.dashboardProFilters.date_start = startDate.value || '';
+        if(!state.dashboardProFilters.date_end) state.dashboardProFilters.date_end = state.dashboardProFilters.date_start;
+        state.dashboardProFilters.day = state.dashboardProFilters.date_start || '';
         state.dashboardProFilters.equipment_id = '';
         renderDashboardPro();
       });
-      day.dataset.bound = '1';
+      startDate.dataset.bound = '1';
+    }
+    if(endDate && endDate.dataset.bound !== '1'){
+      endDate.value = state.dashboardProFilters.date_end || state.dashboardProFilters.date_start || state.dashboardProFilters.day || '';
+      endDate.addEventListener('change', ()=>{
+        state.dashboardProFilters.date_end = endDate.value || state.dashboardProFilters.date_start || '';
+        state.dashboardProFilters.equipment_id = '';
+        renderDashboardPro();
+      });
+      endDate.dataset.bound = '1';
     }
     if(shift && shift.dataset.bound !== '1'){
       shift.value = state.dashboardProFilters.shift_name || '';
@@ -6512,12 +6630,14 @@
       clearBtn.addEventListener('click', ()=>{
         state.dashboardProFilters = {
           day: '',
+          date_start: '',
+          date_end: '',
           shift_name: '',
           equipment_type: '',
           equipment_id: '',
           sort: 'trip_desc'
         };
-        state.dashboardProFilters.shift_name = '';
+        dashboardProNormalizeRangeFilters();
         renderDashboardPro();
       });
       clearBtn.dataset.bound = '1';
@@ -6738,26 +6858,27 @@
   async function renderDashboardProData(){
 
     const buckets = getCompletedShiftBuckets();
-    const selected = getSelectedDashboardProBucket();
-    if(!selected){
-      document.getElementById('dashboardProAlertsBody').innerHTML = '<div class="empty">Tamamlanmış geçmiş vardiya verisi bulunamadı.</div>';
+    const selectedBuckets = getDashboardProSelectedBuckets();
+    const selected = selectedBuckets[0] || null;
+    if(!selectedBuckets.length){
+      document.getElementById('dashboardProAlertsBody').innerHTML = '<div class="empty">Seçilen tarih/vardiya filtresi için tamamlanmış veri bulunamadı.</div>';
       document.getElementById('dashboardProSummaryBody').innerHTML = '<div class="empty">Özet oluşturulamadı.</div>';
       document.getElementById('dashboardProTruckBody').innerHTML = '<div class="empty">Kamyon analizi yok.</div>';
       document.getElementById('dashboardProExcBody').innerHTML = '<div class="empty">Ekskavatör analizi yok.</div>';
       document.getElementById('dashboardProPackageBody').innerHTML = '<div class="empty">Paket tonaj analizi yok.</div>';
       const fuelConsumptionBody = document.getElementById('dashboardProFuelConsumptionBody'); if(fuelConsumptionBody) fuelConsumptionBody.innerHTML = '<div class="empty">Yakıt tüketimi analizi yok.</div>';
-      ['proTripsStat','proFuelStat','proMeterStat','proAvgTripStat','proFuelPerTripStat','proCompareStat'].forEach(id=>{ const el=document.getElementById(id); if(el) el.textContent='-'; });
-      ['proTripsSub','proFuelSub','proMeterSub','proAvgTripSub','proFuelPerTripSub','proCompareSub'].forEach(id=>{ const el=document.getElementById(id); if(el) el.textContent='Veri yok'; });
+      ['proTripsStat','proFuelStat','proMeterStat','proFuelPerTonStat'].forEach(id=>{ const el=document.getElementById(id); if(el) el.textContent='-'; });
+      ['proTripsSub','proFuelSub','proMeterSub','proFuelPerTonSub'].forEach(id=>{ const el=document.getElementById(id); if(el) el.textContent='Veri yok'; });
       return;
     }
-    const summary = buildShiftSummary(selected.shift_name, selected.shift_date);
-    const previous = buckets.filter(b=>b.shift_key !== selected.shift_key).find(b=>b.endMs < selected.endMs) || null;
-    const previousSummary = previous ? buildShiftSummary(previous.shift_name, previous.shift_date) : null;
-    const recent = buckets.filter(b=>b.endMs <= selected.endMs && b.shift_key !== selected.shift_key).slice(0,3).map(b=>buildShiftSummary(b.shift_name, b.shift_date));
-    const sqlSummaryRows = await loadDashboardProSummaryRows();
-    const sqlCurrent = findDashboardProSummaryRow(sqlSummaryRows, selected);
-    const sqlPrevious = findDashboardProSummaryRow(sqlSummaryRows, previous);
-    const sqlRecent = buckets.filter(b=>b.endMs <= selected.endMs && b.shift_key !== selected.shift_key).slice(0,3).map(b=>findDashboardProSummaryRow(sqlSummaryRows, b)).filter(Boolean);
+    const summary = buildDashboardProRangeSummary(selectedBuckets);
+    const previous = null;
+    const previousSummary = null;
+    const recent = [];
+    const sqlSummaryRows = [];
+    const sqlCurrent = null;
+    const sqlPrevious = null;
+    const sqlRecent = [];
     const filters = state.dashboardProFilters || {};
     const selectedType = String(filters.equipment_type || '');
     const selectedEquipmentId = String(filters.equipment_id || '');
@@ -6858,35 +6979,23 @@
       return item.shift?.hasFuel && item.shift?.validCount && (info.level === 'red' || info.level === 'orange');
     }).length;
 
-    const avg3Trips = sqlRecent.length ? averageOf(sqlRecent, 'total_trip_count') : averageOf(recent, 'total_trip_count');
-    const avg3Fuel = sqlRecent.length ? averageOf(sqlRecent, 'total_fuel_liters') : averageOf(recent, 'total_fuel_liters');
-    const avg3Meter = averageOf(recent, 'total_tonnage');
-    const tripPct = comparePct(filteredTripCount, avg3Trips);
-    const fuelPct = comparePct(filteredFuelLiters, avg3Fuel);
-    const meterPct = comparePct(filteredTonnage, avg3Meter);
-    const compareDelta = sqlPrevious ? (filteredTripCount - Number(sqlPrevious.total_trip_count || 0)) : (previousSummary ? (filteredTripCount - previousSummary.total_trip_count) : null);
+    const fuelPerTon = filteredTonnage > 0 ? (filteredFuelLiters / filteredTonnage) : 0;
 
     document.getElementById('proTripsStat').textContent = String(filteredTripCount);
-    document.getElementById('proTripsSub').innerHTML = `Son 3 vardiya ort.: <b>${avg3Trips.toFixed(1)}</b>${sqlRecent.length ? ' <span class="pill green">SQL</span>' : ''} • <span class="${metricStatusClass(tripPct ?? 0, -10, -25, true)}">${formatPct(tripPct)}</span>`;
+    document.getElementById('proTripsSub').innerHTML = `Seçilen aralık: <b>${escapeHtml(summary.label)}</b> • Kapsam: <b>${selectedBuckets.length}</b> vardiya`;
     document.getElementById('proFuelStat').textContent = `${filteredFuelLiters.toFixed(0)} L`;
-    document.getElementById('proFuelSub').innerHTML = `Kamyon: <b>${filteredTruckFuelLiters.toFixed(0)} L</b> • Ekskavatör: <b>${filteredExcFuelLiters.toFixed(0)} L</b> • Yardımcı: <b>${filteredHelperFuelLiters.toFixed(0)} L</b><br>Son 3 vardiya ort.: <b>${avg3Fuel.toFixed(0)} L</b>${sqlRecent.length ? ' <span class="pill green">SQL</span>' : ''} • <span class="${metricStatusClass(-(fuelPct ?? 0), -10, -25, true)}">${formatPct(fuelPct)}</span>`;
+    document.getElementById('proFuelSub').innerHTML = `Kamyon: <b>${filteredTruckFuelLiters.toFixed(0)} L</b> • Ekskavatör: <b>${filteredExcFuelLiters.toFixed(0)} L</b> • Yardımcı: <b>${filteredHelperFuelLiters.toFixed(0)} L</b>`;
     document.getElementById('proMeterStat').textContent = `${filteredTonnage.toFixed(1)} ton`;
-    document.getElementById('proMeterSub').innerHTML = `Son 3 vardiya ort.: <b>${avg3Meter.toFixed(1)} ton</b> • <span class="${metricStatusClass(meterPct ?? 0, -10, -25, true)}">${formatPct(meterPct)}</span>`;
-    document.getElementById('proAvgTripStat').textContent = filteredAvgTripPerTruck.toFixed(1);
-    document.getElementById('proAvgTripSub').innerHTML = `Aktif kamyon: <b>${filteredTruckCount}</b> • Toplam sefer: <b>${filteredTripCount}</b>`;
-    document.getElementById('proFuelPerTripStat').textContent = filteredTruckFuelPerTrip.toFixed(1);
-    document.getElementById('proFuelPerTripSub').innerHTML = `Sadece kamyon yakıtı • Verilen yakıta göre: <b>${filteredTruckFuelLiters.toFixed(0)} L</b> • Sefer: <b>${filteredTripCount}</b>`;
-    document.getElementById('proCompareStat').textContent = (sqlPrevious || previousSummary) ? `${compareDelta >= 0 ? '+' : ''}${compareDelta}` : '-';
-    document.getElementById('proCompareSub').innerHTML = sqlPrevious ? `Önceki vardiya: <b>${escapeHtml(String(sqlPrevious.shift_date || ''))} • ${escapeHtml(String(sqlPrevious.shift_name || ''))}</b> • Sefer: <b>${Number(sqlPrevious.total_trip_count || 0)}</b> <span class="pill green">SQL</span>` : (previousSummary ? `Önceki vardiya: <b>${escapeHtml(previousSummary.label)}</b> • Sefer: <b>${previousSummary.total_trip_count}</b>` : 'Önceki vardiya verisi yok');
+    document.getElementById('proMeterSub').innerHTML = `Tonaj, filtre aralığındaki seferlerden paket faktörü ile hesaplanır.`;
+    document.getElementById('proFuelPerTonStat').textContent = filteredTonnage > 0 ? `${fuelPerTon.toFixed(2)} L/ton` : '-';
+    document.getElementById('proFuelPerTonSub').innerHTML = `Tüm üretim ekipmanları dahil: kamyon + ekskavatör + yardımcı verilen yakıt / toplam tonaj.`;
 
     const alertRules = { ...DEFAULT_ALERT_RULES, ...(state.alertRules || {}) };
     const alerts = [];
     if(fuelConsumptionNoFuelCount > 0) alerts.push({level:'orange', title:'Yakıt almayan ekipman', text:`Seçilen vardiyada ${fuelConsumptionNoFuelCount} ekipman çalıştı/kayıt gördü ama yakıt almadı.`});
     if(fuelConsumptionInvalidCount > 0) alerts.push({level:'red', title:'Yakıt tüketimi hesaplanamadı', text:`${fuelConsumptionInvalidCount} ekipmanda sayaç farkı veya önceki yakıt sayaç kaydı eksik.`});
     if(fuelConsumptionHighCount > 0) alerts.push({level:'red', title:'Yakıt tüketimi eşik dışı', text:`${fuelConsumptionHighCount} ekipmanda yakıt tüketimi belirlenen eşiklerin dışında.`});
-    if(avg3Trips > 0 && filteredTripCount < avg3Trips * alertRules.lowProductionRatio) alerts.push({level:'red', title:'Düşük üretim vardiyası', text:`Sefer ${filteredTripCount}, son 3 vardiya ortalaması ${avg3Trips.toFixed(1)}.`});
-    if(avg3Fuel > 0 && filteredFuelLiters > avg3Fuel * alertRules.highFuelRatio) alerts.push({level:'orange', title:'Yakıt yükselmiş', text:`Yakıt ${filteredFuelLiters.toFixed(0)} L, son 3 vardiya ortalaması ${avg3Fuel.toFixed(0)} L.`});
-    if(filteredLongBreakdowns > 0 || filteredBreakdownMinutes >= alertRules.longBreakdownMinutes) alerts.push({level:'red', title:'Uzun süren arıza', text:`Bu seçimde toplam ${formatDurationMinutes(filteredBreakdownMinutes)} arıza süresi var.`});
+        if(filteredLongBreakdowns > 0 || filteredBreakdownMinutes >= alertRules.longBreakdownMinutes) alerts.push({level:'red', title:'Uzun süren arıza', text:`Bu seçimde toplam ${formatDurationMinutes(filteredBreakdownMinutes)} arıza süresi var.`});
     const fleetAvgKmPerTrip = truckItems.length ? truckItems.reduce((s,x)=>s + (x.kmPerTrip || 0), 0) / truckItems.length : 0;
     truckItems.forEach(t=>{
       if((t.meterDiff || 0) > alertRules.abnormalKmThreshold && (t.tripCount || 0) < alertRules.abnormalKmTripLimit) alerts.push({level:'red', title:'Anormal km farkı', text:`${t.name}: ${t.meterDiff.toFixed(1)} km, ${t.tripCount} sefer.`});
@@ -7015,6 +7124,8 @@
       selectedLabel: summary.label,
       filters: {
         day: filters.day || '',
+        date_start: filters.date_start || '',
+        date_end: filters.date_end || '',
         shift_name: filters.shift_name || '',
         equipment_type: selectedType || '',
         equipment_id: state.dashboardProFilters.equipment_id || '',
@@ -7033,8 +7144,7 @@
         { 'Kalem': 'Toplam Tonaj', 'Değer': Number(filteredTonnage.toFixed(1)) },
         { 'Kalem': 'Aktif Kamyon', 'Değer': filteredTruckCount },
         { 'Kalem': 'Aktif Ekskavatör', 'Değer': filteredExcCount },
-        { 'Kalem': 'Kamyon Başına Ort. Sefer', 'Değer': Number(filteredAvgTripPerTruck.toFixed(2)) },
-        { 'Kalem': 'Sefer Başına Kamyon Yakıtı', 'Değer': Number(filteredTruckFuelPerTrip.toFixed(2)) },
+        { 'Kalem': 'Ton Başına Yakılan Yakıt (L/ton)', 'Değer': Number((filteredTonnage > 0 ? (filteredFuelLiters / filteredTonnage) : 0).toFixed(3)) },
         { 'Kalem': 'Toplam Arıza Dakikası', 'Değer': filteredBreakdownMinutes },
         { 'Kalem': 'Uzun Arıza Sayısı', 'Değer': filteredLongBreakdowns }
       ],
