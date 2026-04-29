@@ -1285,18 +1285,21 @@
     return end.getTime();
   }
   function getCompletedShiftBuckets(){
-    // Dashboard Pro artik yalnizca Kayitlar > Uretim kaynagindan tarih/vardiya havuzu uretir.
-    // Yetim sefer/yakit/sayac kayitlari analiz tarih araligini veya sonuclari sisirmez.
+    // Dashboard Pro artik Supabase v_dashboard_pro_final view'ini ana kaynak kabul eder.
+    // Aktif veya erken kapatilmis vardiya da analizde gorunsun diye vardiya bitis saatine gore eleme yapilmaz.
     const bag = new Map();
-    (state.productions || []).forEach(r=>{
+    const sourceRows = (state.dashboardProFinal && state.dashboardProFinal.length) ? state.dashboardProFinal : (state.productions || []);
+    (sourceRows || []).forEach(r=>{
       if(!r || r.deleted_at) return;
-      const bucket = resolveShiftBucketForRow(r);
-      if(!bucket) return;
-      const endMs = getShiftBucketEndMs(bucket.shift_name, bucket.shift_date);
-      if(!Number.isFinite(endMs) || endMs <= 0 || endMs > Date.now()) return;
-      if(!bag.has(bucket.shift_key)) bag.set(bucket.shift_key, { ...bucket, endMs });
+      const shiftDate = String(r.shift_date || '').slice(0,10);
+      const shiftName = String(r.shift_name || '').trim();
+      if(!shiftDate || !shiftName) return;
+      const shiftKey = `${shiftDate}__${shiftName}`;
+      const endMs = new Date(r.end_at || r.start_at || r.created_at || `${shiftDate}T00:00:00`).getTime() || 0;
+      if(!bag.has(shiftKey)) bag.set(shiftKey, { shift_name: shiftName, shift_date: shiftDate, shift_key: shiftKey, endMs });
+      else bag.get(shiftKey).endMs = Math.max(Number(bag.get(shiftKey).endMs || 0), Number(endMs || 0));
     });
-    return Array.from(bag.values()).sort((a,b)=>b.endMs - a.endMs);
+    return Array.from(bag.values()).sort((a,b)=>(b.shift_date || '').localeCompare(a.shift_date || '') || String(b.shift_name || '').localeCompare(String(a.shift_name || ''), 'tr'));
   }
   function rowsForShiftBucket(rows, shiftName, shiftDate){
     return (rows || []).filter(r=>{
@@ -3407,7 +3410,8 @@
     APP_SETTINGS: 'app_settings',
     DASHBOARD_SHIFT_SUMMARY: 'v_shift_summary_safe',
     DASHBOARD_EQUIPMENT_SHIFT_SUMMARY: 'v_equipment_shift_summary_safe',
-    DASHBOARD_PRO_SHIFT_SUMMARY: 'v_dashboard_pro_shift_summary_safe'
+    DASHBOARD_PRO_SHIFT_SUMMARY: 'v_dashboard_pro_shift_summary_safe',
+    DASHBOARD_PRO_FINAL: 'v_dashboard_pro_final'
   };
 
   function resolveDbTableName(name){
@@ -3482,6 +3486,8 @@
   }
   function getTripRowTonnage(row){
     try{
+      const directDashboardTonnage = Number(row?._dashboard_tonnage);
+      if(Number.isFinite(directDashboardTonnage) && directDashboardTonnage > 0) return directDashboardTonnage;
       const tripCount = Number(row?.trip_count || 0);
       if(!Number.isFinite(tripCount) || tripCount <= 0) return 0;
       const model = getEquipmentTruckModel(row?.equipment_id);
@@ -4057,7 +4063,7 @@
   }
 
   async function loadAllSafe(){
-    const tables = [TABLES.EQUIPMENTS, TABLES.PACKAGES, TABLES.PRODUCTIONS, TABLES.BREAKDOWNS, TABLES.RENTALS, TABLES.FUEL_LOGS, TABLES.METER_LOGS, TABLES.TRUCK_TRIPS];
+    const tables = [TABLES.EQUIPMENTS, TABLES.PACKAGES, TABLES.PRODUCTIONS, TABLES.BREAKDOWNS, TABLES.RENTALS, TABLES.FUEL_LOGS, TABLES.METER_LOGS, TABLES.TRUCK_TRIPS, TABLES.DASHBOARD_PRO_FINAL];
     if(canManageUsers()) tables.push(TABLES.PROFILES);
     const results = {};
     for(const t of tables){
@@ -4090,6 +4096,20 @@
       package_name: r.package_name || packageName(r.package_id) || '',
       linked_excavator_name: r.linked_excavator_name || (findEquipmentById(r.linked_excavator_id)?.name || '') || '',
       created_at: r.created_at || r.recorded_at || nowIso()
+    }));
+    state.dashboardProFinal = (results[TABLES.DASHBOARD_PRO_FINAL]?.data || []).map(r=>({
+      ...r,
+      id: r.production_id || r.id || '',
+      equipment_name: r.equipment_name || r.equipment_name_snapshot || (findEquipmentById(r.equipment_id)?.name || '') || '',
+      equipment_type: r.equipment_type || findEquipmentById(r.equipment_id)?.type || '',
+      package_name: r.package_name || packageName(r.package_id) || '',
+      total_trips: Number(r.total_trips || 0) || 0,
+      total_given_fuel: Number(r.total_given_fuel || 0) || 0,
+      meter_diff: Number(r.meter_diff || 0) || 0,
+      total_tonnage: Number(r.total_tonnage || 0) || 0,
+      fuel_consumption: Number(r.fuel_consumption || 0) || 0,
+      fuel_per_ton: Number(r.fuel_per_ton || 0) || 0,
+      created_at: r.created_at || r.start_at || nowIso()
     }));
     state.userProfiles = canManageUsers() ? ((results[TABLES.PROFILES]?.data || []).sort((a,b)=>String(a.full_name || a.email || '').localeCompare(String(b.full_name || b.email || ''), 'tr'))) : [];
 
@@ -6367,21 +6387,116 @@
       tonPerHour: item.workHours ? (item.tonnage / item.workHours) : 0
     }));
   }
+  function dashboardProFinalRowsForBuckets(buckets){
+    const allowed = new Set((buckets || []).map(b=>`${String(b.shift_date || '')}__${String(b.shift_name || '')}`));
+    return (state.dashboardProFinal || []).filter(r=>{
+      if(!r || r.deleted_at) return false;
+      const key = `${String(r.shift_date || '').slice(0,10)}__${String(r.shift_name || '')}`;
+      return allowed.has(key);
+    });
+  }
+  function dashboardProItemTypeKeyFromText(typeText){
+    const t = String(typeText || '').toLocaleLowerCase('tr-TR');
+    if(t.includes('kamyon')) return 'truck';
+    if(t.includes('ekskavat')) return 'excavator';
+    return 'other';
+  }
   function buildDashboardProRangeSummary(buckets){
     const selectedBuckets = Array.isArray(buckets) ? buckets : [];
     if(!selectedBuckets.length) return null;
-    const summaries = selectedBuckets.map(b=>buildShiftSummary(b.shift_name, b.shift_date));
-    const productions = summaries.flatMap(s=>s.productions || []);
-    const closedProductions = summaries.flatMap(s=>s.closedProductions || []);
-    const trips = summaries.flatMap(s=>s.trips || []);
-    const fuels = summaries.flatMap(s=>s.fuels || []);
-    const breakdowns = summaries.flatMap(s=>s.breakdowns || []);
-    const meters = summaries.flatMap(s=>s.meters || []);
-    const truckAnalysis = mergeDashboardProAnalysisItems(summaries.flatMap(s=>s.truck_analysis || []), 'truck');
-    const excavatorAnalysis = mergeDashboardProAnalysisItems(summaries.flatMap(s=>s.excavator_analysis || []), 'excavator');
-    const totalTripCount = sumField(trips, r=>r.trip_count);
-    const totalTonnage = sumField(trips, r=>getTripRowTonnage(r));
-    const totalFuelLiters = sumField(fuels, r=>r.liters);
+
+    const finalRows = dashboardProFinalRowsForBuckets(selectedBuckets);
+    const productions = finalRows.map(r=>({
+      id:r.production_id || r.id,
+      equipment_id:r.equipment_id,
+      equipment_name:r.equipment_name,
+      equipment_type:r.equipment_type,
+      package_id:r.package_id,
+      package_name:r.package_name,
+      shift_date:r.shift_date,
+      shift_name:r.shift_name,
+      start_at:r.start_at,
+      end_at:r.end_at,
+      from_location:r.from_location,
+      to_location:r.to_location,
+      created_at:r.created_at,
+      start_meter_value:r.start_meter_value,
+      end_meter_value:r.end_meter_value
+    }));
+    const closedProductions = productions.filter(r=>!!r.end_at);
+
+    const trips = finalRows.filter(r=>Number(r.total_trips || 0) > 0).map(r=>({
+      id:`dash_trip_${r.production_id || r.id}`,
+      production_id:r.production_id || r.id,
+      equipment_id:r.equipment_id,
+      equipment_name:r.equipment_name,
+      package_id:r.package_id,
+      package_name:r.package_name,
+      shift_date:r.shift_date,
+      shift_name:r.shift_name,
+      trip_count:Number(r.total_trips || 0) || 0,
+      from_location:r.from_location,
+      to_location:r.to_location,
+      created_at:r.created_at,
+      _dashboard_tonnage:Number(r.total_tonnage || 0) || 0
+    }));
+    const fuels = finalRows.filter(r=>Number(r.total_given_fuel || 0) > 0).map(r=>({
+      id:`dash_fuel_${r.production_id || r.id}`,
+      production_id:r.production_id || r.id,
+      equipment_id:r.equipment_id,
+      equipment_name:r.equipment_name,
+      shift_date:r.shift_date,
+      shift_name:r.shift_name,
+      liters:Number(r.total_given_fuel || 0) || 0,
+      meter_type: dashboardProItemTypeKeyFromText(r.equipment_type) === 'truck' ? 'km' : 'saat',
+      meter_value:Number(r.end_meter_value || 0) || 0,
+      created_at:r.created_at,
+      _dashboard_meter_diff:Number(r.meter_diff || 0) || 0
+    }));
+    const meters = finalRows.filter(r=>Number(r.meter_diff || 0) > 0).map(r=>({
+      id:`dash_meter_${r.production_id || r.id}`,
+      production_id:r.production_id || r.id,
+      equipment_id:r.equipment_id,
+      equipment_name:r.equipment_name,
+      shift_date:r.shift_date,
+      shift_name:r.shift_name,
+      meter_type: dashboardProItemTypeKeyFromText(r.equipment_type) === 'truck' ? 'km' : 'saat',
+      meter_value:Number(r.end_meter_value || 0) || Number(r.meter_diff || 0) || 0,
+      created_at:r.created_at
+    }));
+    const breakdowns = [];
+
+    const itemMap = new Map();
+    finalRows.forEach(r=>{
+      const type = dashboardProItemTypeKeyFromText(r.equipment_type);
+      if(type !== 'truck' && type !== 'excavator') return;
+      const id = String(r.equipment_id || '');
+      if(!id) return;
+      if(!itemMap.has(id)) itemMap.set(id, { id, type, name:r.equipment_name || '-', zone:r.from_location || '-', route:[r.from_location||'',r.to_location||''].filter(Boolean).join(' → '), packageName:r.package_name || '-', linkedName:'-', linkedExcavatorId:'', tripCount:0, fuelLiters:0, tonnage:0, meterDiff:0, workHours:0, linkedTruckCount:0 });
+      const item = itemMap.get(id);
+      item.tripCount += Number(r.total_trips || 0) || 0;
+      item.fuelLiters += Number(r.total_given_fuel || 0) || 0;
+      item.tonnage += Number(r.total_tonnage || 0) || 0;
+      item.meterDiff += Number(r.meter_diff || 0) || 0;
+      item.workHours += productionDurationHours(r) || 0;
+      if(!item.route || item.route === '-') item.route = [r.from_location||'',r.to_location||''].filter(Boolean).join(' → ');
+      if(!item.packageName || item.packageName === '-') item.packageName = r.package_name || '-';
+    });
+    const mappedItems = Array.from(itemMap.values()).map(item=>({
+      ...item,
+      efficiency: item.workHours ? (item.tripCount / item.workHours) : 0,
+      fuelPerTrip: item.tripCount ? (item.fuelLiters / item.tripCount) : 0,
+      kmPerTrip: item.tripCount ? (item.meterDiff / item.tripCount) : 0,
+      tonPerTrip: item.tripCount ? (item.tonnage / item.tripCount) : 0,
+      tonPerKm: item.meterDiff ? (item.tonnage / item.meterDiff) : 0,
+      tonPerHour: item.workHours ? (item.tonnage / item.workHours) : 0
+    }));
+    const truckAnalysis = mappedItems.filter(x=>x.type === 'truck');
+    const excavatorAnalysis = mappedItems.filter(x=>x.type === 'excavator');
+
+    const totalTripCount = finalRows.reduce((s,r)=>s + (Number(r.total_trips || 0) || 0), 0);
+    const totalTonnage = finalRows.reduce((s,r)=>s + (Number(r.total_tonnage || 0) || 0), 0);
+    const totalFuelLiters = finalRows.reduce((s,r)=>s + (Number(r.total_given_fuel || 0) || 0), 0);
     const totalWorkHours = closedProductions.reduce((sum,row)=>sum + productionDurationHours(row), 0);
     const totalKm = truckAnalysis.reduce((sum,item)=>sum + (Number(item.meterDiff || 0) || 0), 0);
     const totalEngineHours = excavatorAnalysis.reduce((sum,item)=>sum + (Number(item.workHours || 0) || 0), 0);
@@ -6412,16 +6527,8 @@
       avg_fuel_per_trip:totalTripCount ? totalFuelLiters / totalTripCount : 0,
       truck_analysis:truckAnalysis,
       excavator_analysis:excavatorAnalysis,
-      total_breakdown_minutes:breakdowns.reduce((s,r)=>{
-        const start = new Date(r.start_at || r.start_time || r.created_at || 0).getTime();
-        const end = new Date(r.end_at || r.end_time || r.updated_at || 0).getTime();
-        return (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) ? s : s + Math.round((end - start) / 60000);
-      }, 0),
-      long_breakdown_count:breakdowns.filter(r=>{
-        const start = new Date(r.start_at || r.start_time || r.created_at || 0).getTime();
-        const end = new Date(r.end_at || r.end_time || r.updated_at || 0).getTime();
-        return Number.isFinite(start) && Number.isFinite(end) && end > start && Math.round((end - start) / 60000) >= 120;
-      }).length
+      total_breakdown_minutes:0,
+      long_breakdown_count:0
     };
   }
   function dashboardProEquipmentTypeKeyForItem(item){
@@ -6865,6 +6972,29 @@
     return formatFuelConsumptionRate(info?.shift?.rate, unit);
   }
 
+
+  function buildDashboardFuelConsumptionItems(summary, selected, truckItems, excItems){
+    // Dashboard Pro yakit tuketimi artik v_dashboard_pro_final satirlarindan gelir.
+    const rows = dashboardProFinalRowsForBuckets(summary?.buckets || []);
+    const byId = new Map();
+    rows.forEach(r=>{
+      const id = String(r.equipment_id || '');
+      if(!id) return;
+      const type = dashboardProItemTypeKeyFromText(r.equipment_type);
+      if(!byId.has(id)) byId.set(id, { id, name:r.equipment_name || '-', type, shift:{ totalLiters:0, totalDiff:0, validCount:0, hasFuel:false, rate:null, unit:type === 'truck' ? 'L/km' : 'L/saat' } });
+      const item = byId.get(id);
+      item.shift.totalLiters += Number(r.total_given_fuel || 0) || 0;
+      item.shift.totalDiff += Number(r.meter_diff || 0) || 0;
+      item.shift.hasFuel = item.shift.hasFuel || Number(r.total_given_fuel || 0) > 0;
+    });
+    byId.forEach(item=>{
+      if(item.shift.totalLiters > 0 && item.shift.totalDiff > 0){
+        item.shift.validCount = 1;
+        item.shift.rate = item.shift.totalLiters / item.shift.totalDiff;
+      }
+    });
+    return Array.from(byId.values());
+  }
 
   async function renderDashboardProData(){
 
