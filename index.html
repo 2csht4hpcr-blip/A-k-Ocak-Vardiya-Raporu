@@ -6509,6 +6509,16 @@
           <div class="pro-stat-sub" id="proFuelSub"></div>
         </div>
         <div class="pro-stat-card">
+          <div class="pro-stat-head"><div class="pro-stat-title">Toplam Tüketilen Yakıt</div><div class="pro-stat-chip">Tüketim</div></div>
+          <div class="pro-stat-value" id="proConsumedFuelStat">-</div>
+          <div class="pro-stat-sub" id="proConsumedFuelSub"></div>
+        </div>
+        <div class="pro-stat-card">
+          <div class="pro-stat-head"><div class="pro-stat-title">Kamyon Km Yakıt Tüketimi</div><div class="pro-stat-chip">L/km</div></div>
+          <div class="pro-stat-value" id="proTruckKmFuelStat">-</div>
+          <div class="pro-stat-sub" id="proTruckKmFuelSub"></div>
+        </div>
+        <div class="pro-stat-card">
           <div class="pro-stat-head"><div class="pro-stat-title">Toplam Tonaj</div><div class="pro-stat-chip">Tonaj</div></div>
           <div class="pro-stat-value" id="proMeterStat">-</div>
           <div class="pro-stat-sub" id="proMeterSub"></div>
@@ -6519,14 +6529,10 @@
           <div class="pro-stat-sub" id="proFuelPerTonSub"></div>
         </div>
       </div>
-      <div class="grid g2" style="margin-top:16px">
+      <div class="grid g1" style="margin-top:16px">
         <div class="dashboard-block">
           <h3>Akıllı Uyarılar</h3>
           <div id="dashboardProAlertsBody" class="dashboard-scroll"></div>
-        </div>
-        <div class="dashboard-block">
-          <h3>Vardiya Özeti</h3>
-          <div id="dashboardProSummaryBody" class="dashboard-scroll"></div>
         </div>
       </div>
       <div class="grid g1" style="margin-top:16px">
@@ -6862,13 +6868,12 @@
     const selected = selectedBuckets[0] || null;
     if(!selectedBuckets.length){
       document.getElementById('dashboardProAlertsBody').innerHTML = '<div class="empty">Seçilen tarih/vardiya filtresi için tamamlanmış veri bulunamadı.</div>';
-      document.getElementById('dashboardProSummaryBody').innerHTML = '<div class="empty">Özet oluşturulamadı.</div>';
       document.getElementById('dashboardProTruckBody').innerHTML = '<div class="empty">Kamyon analizi yok.</div>';
       document.getElementById('dashboardProExcBody').innerHTML = '<div class="empty">Ekskavatör analizi yok.</div>';
       document.getElementById('dashboardProPackageBody').innerHTML = '<div class="empty">Paket tonaj analizi yok.</div>';
       const fuelConsumptionBody = document.getElementById('dashboardProFuelConsumptionBody'); if(fuelConsumptionBody) fuelConsumptionBody.innerHTML = '<div class="empty">Yakıt tüketimi analizi yok.</div>';
-      ['proTripsStat','proFuelStat','proMeterStat','proFuelPerTonStat'].forEach(id=>{ const el=document.getElementById(id); if(el) el.textContent='-'; });
-      ['proTripsSub','proFuelSub','proMeterSub','proFuelPerTonSub'].forEach(id=>{ const el=document.getElementById(id); if(el) el.textContent='Veri yok'; });
+      ['proTripsStat','proFuelStat','proConsumedFuelStat','proTruckKmFuelStat','proMeterStat','proFuelPerTonStat'].forEach(id=>{ const el=document.getElementById(id); if(el) el.textContent='-'; });
+      ['proTripsSub','proFuelSub','proConsumedFuelSub','proTruckKmFuelSub','proMeterSub','proFuelPerTonSub'].forEach(id=>{ const el=document.getElementById(id); if(el) el.textContent='Veri yok'; });
       return;
     }
     const summary = buildDashboardProRangeSummary(selectedBuckets);
@@ -6978,6 +6983,11 @@
       const info = fuelConsumptionAlertInfo(item, item.shift);
       return item.shift?.hasFuel && item.shift?.validCount && (info.level === 'red' || info.level === 'orange');
     }).length;
+    const totalConsumedFuelLiters = fuelConsumptionItems.reduce((sum,item)=>sum + (Number(item.shift?.totalLiters || 0) || 0), 0);
+    const truckConsumedFuelLiters = fuelConsumptionItems.filter(item=>item.type === 'truck').reduce((sum,item)=>sum + (Number(item.shift?.totalLiters || 0) || 0), 0);
+    const truckConsumedMeterDiff = fuelConsumptionItems.filter(item=>item.type === 'truck').reduce((sum,item)=>sum + (Number(item.shift?.totalDiff || 0) || 0), 0);
+    const truckFuelPerKm = truckConsumedMeterDiff > 0 ? (truckConsumedFuelLiters / truckConsumedMeterDiff) : 0;
+    const consumedFuelCoverageCount = fuelConsumptionItems.filter(item=>item.shift?.validCount).length;
 
     const fuelPerTon = filteredTonnage > 0 ? (filteredFuelLiters / filteredTonnage) : 0;
 
@@ -6985,6 +6995,10 @@
     document.getElementById('proTripsSub').innerHTML = `Seçilen aralık: <b>${escapeHtml(summary.label)}</b> • Kapsam: <b>${selectedBuckets.length}</b> vardiya`;
     document.getElementById('proFuelStat').textContent = `${filteredFuelLiters.toFixed(0)} L`;
     document.getElementById('proFuelSub').innerHTML = `Kamyon: <b>${filteredTruckFuelLiters.toFixed(0)} L</b> • Ekskavatör: <b>${filteredExcFuelLiters.toFixed(0)} L</b> • Yardımcı: <b>${filteredHelperFuelLiters.toFixed(0)} L</b>`;
+    document.getElementById('proConsumedFuelStat').textContent = totalConsumedFuelLiters > 0 ? `${totalConsumedFuelLiters.toFixed(0)} L` : '-';
+    document.getElementById('proConsumedFuelSub').innerHTML = totalConsumedFuelLiters > 0 ? `Sayaç farkı bulunan yakıt kayıtlarından hesaplandı • Ekipman: <b>${consumedFuelCoverageCount}</b>` : 'Sayaç farkı bulunmadığı için hesaplanamadı';
+    document.getElementById('proTruckKmFuelStat').textContent = truckFuelPerKm > 0 ? `${truckFuelPerKm.toFixed(2)} L/km` : '-';
+    document.getElementById('proTruckKmFuelSub').innerHTML = truckConsumedMeterDiff > 0 ? `Kamyon tüketimi: <b>${truckConsumedFuelLiters.toFixed(0)} L</b> / <b>${truckConsumedMeterDiff.toFixed(1)} km</b>` : 'Kamyonlarda sayaç farkı yok';
     document.getElementById('proMeterStat').textContent = `${filteredTonnage.toFixed(1)} ton`;
     document.getElementById('proMeterSub').innerHTML = `Tonaj, filtre aralığındaki seferlerden paket faktörü ile hesaplanır.`;
     document.getElementById('proFuelPerTonStat').textContent = filteredTonnage > 0 ? `${fuelPerTon.toFixed(2)} L/ton` : '-';
@@ -7011,31 +7025,6 @@
     const maxExcTonPerHour = Math.max(1, ...excItems.map(x=>Number(x.tonPerHour || 0) || 0));
 
     document.getElementById('dashboardProAlertsBody').innerHTML = alerts.length ? alerts.map(a=>`<div class="pro-alert-card ${a.level === 'red' ? 'red' : 'orange'}"><div class="pro-alert-head"><div class="pro-alert-title">${escapeHtml(a.title)}</div><span class="pill ${a.level === 'red' ? 'red' : 'orange'}">${a.level === 'red' ? 'Kritik' : 'Dikkat'}</span></div><div class="pro-alert-text">${escapeHtml(a.text)}</div></div>`).join('') : '<div class="empty">Seçilen filtre için kritik uyarı görünmüyor.</div>';
-
-    document.getElementById('dashboardProSummaryBody').innerHTML = `
-      <div class="pro-summary-grid">
-        <div class="pro-mini-card">
-          <div class="pro-mini-label">Seçilen vardiya</div>
-          <div class="pro-mini-value" style="font-size:18px">${escapeHtml(summary.label)}</div>
-          <div class="pro-mini-sub">${sqlCurrent ? 'SQL özet bağlı' : 'Canlı hesaplama'}</div>
-        </div>
-        <div class="pro-mini-card">
-          <div class="pro-mini-label">Aktif ekipman</div>
-          <div class="pro-mini-value">${filteredTruckCount + filteredExcCount}</div>
-          <div class="pro-mini-sub">Kamyon ${filteredTruckCount} • Ekskavatör ${filteredExcCount}</div>
-        </div>
-        <div class="pro-mini-card">
-          <div class="pro-mini-label">Arıza etkisi</div>
-          <div class="pro-mini-value">${formatDurationMinutes(filteredBreakdownMinutes)}</div>
-          <div class="pro-mini-sub">Uzun arıza: ${filteredLongBreakdowns}</div>
-        </div>
-        <div class="pro-mini-card">
-          <div class="pro-mini-label">Karşılaştırma</div>
-          <div class="pro-mini-value" style="font-size:22px">${(sqlPrevious || previousSummary) ? `${compareDelta >= 0 ? '+' : ''}${compareDelta}` : '-'}</div>
-          <div class="pro-mini-sub">${sqlPrevious ? `Önceki: ${Number(sqlPrevious.total_trip_count || 0)} sefer` : (previousSummary ? `Önceki: ${previousSummary.total_trip_count} sefer` : 'Önceki veri yok')}</div>
-        </div>
-      </div>
-    `;
 
     document.getElementById('dashboardProTruckBody').innerHTML = truckItems.length ? `<div class="pro-item-grid">` + truckItems.map(item=>`
       <div class="pro-item-card">
