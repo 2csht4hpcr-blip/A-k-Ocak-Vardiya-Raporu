@@ -5429,9 +5429,22 @@
       const rawShiftGuess = buildShiftAnchoredIso(tripDate, document.getElementById('m_trip_shift_name')?.value || '', '12:00') || `${tripDate}T12:00:00`;
       const production_id = document.getElementById('m_trip_production_id')?.value || null;
       const selectedShiftInput = inferShiftNameForInput('m_trip_shift_name', rawShiftGuess);
-      const matchedProduction = getProductionRowById(production_id) || findProductionByShiftBucket(equipment_id, tripDate, selectedShiftInput) || null;
-      const selectedShift = matchedProduction ? (getShiftNameForRow(matchedProduction) || selectedShiftInput) : selectedShiftInput;
-      const eventAt = buildLogisticsEventIso(tripDate, selectedShift, '', '12:00') || rawShiftGuess;
+      const eventAtGuess = buildLogisticsEventIso(tripDate, selectedShiftInput, '', '12:00') || rawShiftGuess;
+
+      // VERI GUVENI FIX: Sefer kaydı mutlaka ilgili production_logs kaydına bağlanmalı.
+      // Öncelik: gizli production_id -> tarih/vardiya eşleşmesi -> zaman aralığı -> aktif üretim.
+      const matchedProduction = getProductionRowById(production_id)
+        || findProductionByShiftBucket(equipment_id, tripDate, selectedShiftInput)
+        || productionForEquipmentAt(equipment_id, eventAtGuess)
+        || currentOpenProductionForEquipment(equipment_id)
+        || null;
+
+      if(!matchedProduction?.id){
+        throw new Error('Bu kamyon için seçilen tarih/vardiyada aktif üretim kaydı bulunamadı. Önce üretimi başlatın veya doğru tarih/vardiya seçin.');
+      }
+
+      const selectedShift = getShiftNameForRow(matchedProduction) || selectedShiftInput;
+      const eventAt = buildLogisticsEventIso(tripDate, selectedShift, '', '12:00') || eventAtGuess;
       const package_id = document.getElementById('m_trip_package_id').value || matchedProduction?.package_id || null;
       const tripCount = num(document.getElementById('m_trip_count_new').value);
       if(tripCount <= 0) throw new Error('Sefer sayısı 0’dan büyük olmalı');
