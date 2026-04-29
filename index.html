@@ -4257,6 +4257,17 @@
     }
     return res;
   }
+  async function updateWhereWithOptionalColumns(table, payload, optionalCols, filterCol, filterVal){
+    payload = normalizePayloadForTable(table, payload);
+    let res = await state.sb.from(resolveDbTableName(table)).update(payload).eq(filterCol, filterVal);
+    if(!res.error) return res;
+    if(optionalColumnError(res.error, optionalCols)){
+      const cloned = {...payload};
+      (optionalCols || []).forEach(k=>delete cloned[k]);
+      res = await state.sb.from(resolveDbTableName(table)).update(cloned).eq(filterCol, filterVal);
+    }
+    return res;
+  }
   function latestKnownMeterValueForEquipment(equipment_id){
     const snap = latestMeterSnapshotForEquipment(equipment_id);
     return snap && Number.isFinite(Number(snap.value)) ? Number(snap.value) : null;
@@ -5002,18 +5013,26 @@
       if(resolveDbTableName(table) === TABLES.PRODUCTIONS){
         const startAt = toDatetimeLocalValue(row.start_at || row.start_time || row.created_at);
         const endAt = toDatetimeLocalValue(row.end_at || row.end_time || '');
+        const createdAt = toDatetimeLocalValue(row.created_at || row.start_at || '');
+        const shiftOptions = (state.shiftConfig?.shifts || []).map(s=>`<option value="${escapeHtml(s.name)}" ${String(row.shift_name || '')===String(s.name || '')?'selected':''}>${escapeHtml(s.name)}</option>`).join('');
         const isTruckRow = isTruckEquipment(findEquipmentById(row.equipment_id));
         el.innerHTML = modalShell('Üretim Kaydı Düzenle', `
-          <div class="form-grid">
+          <div class="notice">Bu düzenleme üretime bağlı sefer, yakıt ve sayaç kayıtlarına da yansıtılır.</div>
+          <div class="form-grid" style="margin-top:12px">
             <div class="form-field"><label>Makine</label><select id="m_edit_equipment_id" onchange="toggleProductionEditLinkedField()">${eqOptions}</select></div>
             <div class="form-field"><label>Paket</label><select id="m_edit_package_id"><option value="">Seçiniz</option>${packOptions}</select></div>
             <div class="form-field"><label>Nereden</label><input id="m_edit_from_location" value="${escapeHtml(row.from_location || '')}"></div>
             <div class="form-field"><label>Nereye</label><input id="m_edit_to_location" value="${escapeHtml(row.to_location || '')}"></div>
             <div class="form-field ${isTruckRow ? '' : 'hidden'}" id="m_edit_linked_excavator_wrap"><label>Bağlı Ekskavatör</label><select id="m_edit_linked_excavator_id"><option value="">Seçiniz</option>${excavatorOptions}</select></div>
+            <div class="form-field"><label>Vardiya Tarihi</label><input id="m_edit_shift_date" type="date" value="${escapeHtml(row.shift_date || String(row.created_at || '').slice(0,10) || todayStr())}"></div>
+            <div class="form-field"><label>Vardiya</label><select id="m_edit_shift_name"><option value="">Otomatik</option>${shiftOptions}</select></div>
             <div class="form-field"><label>Başlangıç Zamanı</label><input id="m_edit_start_at" type="datetime-local" value="${escapeHtml(startAt)}"></div>
             <div class="form-field"><label>Bitiş Zamanı</label><input id="m_edit_end_at" type="datetime-local" value="${escapeHtml(endAt)}"></div>
             <div class="form-field"><label>Başlangıç Sayaç</label><input id="m_edit_start_meter_value" type="number" step="0.01" value="${escapeHtml(getEffectiveProductionStartMeter(row) ?? row.start_meter_value ?? '')}"></div>
             <div class="form-field"><label>Bitiş Sayaç</label><input id="m_edit_end_meter_value" type="number" step="0.01" value="${escapeHtml(getEffectiveProductionEndMeter(row) ?? row.end_meter_value ?? '')}"></div>
+            <div class="form-field"><label>Sefer Toplamı</label><input id="m_edit_trip_count" type="number" step="1" value="${escapeHtml(row.trip_count ?? 0)}"></div>
+            <div class="form-field"><label>Durum</label><select id="m_edit_status"><option value="active" ${String(row.status || '')==='active'?'selected':''}>Aktif</option><option value="finished" ${String(row.status || '')==='finished'?'selected':''}>Bitti</option><option value="" ${!row.status?'selected':''}>Boş</option></select></div>
+            <div class="form-field"><label>Kayıt Zamanı</label><input id="m_edit_created_at" type="datetime-local" value="${escapeHtml(createdAt)}"></div>
           </div>
           <div class="actions"><button class="secondary" data-close-modal="1">İptal</button><button type="button" data-action="saveEditRecord">Kaydet</button></div>
         `);
@@ -5298,12 +5317,14 @@
             linked_excavator_id: prod.linked_excavator_id || null,
             production_id: prod.id,
             shift_name: getShiftNameForRow(prod) || resolveShiftNameForDateTime(nowIso()) || '',
+            shift_date: prod.shift_date || String(prod.start_at || prod.created_at || nowIso()).slice(0,10) || todayStr(),
+            logistics_shift_date: prod.shift_date || String(prod.start_at || prod.created_at || nowIso()).slice(0,10) || todayStr(),
             created_at: nowIso()
           };
           delete tripPayload.equipment_name_snapshot;
           delete tripPayload.package_name_snapshot;
           delete tripPayload.linked_excavator_name_snapshot;
-          const tripRes = await insertWithOptionalColumns(TABLES.TRUCK_TRIPS, tripPayload, ['production_id','shift_name','material_type']);
+          const tripRes = await insertWithOptionalColumns(TABLES.TRUCK_TRIPS, tripPayload, ['production_id','shift_name','shift_date','logistics_shift_date','material_type']);
           if(tripRes.error) throw tripRes.error;
           await updateWithOptionalColumns(TABLES.PRODUCTIONS, { trip_count: productionTripTotal(prod) + enteredTrips }, ['trip_count'], prod.id);
         }
@@ -5690,6 +5711,10 @@
         const start_meter_value = startMeterRaw === '' ? null : num(startMeterRaw);
         const end_meter_value = endMeterRaw === '' ? null : num(endMeterRaw);
         ensureNonNegativeMeterWindow(start_meter_value ?? 0, end_meter_value ?? start_meter_value ?? 0, autoMeterTypeForEquipment(equipment_id), 'Üretim');
+        const startAtValue = document.getElementById('m_edit_start_at').value ? asLocalIsoString(document.getElementById('m_edit_start_at').value) : null;
+        const endAtValue = document.getElementById('m_edit_end_at').value ? asLocalIsoString(document.getElementById('m_edit_end_at').value) : null;
+        const shiftDateValue = document.getElementById('m_edit_shift_date')?.value || row.shift_date || String(startAtValue || row.created_at || '').slice(0,10) || todayStr();
+        const shiftNameValue = document.getElementById('m_edit_shift_name')?.value || resolveShiftNameForDateTime(startAtValue || row.start_at || row.created_at || nowIso()) || row.shift_name || 'Tanımsız';
         payload = {
           equipment_id,
           equipment_name_snapshot: eq?.name || '',
@@ -5701,8 +5726,13 @@
           to_location: document.getElementById('m_edit_to_location').value.trim(),
           linked_excavator_id,
           linked_excavator_name_snapshot: linkedEq?.name || null,
-          start_at: document.getElementById('m_edit_start_at').value ? asLocalIsoString(document.getElementById('m_edit_start_at').value) : null,
-          end_at: document.getElementById('m_edit_end_at').value ? asLocalIsoString(document.getElementById('m_edit_end_at').value) : null,
+          shift_name: shiftNameValue,
+          shift_date: shiftDateValue,
+          status: document.getElementById('m_edit_status')?.value || null,
+          trip_count: document.getElementById('m_edit_trip_count')?.value === '' ? 0 : num(document.getElementById('m_edit_trip_count')?.value || 0),
+          start_at: startAtValue,
+          end_at: endAtValue,
+          created_at: document.getElementById('m_edit_created_at')?.value ? asLocalIsoString(document.getElementById('m_edit_created_at').value) : row.created_at,
           start_meter_value,
           end_meter_value
         };
@@ -5835,6 +5865,31 @@
         await syncProductionMetersForMeterLogRow({ ...row, ...payload, id: row.id }, true);
       }
       if(resolveDbTableName(table) === TABLES.PRODUCTIONS){
+        const relatedTripPayload = {
+          equipment_id: payload.equipment_id,
+          production_id: row.id,
+          package_id: payload.package_id,
+          package_name: payload.package_name_snapshot,
+          from_location: payload.from_location,
+          to_location: payload.to_location,
+          linked_excavator_id: payload.linked_excavator_id,
+          linked_excavator_name: payload.linked_excavator_name_snapshot,
+          shift_name: payload.shift_name,
+          shift_date: payload.shift_date
+        };
+        const relatedFuelMeterPayload = {
+          equipment_id: payload.equipment_id,
+          production_id: row.id,
+          shift_name: payload.shift_name,
+          shift_date: payload.shift_date,
+          logistics_shift_date: payload.shift_date
+        };
+        const tripLinkRes = await updateWhereWithOptionalColumns(TABLES.TRUCK_TRIPS, relatedTripPayload, ['production_id','package_name','linked_excavator_id','linked_excavator_name','shift_name','shift_date'], 'production_id', row.id);
+        if(tripLinkRes.error) throw tripLinkRes.error;
+        const fuelLinkRes = await updateWhereWithOptionalColumns(TABLES.FUEL_LOGS, relatedFuelMeterPayload, ['production_id','shift_name','shift_date','logistics_shift_date'], 'production_id', row.id);
+        if(fuelLinkRes.error) throw fuelLinkRes.error;
+        const meterLinkRes = await updateWhereWithOptionalColumns(TABLES.METER_LOGS, relatedFuelMeterPayload, ['production_id','shift_name','shift_date','logistics_shift_date'], 'production_id', row.id);
+        if(meterLinkRes.error) throw meterLinkRes.error;
         const updatedEq = findEquipmentById(payload.equipment_id);
         const isExcavator = String(updatedEq?.type || '').toLocaleLowerCase('tr-TR').includes('eksk');
         if(isExcavator){
@@ -6661,6 +6716,25 @@
     }).join('') || '<div class="empty">Seçilen filtre için yakıt tüketimi analizi yok.</div>';
   }
 
+  function dashboardProFuelInfoForItem(fuelMap, item){
+    try{
+      return fuelMap && item ? (fuelMap.get(String(item.id || '')) || null) : null;
+    }catch(e){
+      return null;
+    }
+  }
+  function dashboardProGivenFuelText(fuelMap, item){
+    const info = dashboardProFuelInfoForItem(fuelMap, item);
+    const liters = Number(info?.shift?.totalLiters ?? item?.fuelLiters ?? 0);
+    return `${Number.isFinite(liters) ? liters.toFixed(0) : '0'} L`;
+  }
+  function dashboardProConsumptionText(fuelMap, item){
+    const info = dashboardProFuelInfoForItem(fuelMap, item);
+    const unit = info?.unit || (item?.type === 'truck' ? 'L/km' : 'L/saat');
+    return formatFuelConsumptionRate(info?.shift?.rate, unit);
+  }
+
+
   async function renderDashboardProData(){
 
     const buckets = getCompletedShiftBuckets();
@@ -6776,6 +6850,7 @@
     const filteredAvgTripPerTruck = filteredTruckCount ? (filteredTripCount / filteredTruckCount) : 0;
     const filteredTruckFuelPerTrip = filteredTripCount ? (filteredTruckFuelLiters / filteredTripCount) : 0;
     const fuelConsumptionItems = buildDashboardFuelConsumptionItems(summary, selected, truckItems, excItems);
+    const fuelConsumptionByEquipmentId = new Map(fuelConsumptionItems.map(item=>[String(item.id || ''), item]));
     const fuelConsumptionNoFuelCount = fuelConsumptionItems.filter(item=>!item.shift?.hasFuel).length;
     const fuelConsumptionInvalidCount = fuelConsumptionItems.filter(item=>item.shift?.hasFuel && !item.shift?.validCount).length;
     const fuelConsumptionHighCount = fuelConsumptionItems.filter(item=>{
@@ -6865,6 +6940,8 @@
           <div class="pro-kpi"><div class="k-label">KM/Sefer</div><div class="k-value">${item.kmPerTrip.toFixed(1)}</div></div>
           <div class="pro-kpi"><div class="k-label">Tonaj</div><div class="k-value">${item.tonnage.toFixed(0)}</div></div>
           <div class="pro-kpi"><div class="k-label">Ton/Sefer</div><div class="k-value">${item.tonPerTrip.toFixed(1)}</div></div>
+          <div class="pro-kpi"><div class="k-label">Verilen Yakıt</div><div class="k-value">${dashboardProGivenFuelText(fuelConsumptionByEquipmentId, item)}</div></div>
+          <div class="pro-kpi"><div class="k-label">Yakıt Tüketimi</div><div class="k-value">${dashboardProConsumptionText(fuelConsumptionByEquipmentId, item)}</div></div>
         </div>
         <div class="pro-bar-wrap">
           <div class="muted">Sefer yoğunluğu</div>
@@ -6886,10 +6963,10 @@
         </div>
         <div class="pro-kpi-row">
           <div class="pro-kpi"><div class="k-label">Sefer</div><div class="k-value">${item.tripCount}</div></div>
-          <div class="pro-kpi"><div class="k-label">Bağlı Kamyon</div><div class="k-value">${item.linkedTruckCount || 0}</div></div>
           <div class="pro-kpi"><div class="k-label">Tonaj</div><div class="k-value">${(item.tonnage || 0).toFixed(0)}</div></div>
-          <div class="pro-kpi"><div class="k-label">Sayaç Saati</div><div class="k-value">${(item.workHours || 0).toFixed(1)}</div></div>
           <div class="pro-kpi"><div class="k-label">Ton/Saat</div><div class="k-value">${(item.tonPerHour || 0).toFixed(1)}</div></div>
+          <div class="pro-kpi"><div class="k-label">Verilen Yakıt</div><div class="k-value">${dashboardProGivenFuelText(fuelConsumptionByEquipmentId, item)}</div></div>
+          <div class="pro-kpi"><div class="k-label">Yakıt Tüketimi</div><div class="k-value">${dashboardProConsumptionText(fuelConsumptionByEquipmentId, item)}</div></div>
         </div>
         <div class="pro-bar-wrap">
           <div class="muted">Sefer yoğunluğu</div>
