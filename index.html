@@ -1285,17 +1285,16 @@
     return end.getTime();
   }
   function getCompletedShiftBuckets(){
+    // Dashboard Pro artik yalnizca Kayitlar > Uretim kaynagindan tarih/vardiya havuzu uretir.
+    // Yetim sefer/yakit/sayac kayitlari analiz tarih araligini veya sonuclari sisirmez.
     const bag = new Map();
-    const sources = [state.productions, state.truck_trips, state.fuel_logs, state.breakdowns, state.meter_logs];
-    sources.forEach(rows=>{
-      (rows || []).forEach(r=>{
-        if(!r || r.deleted_at) return;
-        const bucket = resolveShiftBucketForRow(r);
-        if(!bucket) return;
-        const endMs = getShiftBucketEndMs(bucket.shift_name, bucket.shift_date);
-        if(!Number.isFinite(endMs) || endMs <= 0 || endMs > Date.now()) return;
-        if(!bag.has(bucket.shift_key)) bag.set(bucket.shift_key, { ...bucket, endMs });
-      });
+    (state.productions || []).forEach(r=>{
+      if(!r || r.deleted_at) return;
+      const bucket = resolveShiftBucketForRow(r);
+      if(!bucket) return;
+      const endMs = getShiftBucketEndMs(bucket.shift_name, bucket.shift_date);
+      if(!Number.isFinite(endMs) || endMs <= 0 || endMs > Date.now()) return;
+      if(!bag.has(bucket.shift_key)) bag.set(bucket.shift_key, { ...bucket, endMs });
     });
     return Array.from(bag.values()).sort((a,b)=>b.endMs - a.endMs);
   }
@@ -1397,11 +1396,17 @@
     return vals.reduce((a,b)=>a+b,0) / vals.length;
   }
   function buildShiftSummary(shiftName, shiftDate){
+    // Dashboard Pro ana kaynagi: Kayitlar > Uretim.
+    // Sefer/Yakit/Sayac sadece bu uretim kayitlarina production_id ile bagliysa analize girer.
+    // Uretim duzenlenirse tarih/vardiya/paket/makine degisikligi aninda analize yansir;
+    // uretim silinirse bagli kayitlar analiz disinda kalir.
     const productions = rowsForShiftBucket(state.productions, shiftName, shiftDate);
-    const trips = rowsForShiftBucket(state.truck_trips, shiftName, shiftDate);
-    const fuels = rowsForShiftBucket(state.fuel_logs, shiftName, shiftDate);
-    const breakdowns = rowsForShiftBucket(state.breakdowns, shiftName, shiftDate);
-    const meters = rowsForShiftBucket(state.meter_logs, shiftName, shiftDate);
+    const productionIdSet = new Set(productions.map(r=>String(r.id || "")).filter(Boolean));
+    const isLinkedToVisibleProduction = r => !r?.deleted_at && productionIdSet.has(String(r?.production_id || ""));
+    const trips = (state.truck_trips || []).filter(isLinkedToVisibleProduction);
+    const fuels = (state.fuel_logs || []).filter(isLinkedToVisibleProduction);
+    const meters = (state.meter_logs || []).filter(isLinkedToVisibleProduction);
+    const breakdowns = [];
 
     const closedProductions = productions.filter(r=>(r.end_at || r.end_time));
     const totalTripCount = sumField(trips, r=>r.trip_count);
