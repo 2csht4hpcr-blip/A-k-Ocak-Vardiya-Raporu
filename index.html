@@ -1057,7 +1057,7 @@
   }
   function activeBreakdownRowsForCurrentShift(){ return activeBreakdownRows().filter(isBreakdownInCurrentShift); }
   function activeRentalRowsForCurrentShift(){ return activeRentalRows().filter(isRowInCurrentShift); }
-  function activeExcavatorProductionsForCurrentShift(){ return activeProductionRowsForCurrentShift().filter(r=>isLoadingEquipment(findEquipmentById(r.equipment_id))); }
+  function activeExcavatorProductionsForCurrentShift(){ return activeProductionRowsForCurrentShift().filter(r=>isLoaderAnalysisProduction(r)); }
   function activeTruckProductionsForCurrentShift(){ return activeProductionRowsForCurrentShift().filter(r=>isTruckEquipment(findEquipmentById(r.equipment_id))); }
   function currentShiftTripRows(){ return filterRowsForCurrentShift(state.truck_trips); }
   function currentShiftFuelRows(){ return filterRowsForCurrentShift(state.fuel_logs); }
@@ -1417,7 +1417,7 @@
     const totalFuelLiters = sumField(fuels, r=>r.liters);
     const totalWorkHours = closedProductions.reduce((s,r)=>s + productionDurationHours(r), 0);
     const truckProductions = closedProductions.filter(r=>isTruckEquipment(findEquipmentById(r.equipment_id)));
-    const excavatorProductions = closedProductions.filter(r=>isLoadingEquipment(findEquipmentById(r.equipment_id)));
+    const excavatorProductions = closedProductions.filter(r=>isLoaderAnalysisProduction(r));
     const totalKm = truckProductions.reduce((s,r)=>s + productionMeterDiff(r), 0);
     const totalEngineHours = excavatorProductions.reduce((s,r)=>s + productionMeterDiff(r), 0);
     const activeTruckCount = Math.max(uniqueCount(trips, r=>r.equipment_id), uniqueCount(truckProductions, r=>r.equipment_id));
@@ -1467,7 +1467,7 @@
       truckProductionMap[id] = r;
     });
     const excavatorProductionMap = {};
-    productions.filter(r=>isLoadingEquipment(findEquipmentById(r.equipment_id))).forEach(r=>{
+    productions.filter(r=>isLoaderAnalysisProduction(r)).forEach(r=>{
       const id = String(r.equipment_id || '');
       if(!id || excavatorProductionMap[id]) return;
       excavatorProductionMap[id] = r;
@@ -1524,8 +1524,8 @@
     const excavatorIds = Array.from(new Set([
       ...excavatorProductions.map(r=>String(r.equipment_id || '')),
       ...trips.map(r=>String(r.loader_id || r.linked_excavator_id || '')),
-      ...fuels.filter(r=>isLoadingEquipment(findEquipmentById(r.equipment_id))).map(r=>String(r.equipment_id || '')),
-      ...meters.filter(r=>isLoadingEquipment(findEquipmentById(r.equipment_id))).map(r=>String(r.equipment_id || ''))
+      ...fuels.filter(r=>isLoadingEquipment(findEquipmentById(r.equipment_id)) && state.productions.some(p=>String(p.equipment_id||'')===String(r.equipment_id||'') && isLoadingWorkProduction(p))).map(r=>String(r.equipment_id || '')),
+      ...meters.filter(r=>isLoadingEquipment(findEquipmentById(r.equipment_id)) && state.productions.some(p=>String(p.equipment_id||'')===String(r.equipment_id||'') && isLoadingWorkProduction(p))).map(r=>String(r.equipment_id || ''))
     ].filter(Boolean)));
     const excavatorAnalysis = excavatorIds.map(id=>{
       const prodRows = excavatorProductions.filter(r=>String(r.equipment_id||'') === id);
@@ -3451,6 +3451,10 @@
   function isLoaderEquipment(eq){ return /loder|loader|yükleyici|yukleyici/i.test(String(eq?.type || '') + ' ' + String(eq?.name || '')); }
   function isLoadingEquipment(eq){ return isExcavatorEquipment(eq) || isLoaderEquipment(eq); }
   function loadingEquipmentKind(eq){ return isLoaderEquipment(eq) && !isExcavatorEquipment(eq) ? 'loader' : 'excavator'; }
+  function productionWorkMode(row){ return String(row?.production_mode || row?.work_mode || 'loading'); }
+  function isHelperWorkProduction(row){ return productionWorkMode(row) === 'helper'; }
+  function isLoadingWorkProduction(row){ return !isHelperWorkProduction(row); }
+  function isLoaderAnalysisProduction(row){ return isLoadingEquipment(findEquipmentById(row?.equipment_id)) && isLoadingWorkProduction(row); }
   function getProductionLoaderId(row){ return String(row?.loader_id || row?.linked_excavator_id || ''); }
   function getProductionLoaderName(row){ return row?.loader_name || row?.loader_name_snapshot || row?.linked_excavator_name || row?.linked_excavator_name_snapshot || ''; }
   function findEquipmentById(id){ return state.equipments.find(e=>String(e.id)===String(id)); }
@@ -4737,9 +4741,9 @@
   }
   function currentOpenBreakdownForEquipment(equipmentId){ return activeBreakdownRows().find(r => String(r.equipment_id)===String(equipmentId)); }
   function currentOpenRentalForEquipment(equipmentId){ return activeRentalRows().find(r => String(r.equipment_id)===String(equipmentId)); }
-  function activeExcavatorProductions(){ return activeProductionRows().filter(r=>isLoadingEquipment(findEquipmentById(r.equipment_id))); }
+  function activeExcavatorProductions(){ return activeProductionRows().filter(r=>isLoaderAnalysisProduction(r)); }
   function activeTruckProductions(){ return activeProductionRows().filter(r=>isTruckEquipment(findEquipmentById(r.equipment_id))); }
-  function activeLoaderProductions(){ return activeProductionRows().filter(r=>isLoadingEquipment(findEquipmentById(r.equipment_id))); }
+  function activeLoaderProductions(){ return activeProductionRows().filter(r=>isLoaderAnalysisProduction(r)); }
   function deletedRows(){
     const bag = [];
     state.productions.filter(r=>r.deleted_at).forEach(r=>bag.push({...r, _table:'productions', _type:'Üretim'}));
@@ -4806,16 +4810,18 @@
       const packOptions = state.packages.filter(p=>!p.deleted_at).map(p=>`<option value="${escapeHtml(p.id)}">${escapeHtml(p.name)}</option>`).join('');
       el.innerHTML = modalShell('Yükleyici Üretim Başlat', `
         <div class="form-grid">
-          <div class="form-field"><label>Ekipman</label><select id="m_equipment_id" onchange="updateProductionStartMeterHints()">${state.equipments.filter(isLoadingEquipment).filter(e=>!currentOpenBreakdownForEquipment(e.id) && !currentOpenProductionForEquipment(e.id) && !e.deleted_at).map(e=>`<option value="${escapeHtml(e.id)}" ${String(data.equipment_id||'')===String(e.id)?'selected':''}>${escapeHtml(e.name)}</option>`).join('')}</select></div>
-          <div class="form-field"><label>Paket</label><select id="m_package_id"><option value="">Seçiniz</option>${packOptions}</select></div>
-          <div class="form-field"><label>Nereden</label><input id="m_from_location" placeholder="Örn: Kuzey Ocak"></div>
-          <div class="form-field"><label>Nereye</label><input id="m_to_location" placeholder="Örn: Stok 1"></div>
+          <div class="form-field"><label>Ekipman</label><select id="m_equipment_id" onchange="updateProductionStartMeterHints();toggleLoaderProductionModeFields()">${state.equipments.filter(isLoadingEquipment).filter(e=>!currentOpenBreakdownForEquipment(e.id) && !currentOpenProductionForEquipment(e.id) && !e.deleted_at).map(e=>`<option value="${escapeHtml(e.id)}" ${String(data.equipment_id||'')===String(e.id)?'selected':''}>${escapeHtml(e.name)}</option>`).join('')}</select></div>
+          <div class="form-field" id="m_loader_mode_wrap"><label>Çalışma Şekli</label><select id="m_production_mode" onchange="toggleLoaderProductionModeFields()"><option value="loading">Yükleme</option><option value="helper">Yardımcı işler</option></select></div>
+          <div class="form-field" id="m_package_wrap"><label>Paket</label><select id="m_package_id"><option value="">Seçiniz</option>${packOptions}</select></div>
+          <div class="form-field"><label id="m_from_label">Nereden / Çalışma Alanı</label><input id="m_from_location" placeholder="Örn: Kuzey Ocak"></div>
+          <div class="form-field" id="m_to_wrap"><label>Nereye</label><input id="m_to_location" placeholder="Örn: Stok 1"></div>
           <div class="form-field"><label id="m_start_meter_label">Motor Saati</label><input id="m_start_meter" type="number" step="0.01" placeholder="0"></div>
         </div>
+        <div id="m_loader_mode_info" class="notice" style="margin-top:10px">Yükleme seçilirse bu ekipman kamyonlara yükleyici olarak bağlanır. Yardımcı işler seçilirse yalnızca çalışma alanı/sayaç/yakıt takip edilir.</div>
         <div id="m_start_meter_hint" class="subtle" style="margin-top:8px"></div>
         <div class="actions"><button class="secondary" data-close-modal="1">İptal</button><button type="button" data-action="saveStartProductionExcavator">Başlat</button></div>
       `);
-      setTimeout(()=>{ updateProductionStartMeterHints(); fillTruckRouteFromExcavator(); }, 0);
+      setTimeout(()=>{ updateProductionStartMeterHints(); toggleLoaderProductionModeFields(); fillTruckRouteFromExcavator(); }, 0);
       return;
     }
 
@@ -5210,6 +5216,26 @@
     }
   }
 
+  function toggleLoaderProductionModeFields(){
+    const eq = findEquipmentById(document.getElementById('m_equipment_id')?.value || '');
+    const modeWrap = document.getElementById('m_loader_mode_wrap');
+    const modeSel = document.getElementById('m_production_mode');
+    const packageWrap = document.getElementById('m_package_wrap');
+    const toWrap = document.getElementById('m_to_wrap');
+    const fromLabel = document.getElementById('m_from_label');
+    const info = document.getElementById('m_loader_mode_info');
+    const isLoderOnly = isLoaderEquipment(eq) && !isExcavatorEquipment(eq);
+    if(modeWrap) modeWrap.classList.toggle('hidden', !isLoderOnly);
+    if(!isLoderOnly && modeSel) modeSel.value = 'loading';
+    const helperMode = isLoderOnly && String(modeSel?.value || 'loading') === 'helper';
+    if(packageWrap) packageWrap.classList.toggle('hidden', helperMode);
+    if(toWrap) toWrap.classList.toggle('hidden', helperMode);
+    if(fromLabel) fromLabel.textContent = helperMode ? 'Çalışma Alanı' : 'Nereden / Çalışma Alanı';
+    if(info) info.textContent = helperMode
+      ? 'Yardımcı işler modunda loder kamyon yükleyicisi olarak görünmez; sefer/tonaj analizi almaz, sadece çalışma alanı, sayaç ve yakıt takibi yapılır.'
+      : 'Yükleme modunda loder ekskavatör gibi davranır; kamyonlar bu lodere bağlanabilir ve tonaj/sefer yükleyici analizine girer.';
+  }
+
   function toggleDefinitionTruckModelField(){
     const typeInput = document.getElementById('m_def_type');
     const wrap = document.getElementById('m_def_truck_model_wrap');
@@ -5227,24 +5253,30 @@
       const eq = findEquipmentById(equipment_id);
       if(!equipment_id) throw new Error('Ekipman seçiniz');
       if(currentOpenBreakdownForEquipment(equipment_id)) throw new Error('Arızadaki ekipman üretime alınamaz');
-      const package_id = document.getElementById('m_package_id').value || null;
+      const isLoderOnly = isLoaderEquipment(eq) && !isExcavatorEquipment(eq);
+      const selectedMode = isLoderOnly ? String(document.getElementById('m_production_mode')?.value || 'loading') : 'loading';
+      const isHelperMode = selectedMode === 'helper';
+      const package_id = isHelperMode ? null : (document.getElementById('m_package_id').value || null);
       const payload = {
         equipment_id,
+        equipment_name_snapshot: eq?.name || '',
         package_id,
-        package_name_snapshot: packageName(package_id),
+        package_name_snapshot: isHelperMode ? null : packageName(package_id),
         from_location: document.getElementById('m_from_location').value.trim(),
-        to_location: document.getElementById('m_to_location').value.trim(),
+        to_location: isHelperMode ? '' : document.getElementById('m_to_location').value.trim(),
+        production_mode: selectedMode,
+        work_mode: selectedMode,
         start_at: nowIso(),
         shift_name: resolveShiftNameForDateTime(nowIso()) || 'Tanımsız',
         shift_date: todayStr(),
         start_meter_type: 'saat',
         start_meter_value: document.getElementById('m_start_meter').value === '' ? (preferredStartMeterForProduction(equipment_id, nowIso()).value ?? 0) : num(document.getElementById('m_start_meter').value)
       };
-      const { error } = await insertWithOptionalColumns(TABLES.PRODUCTIONS, payload, ['equipment_name_snapshot','package_name_snapshot','linked_excavator_name_snapshot','loader_type','loader_id','loader_name_snapshot','shift_name','shift_date','start_meter_type','start_meter_value']);
+      const { error } = await insertWithOptionalColumns(TABLES.PRODUCTIONS, payload, ['equipment_name_snapshot','package_name_snapshot','linked_excavator_name_snapshot','loader_type','loader_id','loader_name_snapshot','production_mode','work_mode','shift_name','shift_date','start_meter_type','start_meter_value']);
       if(error) throw error;
       closeModal();
       await refreshData();
-      showToast(isLoaderEquipment(eq) && !isExcavatorEquipment(eq) ? 'Loder yükleyici olarak üretime alındı' : 'Ekskavatör üretime alındı');
+      showToast(isLoaderEquipment(eq) && !isExcavatorEquipment(eq) ? (isHelperMode ? 'Loder yardımcı işler için üretime alındı' : 'Loder yükleyici olarak üretime alındı') : 'Ekskavatör üretime alındı');
     }catch(err){ alert(err.message || err); }
   }
 
@@ -5279,8 +5311,10 @@
         loader_type: loadingEquipmentKind(linkedEq),
         loader_id: linkedProd?.equipment_id || null,
         loader_name_snapshot: linkedProd?.equipment_name || null,
+        production_mode: 'loading',
+        work_mode: 'loading',
       };
-      const { error } = await insertWithOptionalColumns(TABLES.PRODUCTIONS, payload, ['equipment_name_snapshot','package_name_snapshot','linked_excavator_name_snapshot','loader_type','loader_id','loader_name_snapshot','shift_name','shift_date','start_meter_type','start_meter_value']);
+      const { error } = await insertWithOptionalColumns(TABLES.PRODUCTIONS, payload, ['equipment_name_snapshot','package_name_snapshot','linked_excavator_name_snapshot','loader_type','loader_id','loader_name_snapshot','production_mode','work_mode','shift_name','shift_date','start_meter_type','start_meter_value']);
       if(error) throw error;
       closeModal();
       await refreshData();
@@ -5771,6 +5805,8 @@
           loader_name_snapshot: isTruck ? (linkedEq?.name || null) : null,
           shift_name: shiftNameValue,
           shift_date: shiftDateValue,
+          production_mode: isTruck ? 'loading' : (row.production_mode || row.work_mode || 'loading'),
+          work_mode: isTruck ? 'loading' : (row.work_mode || row.production_mode || 'loading'),
           status: document.getElementById('m_edit_status')?.value || null,
           trip_count: document.getElementById('m_edit_trip_count')?.value === '' ? 0 : num(document.getElementById('m_edit_trip_count')?.value || 0),
           start_at: startAtValue,
@@ -6082,7 +6118,7 @@
     const activeTrucks = snapshot.activeTrucks;
     const activeHelpers = activeProductionRowsForCurrentShift().filter(r=>{
       const eq = findEquipmentById(r.equipment_id);
-      return eq && !isExcavatorEquipment(eq) && !isTruckEquipment(eq);
+      return eq && !isTruckEquipment(eq) && (!isLoadingEquipment(eq) || isHelperWorkProduction(r));
     });
     const tripBreakdown = snapshot.tripBreakdown;
     const fuelBreakdown = snapshot.fuelBreakdown;
@@ -6127,7 +6163,7 @@
     });
 
     function linkedTruckChips(excRow){
-      const trucks = activeTrucks.filter(t => String(t.linked_excavator_id || '') === String(excRow.equipment_id || ''));
+      const trucks = activeTrucks.filter(t => String(getProductionLoaderId(t) || t.linked_excavator_id || '') === String(excRow.equipment_id || ''));
       return trucks.length ? `<div class="truck-chip-row">${trucks.map(t=>`<span class="truck-chip">${escapeHtml(t.equipment_name || '-')}</span>`).join('')}</div>` : '<span class="muted">Bağlı kamyon yok</span>';
     }
 
