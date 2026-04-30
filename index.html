@@ -3451,9 +3451,13 @@
   function isLoaderEquipment(eq){ return /loder|loader|yükleyici|yukleyici/i.test(String(eq?.type || '') + ' ' + String(eq?.name || '')); }
   function isLoadingEquipment(eq){ return isExcavatorEquipment(eq) || isLoaderEquipment(eq); }
   function loadingEquipmentKind(eq){ return isLoaderEquipment(eq) && !isExcavatorEquipment(eq) ? 'loader' : 'excavator'; }
+  function isEmptyDashValue(v){
+    const raw = String(v ?? '').toLocaleLowerCase('tr-TR').trim();
+    return !raw || raw === '-' || raw === '—' || raw === 'null' || raw === 'undefined' || raw === 'seçiniz' || raw === 'seciniz';
+  }
   function productionWorkMode(row){
     const explicitRaw = String(row?.production_mode || row?.work_mode || '').toLocaleLowerCase('tr-TR').trim();
-    if(explicitRaw){
+    if(explicitRaw && !isEmptyDashValue(explicitRaw)){
       if(explicitRaw.includes('helper') || explicitRaw.includes('support') || explicitRaw.includes('yardım') || explicitRaw.includes('yardim')) return 'helper';
       if(explicitRaw.includes('load') || explicitRaw.includes('yük') || explicitRaw.includes('yuk')) return 'loading';
       return explicitRaw;
@@ -3461,9 +3465,11 @@
     const eq = findEquipmentById(row?.equipment_id);
     const isLoderOnly = isLoaderEquipment(eq) && !isExcavatorEquipment(eq);
     if(isLoderOnly){
-      const hasPackage = !!String(row?.package_id || row?.package_name || row?.package_name_snapshot || '').trim();
-      const hasTo = !!String(row?.to_location || '').trim();
-      if(!hasPackage && !hasTo) return 'helper';
+      const hasPackage = !isEmptyDashValue(row?.package_id) || !isEmptyDashValue(row?.package_name) || !isEmptyDashValue(row?.package_name_snapshot);
+      const hasTo = !isEmptyDashValue(row?.to_location);
+      const hasLoaderLink = !isEmptyDashValue(row?.loader_id) || !isEmptyDashValue(row?.linked_excavator_id);
+      // Loder yükleme modu ekskavatör gibi kabul edilir. Yardımcı işlerde paket/hedef/yükleyici bağlantısı olmaz.
+      if(!hasPackage || !hasTo || hasLoaderLink) return 'helper';
     }
     return 'loading';
   }
