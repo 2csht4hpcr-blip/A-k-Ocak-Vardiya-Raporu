@@ -1057,7 +1057,7 @@
   }
   function activeBreakdownRowsForCurrentShift(){ return activeBreakdownRows().filter(isBreakdownInCurrentShift); }
   function activeRentalRowsForCurrentShift(){ return activeRentalRows().filter(isRowInCurrentShift); }
-  function activeExcavatorProductionsForCurrentShift(){ return activeProductionRowsForCurrentShift().filter(r=>isExcavatorEquipment(findEquipmentById(r.equipment_id))); }
+  function activeExcavatorProductionsForCurrentShift(){ return activeProductionRowsForCurrentShift().filter(r=>isLoadingEquipment(findEquipmentById(r.equipment_id))); }
   function activeTruckProductionsForCurrentShift(){ return activeProductionRowsForCurrentShift().filter(r=>isTruckEquipment(findEquipmentById(r.equipment_id))); }
   function currentShiftTripRows(){ return filterRowsForCurrentShift(state.truck_trips); }
   function currentShiftFuelRows(){ return filterRowsForCurrentShift(state.fuel_logs); }
@@ -1078,7 +1078,7 @@
       const liters = Number(r.liters || 0);
       const eq = findEquipmentById(r.equipment_id);
       if(isTruckEquipment(eq)) summary.truck += liters;
-      else if(isExcavatorEquipment(eq)) summary.excavator += liters;
+      else if(isLoadingEquipment(eq)) summary.excavator += liters;
       else summary.other += liters;
       summary.total += liters;
     });
@@ -1126,7 +1126,7 @@
     const tripsByExcavator = {};
     tripRows.forEach(r=>{
       const truckId = String(r.equipment_id || '');
-      const excId = String(r.linked_excavator_id || '');
+      const excId = String(r.loader_id || r.linked_excavator_id || '');
       const cnt = Number(r.trip_count || 0);
       if(truckId) tripsByTruck[truckId] = (tripsByTruck[truckId] || 0) + cnt;
       if(excId) tripsByExcavator[excId] = (tripsByExcavator[excId] || 0) + cnt;
@@ -1157,7 +1157,7 @@
         fuelLiters:fuelByEquipment[String(r.equipment_id || '')] || 0,
         meterDiff:kmDiff,
         efficiency:tripsPerHour,
-        linkedName:r.linked_excavator_name || '-',
+        linkedName:getProductionLoaderName(r) || '-',
         startedAt:r.start_at || r.start_time || r.created_at || ''
       };
     });
@@ -1166,7 +1166,7 @@
       const tripCount = tripsByExcavator[String(r.equipment_id || '')] || 0;
       const mins = minutesSince(r.start_at || r.start_time || r.created_at);
       const tripsPerHour = mins > 0 ? (tripCount / Math.max(mins / 60, 0.1)) : 0;
-      const linkedTruckCount = activeTrucks.filter(t=>String(t.linked_excavator_id || '') === String(r.equipment_id || '')).length;
+      const linkedTruckCount = activeTrucks.filter(t=>String(getProductionLoaderId(t) || '') === String(r.equipment_id || '')).length;
       return {
         type:'excavator',
         id:String(r.equipment_id || ''),
@@ -1417,11 +1417,11 @@
     const totalFuelLiters = sumField(fuels, r=>r.liters);
     const totalWorkHours = closedProductions.reduce((s,r)=>s + productionDurationHours(r), 0);
     const truckProductions = closedProductions.filter(r=>isTruckEquipment(findEquipmentById(r.equipment_id)));
-    const excavatorProductions = closedProductions.filter(r=>isExcavatorEquipment(findEquipmentById(r.equipment_id)));
+    const excavatorProductions = closedProductions.filter(r=>isLoadingEquipment(findEquipmentById(r.equipment_id)));
     const totalKm = truckProductions.reduce((s,r)=>s + productionMeterDiff(r), 0);
     const totalEngineHours = excavatorProductions.reduce((s,r)=>s + productionMeterDiff(r), 0);
     const activeTruckCount = Math.max(uniqueCount(trips, r=>r.equipment_id), uniqueCount(truckProductions, r=>r.equipment_id));
-    const activeExcavatorCount = Math.max(uniqueCount(excavatorProductions, r=>r.equipment_id), uniqueCount(trips, r=>r.linked_excavator_id));
+    const activeExcavatorCount = Math.max(uniqueCount(excavatorProductions, r=>r.equipment_id), uniqueCount(trips, r=>r.loader_id || r.linked_excavator_id));
     const avgTripPerTruck = activeTruckCount ? (totalTripCount / activeTruckCount) : 0;
     const avgFuelPerTrip = totalTripCount ? (totalFuelLiters / totalTripCount) : 0;
     const tripPerWorkHour = totalWorkHours ? (totalTripCount / totalWorkHours) : 0;
@@ -1454,7 +1454,7 @@
     const tripsByExc = {};
     const tonnageByExc = {};
     trips.forEach(r=>{
-      const id = String(r.linked_excavator_id || '');
+      const id = String(r.loader_id || r.linked_excavator_id || '');
       if(!id) return;
       tripsByExc[id] = (tripsByExc[id] || 0) + (Number(r.trip_count || 0) || 0);
       tonnageByExc[id] = (tonnageByExc[id] || 0) + getTripRowTonnage(r);
@@ -1467,18 +1467,18 @@
       truckProductionMap[id] = r;
     });
     const excavatorProductionMap = {};
-    productions.filter(r=>isExcavatorEquipment(findEquipmentById(r.equipment_id))).forEach(r=>{
+    productions.filter(r=>isLoadingEquipment(findEquipmentById(r.equipment_id))).forEach(r=>{
       const id = String(r.equipment_id || '');
       if(!id || excavatorProductionMap[id]) return;
       excavatorProductionMap[id] = r;
     });
     trips.forEach(r=>{
-      const id = String(r.linked_excavator_id || '');
+      const id = String(r.loader_id || r.linked_excavator_id || '');
       if(!id || excavatorProductionMap[id]) return;
       const eq = findEquipmentById(id) || {};
       excavatorProductionMap[id] = {
         equipment_id: id,
-        equipment_name: eq.name || r.linked_excavator_name || '-',
+        equipment_name: eq.name || r.loader_name || r.linked_excavator_name || '-',
         from_location: r.from_location || '',
         to_location: r.to_location || '',
         package_id: r.package_id || '',
@@ -1506,8 +1506,8 @@
         zone:prod.to_location || prod.from_location || '',
         route:`${prod.from_location || '-'} → ${prod.to_location || '-'}`,
         packageName:prod.package_name || packageName(prod.package_id) || '-',
-        linkedName:prod.linked_excavator_name || (findEquipmentById(prod.linked_excavator_id)?.name || '-'),
-        linkedExcavatorId:String(prod.linked_excavator_id || trips.find(t=>String(t.equipment_id||'')===id)?.linked_excavator_id || ''),
+        linkedName:getProductionLoaderName(prod) || (findEquipmentById(getProductionLoaderId(prod))?.name || '-'),
+        linkedExcavatorId:String(getProductionLoaderId(prod) || (trips.find(t=>String(t.equipment_id||'')===id)?.loader_id || trips.find(t=>String(t.equipment_id||'')===id)?.linked_excavator_id) || ''),
         tripCount,
         fuelLiters,
         tonnage,
@@ -1523,13 +1523,13 @@
 
     const excavatorIds = Array.from(new Set([
       ...excavatorProductions.map(r=>String(r.equipment_id || '')),
-      ...trips.map(r=>String(r.linked_excavator_id || '')),
-      ...fuels.filter(r=>isExcavatorEquipment(findEquipmentById(r.equipment_id))).map(r=>String(r.equipment_id || '')),
-      ...meters.filter(r=>isExcavatorEquipment(findEquipmentById(r.equipment_id))).map(r=>String(r.equipment_id || ''))
+      ...trips.map(r=>String(r.loader_id || r.linked_excavator_id || '')),
+      ...fuels.filter(r=>isLoadingEquipment(findEquipmentById(r.equipment_id))).map(r=>String(r.equipment_id || '')),
+      ...meters.filter(r=>isLoadingEquipment(findEquipmentById(r.equipment_id))).map(r=>String(r.equipment_id || ''))
     ].filter(Boolean)));
     const excavatorAnalysis = excavatorIds.map(id=>{
       const prodRows = excavatorProductions.filter(r=>String(r.equipment_id||'') === id);
-      const tripRowsForExc = trips.filter(t=>String(t.linked_excavator_id||'') === id);
+      const tripRowsForExc = trips.filter(t=>String(t.loader_id || t.linked_excavator_id || '') === id);
       const prod = excavatorProductionMap[id] || prodRows[0] || tripRowsForExc[0] || {};
       const eq = findEquipmentById(id) || {};
       const meterWindow = shiftEquipmentMeterWindow(id, shiftName, shiftDate);
@@ -1545,7 +1545,7 @@
         zone:prod.from_location || prod.to_location || '',
         route:`${prod.from_location || '-'} → ${prod.to_location || '-'}`,
         packageName:prod.package_name || packageName(prod.package_id) || '-',
-        linkedTruckCount: uniqueCount(trips.filter(t=>String(t.linked_excavator_id||'') === id), r=>r.equipment_id),
+        linkedTruckCount: uniqueCount(trips.filter(t=>String(t.loader_id || t.linked_excavator_id || '') === id), r=>r.equipment_id),
         tripCount,
         fuelLiters:fuelsByEquipment[id] || 0,
         tonnage,
@@ -1851,7 +1851,7 @@
       "Aktif Ekskavatörler":"Active Excavators",
       "Bağlı Kamyonlar":"Linked Trucks",
       "Aktif vardiyada ekskavatör girişi yok.":"No excavator entry in the active shift.",
-      "Bağlı Ekskavatör":"Linked Excavator",
+      "Bağlı Yükleyici":"Linked Excavator",
       "Aktif vardiyada kamyon girişi yok.":"No truck entry in the active shift.",
       "Arızada Olanlar":"Breakdowns",
       "Sebep girilmemiş":"No reason entered",
@@ -2075,7 +2075,7 @@
       "Aktif Ekskavatörler":"Активные экскаваторы",
       "Bağlı Kamyonlar":"Связанные самосвалы",
       "Aktif vardiyada ekskavatör girişi yok.":"В активной смене нет записи экскаватора.",
-      "Bağlı Ekskavatör":"Связанный экскаватор",
+      "Bağlı Yükleyici":"Связанный экскаватор",
       "Aktif vardiyada kamyon girişi yok.":"В активной смене нет записи самосвала.",
       "Arızada Olanlar":"В простое",
       "Sebep girilmemiş":"Причина не указана",
@@ -2360,8 +2360,8 @@
     "Aktif vardiyada kiralık makina yok.": "No rental machine in active shift.",
     "Bağlı Kamyonlar": "Linked Trucks",
     "Bağlı kamyon yok": "No linked truck",
-    "Bağlı Ekskavatör": "Linked Excavator",
-    "Bağlı Ekskavatör (opsiyonel)": "Linked Excavator (optional)",
+    "Bağlı Yükleyici": "Linked Excavator",
+    "Bağlı Yükleyici (opsiyonel)": "Linked Excavator (optional)",
     "Bağlı Üretim": "Linked Production",
     "Bağlı değil": "Not linked",
     "Bağlı üretim bulundu": "Linked production found",
@@ -2529,8 +2529,8 @@
     "İşlem fonksiyonu bulunamadı": "Action function not found",
     "Rapor penceresi açılamadı. Tarayıcı popup engelliyor olabilir.": "Report window could not be opened. The browser may be blocking popups.",
     "Boş bırakılırsa son değer alınır": "If left blank, the last value is used",
-    "Ekskavatör seçersen paket ve rota otomatik gelir.": "If you select an excavator, package and route are filled automatically.",
-    "Ekskavatör bilgileri getirildi": "Excavator info loaded",
+    "Yükleyici seçersen paket ve rota otomatik gelir.": "If you select an excavator, package and route are filled automatically.",
+    "Yükleyici bilgileri getirildi": "Excavator info loaded",
     "Seçilen tarih/vardiya için üretim kaydı bulunamadı.": "No production record found for the selected date/shift.",
     "Rota ve paket elle girilebilir.": "Route and package can be entered manually.",
     "Üretimden gelen son sayaç bilgileri otomatik önerilir. Değer yoksa elle giriş yapabilirsin.": "The last meter information from production is suggested automatically. If there is no value, you can enter it manually.",
@@ -2741,8 +2741,8 @@
     "Aktif vardiyada kiralık makina yok.": "Нет арендованной техники в активной смене.",
     "Bağlı Kamyonlar": "Привязанные самосвалы",
     "Bağlı kamyon yok": "Нет привязанного самосвала",
-    "Bağlı Ekskavatör": "Привязанный экскаватор",
-    "Bağlı Ekskavatör (opsiyonel)": "Привязанный экскаватор (опционально)",
+    "Bağlı Yükleyici": "Привязанный экскаватор",
+    "Bağlı Yükleyici (opsiyonel)": "Привязанный экскаватор (опционально)",
     "Bağlı Üretim": "Привязанное производство",
     "Bağlı değil": "Не привязано",
     "Bağlı üretim bulundu": "Привязанное производство найдено",
@@ -2910,8 +2910,8 @@
     "İşlem fonksiyonu bulunamadı": "Функция действия не найдена",
     "Rapor penceresi açılamadı. Tarayıcı popup engelliyor olabilir.": "Окно отчета не открылось. Возможно, браузер блокирует popup.",
     "Boş bırakılırsa son değer alınır": "Если пусто, берется последнее значение",
-    "Ekskavatör seçersen paket ve rota otomatik gelir.": "При выборе экскаватора пакет и маршрут заполняются автоматически.",
-    "Ekskavatör bilgileri getirildi": "Данные экскаватора загружены",
+    "Yükleyici seçersen paket ve rota otomatik gelir.": "При выборе экскаватора пакет и маршрут заполняются автоматически.",
+    "Yükleyici bilgileri getirildi": "Данные экскаватора загружены",
     "Seçilen tarih/vardiya için üretim kaydı bulunamadı.": "Запись производства для выбранной даты/смены не найдена.",
     "Rota ve paket elle girilebilir.": "Маршрут и пакет можно ввести вручную.",
     "Üretimden gelen son sayaç bilgileri otomatik önerilir. Değer yoksa elle giriş yapabilirsin.": "Последние данные счетчика из производства предлагаются автоматически. Если значения нет, можно ввести вручную.",
@@ -3083,8 +3083,8 @@
       "Kayıt":"Record", "kayıt":"record(s)", "Kayıt yok.":"No records.", "Kayıt bulunamadı":"No record found", "Kayıtlar yükleniyor...":"Records are loading...", "Kayıtlar yüklenirken hata oluştu":"An error occurred while loading records", "Başlangıç Tarihi":"Start Date", "Bitiş Tarihi":"End Date", "Tek Gün":"Single Day", "Sayfa Başına":"Per Page", "Varsayılan görünüm son 7 gün ile açılır.":"Default view opens with the last 7 days.", "Görünenleri Sil":"Delete Visible", "Toplam":"Total", "Sayfa":"Page", "Önceki":"Previous", "Sonraki":"Next", "Filtre":"Filter", "Filtre - Gün":"Filter - Day", "Satır Sayıları":"Row Counts", "Kayıt Tipi":"Record Type", "Kayıt Zamanı":"Record Time",
       "Başlangıç KM":"Start KM", "Motor Saati":"Engine Hours", "KM Değeri":"KM Value", "Sayaç birimi otomatik":"Meter unit automatic", "Son bilinen sayaç":"Last known meter", "Önceki vardiya kapanışı":"Previous shift close", "Sayaç Başlangıç":"Meter Start", "Sayaç Bitiş":"Meter End", "Sayaç Farkı":"Meter Difference", "Sayaç Kaydı":"Meter Record", "Sayaç Saati":"Meter Hours", "Çalışma Yeri":"Work Area", "Çalışma Bölgesi":"Work Area", "Çalışma Farkı":"Work Difference", "Süre":"Duration", "Süre (sa)":"Duration (h)", "Süre (dk)":"Duration (min)", "Açıklama":"Description", "Not":"Note", "Sebep":"Reason", "Sebep girilmemiş":"No reason entered", "Nereden":"From", "Nereye":"To", "Arıza Türü":"Breakdown Type",
       "Bağlantı test ediliyor...":"Testing connection...", "Bağlantı testi":"Connection test", "Bağlantı var ama tablo sorgusunda hata var":"Connection exists but table query has an error", "Bağlantı başarılı":"Connection successful", "Bağlantı testi başarısız":"Connection test failed", "Email ve şifre gerekli":"Email and password are required", "Email veya şifre boş":"Email or password is empty", "Giriş yapılıyor...":"Logging in...", "Giriş başarılı":"Login successful", "Giriş başarısız":"Login failed", "Oturum bulunamadı":"Session not found", "Kısmi yükleme":"Partial load", "Tüm tablolar yüklendi":"All tables loaded", "kişi çevrimiçi":"users online",
-      "Ekskavatör bilgileri getirildi":"Excavator information loaded", "Ekskavatör seçersen paket ve rota otomatik gelir.":"If you select an excavator, package and route are filled automatically.", "Üretim kaydı bulundu":"Production record found", "Seçilen tarih/vardiya için üretim kaydı bulunamadı.":"No production record found for the selected date/shift.", "Rota ve paket elle girilebilir.":"Route and package can be entered manually.", "Bu tarih/vardiya için üretim kaydı bulunamadı.":"No production record found for this date/shift.",
-      "Düşük üretim vardiyası":"Low production shift", "Yakıt yükselmiş":"Fuel increased", "Uzun süren arıza":"Long breakdown", "Anormal km farkı":"Abnormal km difference", "Km / sefer sapması":"Km / trip deviation", "Düşük ekskavatör verimi":"Low excavator efficiency", "Kritik":"Critical", "Dikkat":"Attention", "Seçilen filtre için kritik uyarı görünmüyor.":"No critical warning for the selected filter.", "Seçilen vardiya":"Selected shift", "SQL özet bağlı":"SQL summary connected", "Canlı hesaplama":"Live calculation", "Arıza etkisi":"Breakdown impact", "Uzun arıza":"Long breakdown", "Karşılaştırma":"Comparison", "Önceki veri yok":"No previous data", "Sefer yoğunluğu":"Trip density", "Tonaj katkısı":"Tonnage contribution", "Paket faktörü":"Package factor", "Toplam tonaj katkısı":"Total tonnage contribution", "Filtreye uygun ekskavatör analizi yok.":"No excavator analysis matching the filter.", "Seçilen filtre için paket bazlı tonaj analizi yok.":"No package-based tonnage analysis for the selected filter.",
+      "Yükleyici bilgileri getirildi":"Excavator information loaded", "Yükleyici seçersen paket ve rota otomatik gelir.":"If you select an excavator, package and route are filled automatically.", "Üretim kaydı bulundu":"Production record found", "Seçilen tarih/vardiya için üretim kaydı bulunamadı.":"No production record found for the selected date/shift.", "Rota ve paket elle girilebilir.":"Route and package can be entered manually.", "Bu tarih/vardiya için üretim kaydı bulunamadı.":"No production record found for this date/shift.",
+      "Düşük üretim vardiyası":"Low production shift", "Yakıt yükselmiş":"Fuel increased", "Uzun süren arıza":"Long breakdown", "Anormal km farkı":"Abnormal km difference", "Km / sefer sapması":"Km / trip deviation", "Düşük ekskavatör verimi":"Low excavator efficiency", "Kritik":"Critical", "Dikkat":"Attention", "Seçilen filtre için kritik uyarı görünmüyor.":"No critical warning for the selected filter.", "Seçilen vardiya":"Selected shift", "SQL özet bağlı":"SQL summary connected", "Canlı hesaplama":"Live calculation", "Arıza etkisi":"Breakdown impact", "Uzun arıza":"Long breakdown", "Karşılaştırma":"Comparison", "Önceki veri yok":"No previous data", "Sefer yoğunluğu":"Trip density", "Tonaj katkısı":"Tonnage contribution", "Paket faktörü":"Package factor", "Toplam tonaj katkısı":"Total tonnage contribution", "Filtreye uygun yükleyici analizi yok.":"No excavator analysis matching the filter.", "Seçilen filtre için paket bazlı tonaj analizi yok.":"No package-based tonnage analysis for the selected filter.",
       "Özet":"Summary", "Uyarılar":"Warnings", "Sefer Kayıtları":"Trip Records", "Yakıt Kayıtları":"Fuel Records", "Üretim Kayıtları":"Production Records", "Arıza Kayıtları":"Breakdown Records", "Ekskavatör Analizi":"Excavator Analysis", "Kamyon Analizi":"Truck Analysis", "Paket Analizi":"Package Analysis", "Dashboard Pro Özeti":"Dashboard Pro Summary", "Dashboard Pro Uyarıları":"Dashboard Pro Warnings", "Dashboard Pro Excel dosyası hazırlandı":"Dashboard Pro Excel file is ready", "Dashboard Pro PDF çıktısı hazırlandı":"Dashboard Pro PDF output is ready", "PDF hazırlanıyor...":"Preparing PDF...",
       "Rapor penceresi açılamadı. Tarayıcı popup engelliyor olabilir.":"The report window could not be opened. The browser may be blocking popups.", "Bu rapor yalnızca yöneticiye açıktır.":"This report is only available to managers.", "İşlem fonksiyonu bulunamadı":"Action function not found", "Bu işlem yalnızca yöneticiye açıktır.":"This action is only available to managers.", "Silinecek kayıt bulunamadı.":"No record found to delete.", "Bu listedeki görünür kayıtların tamamı silinenlere taşınsın mı?":"Move all visible records in this list to deleted?", "Aktif vardiya bulunamadı":"Active shift not found", "Arıza aktif vardiyada devam ediyor":"Breakdown continues in the active shift", "Bu işlem için yetkin yok":"You do not have permission for this action", "Bu işlem için yetkin yok.":"You do not have permission for this action."
     },
@@ -3101,8 +3101,8 @@
       "Kayıt":"Запись", "kayıt":"зап.", "Kayıt yok.":"Записей нет.", "Kayıt bulunamadı":"Запись не найдена", "Kayıtlar yükleniyor...":"Записи загружаются...", "Kayıtlar yüklenirken hata oluştu":"Ошибка при загрузке записей", "Başlangıç Tarihi":"Дата начала", "Bitiş Tarihi":"Дата окончания", "Tek Gün":"Один день", "Sayfa Başına":"На страницу", "Varsayılan görünüm son 7 gün ile açılır.":"По умолчанию отображаются последние 7 дней.", "Görünenleri Sil":"Удалить видимые", "Toplam":"Всего", "Sayfa":"Страница", "Önceki":"Предыдущая", "Sonraki":"Следующая", "Filtre":"Фильтр", "Filtre - Gün":"Фильтр - день", "Satır Sayıları":"Количество строк", "Kayıt Tipi":"Тип записи", "Kayıt Zamanı":"Время записи",
       "Başlangıç KM":"Начальный км", "Motor Saati":"Моточасы", "KM Değeri":"Значение км", "Sayaç birimi otomatik":"Единица счетчика автоматически", "Son bilinen sayaç":"Последний известный счетчик", "Önceki vardiya kapanışı":"Закрытие предыдущей смены", "Sayaç Başlangıç":"Начало счетчика", "Sayaç Bitiş":"Конец счетчика", "Sayaç Farkı":"Разница счетчика", "Sayaç Kaydı":"Запись счетчика", "Sayaç Saati":"Часы счетчика", "Çalışma Yeri":"Место работы", "Çalışma Bölgesi":"Рабочий участок", "Çalışma Farkı":"Разница работы", "Süre":"Длительность", "Süre (sa)":"Длительность (ч)", "Süre (dk)":"Длительность (мин)", "Açıklama":"Описание", "Not":"Примечание", "Sebep":"Причина", "Sebep girilmemiş":"Причина не указана", "Nereden":"Откуда", "Nereye":"Куда", "Arıza Türü":"Тип простоя",
       "Bağlantı test ediliyor...":"Проверка соединения...", "Bağlantı testi":"Проверка соединения", "Bağlantı var ama tablo sorgusunda hata var":"Соединение есть, но ошибка запроса таблицы", "Bağlantı başarılı":"Соединение успешно", "Bağlantı testi başarısız":"Проверка соединения не удалась", "Email ve şifre gerekli":"Email и пароль обязательны", "Email veya şifre boş":"Email или пароль пустой", "Giriş yapılıyor...":"Выполняется вход...", "Giriş başarılı":"Вход выполнен", "Giriş başarısız":"Ошибка входа", "Oturum bulunamadı":"Сессия не найдена", "Kısmi yükleme":"Частичная загрузка", "Tüm tablolar yüklendi":"Все таблицы загружены", "kişi çevrimiçi":"польз. онлайн",
-      "Ekskavatör bilgileri getirildi":"Информация экскаватора загружена", "Ekskavatör seçersen paket ve rota otomatik gelir.":"Если выбрать экскаватор, пакет и маршрут заполняются автоматически.", "Üretim kaydı bulundu":"Запись производства найдена", "Seçilen tarih/vardiya için üretim kaydı bulunamadı.":"Для выбранной даты/смены запись производства не найдена.", "Rota ve paket elle girilebilir.":"Маршрут и пакет можно ввести вручную.", "Bu tarih/vardiya için üretim kaydı bulunamadı.":"Для этой даты/смены запись производства не найдена.",
-      "Düşük üretim vardiyası":"Смена с низкой производительностью", "Yakıt yükselmiş":"Топливо выросло", "Uzun süren arıza":"Длительный простой", "Anormal km farkı":"Аномальная разница км", "Km / sefer sapması":"Отклонение км/рейс", "Düşük ekskavatör verimi":"Низкая эффективность экскаватора", "Kritik":"Критично", "Dikkat":"Внимание", "Seçilen filtre için kritik uyarı görünmüyor.":"Для выбранного фильтра критических предупреждений нет.", "Seçilen vardiya":"Выбранная смена", "SQL özet bağlı":"SQL-сводка подключена", "Canlı hesaplama":"Живой расчет", "Arıza etkisi":"Влияние простоя", "Uzun arıza":"Длительный простой", "Karşılaştırma":"Сравнение", "Önceki veri yok":"Предыдущих данных нет", "Sefer yoğunluğu":"Плотность рейсов", "Tonaj katkısı":"Вклад тоннажа", "Paket faktörü":"Коэффициент пакета", "Toplam tonaj katkısı":"Общий вклад тоннажа", "Filtreye uygun ekskavatör analizi yok.":"Нет анализа экскаваторов по выбранному фильтру.", "Seçilen filtre için paket bazlı tonaj analizi yok.":"Нет анализа тоннажа по пакетам для выбранного фильтра.",
+      "Yükleyici bilgileri getirildi":"Информация экскаватора загружена", "Yükleyici seçersen paket ve rota otomatik gelir.":"Если выбрать экскаватор, пакет и маршрут заполняются автоматически.", "Üretim kaydı bulundu":"Запись производства найдена", "Seçilen tarih/vardiya için üretim kaydı bulunamadı.":"Для выбранной даты/смены запись производства не найдена.", "Rota ve paket elle girilebilir.":"Маршрут и пакет можно ввести вручную.", "Bu tarih/vardiya için üretim kaydı bulunamadı.":"Для этой даты/смены запись производства не найдена.",
+      "Düşük üretim vardiyası":"Смена с низкой производительностью", "Yakıt yükselmiş":"Топливо выросло", "Uzun süren arıza":"Длительный простой", "Anormal km farkı":"Аномальная разница км", "Km / sefer sapması":"Отклонение км/рейс", "Düşük ekskavatör verimi":"Низкая эффективность экскаватора", "Kritik":"Критично", "Dikkat":"Внимание", "Seçilen filtre için kritik uyarı görünmüyor.":"Для выбранного фильтра критических предупреждений нет.", "Seçilen vardiya":"Выбранная смена", "SQL özet bağlı":"SQL-сводка подключена", "Canlı hesaplama":"Живой расчет", "Arıza etkisi":"Влияние простоя", "Uzun arıza":"Длительный простой", "Karşılaştırma":"Сравнение", "Önceki veri yok":"Предыдущих данных нет", "Sefer yoğunluğu":"Плотность рейсов", "Tonaj katkısı":"Вклад тоннажа", "Paket faktörü":"Коэффициент пакета", "Toplam tonaj katkısı":"Общий вклад тоннажа", "Filtreye uygun yükleyici analizi yok.":"Нет анализа экскаваторов по выбранному фильтру.", "Seçilen filtre için paket bazlı tonaj analizi yok.":"Нет анализа тоннажа по пакетам для выбранного фильтра.",
       "Özet":"Сводка", "Sefer Kayıtları":"Записи рейсов", "Yakıt Kayıtları":"Записи топлива", "Üretim Kayıtları":"Записи производства", "Arıza Kayıtları":"Записи простоев", "Ekskavatör Analizi":"Анализ экскаватора", "Kamyon Analizi":"Анализ самосвала", "Paket Analizi":"Анализ пакета", "Dashboard Pro Özeti":"Сводка Dashboard Pro", "Dashboard Pro Uyarıları":"Предупреждения Dashboard Pro", "Dashboard Pro Excel dosyası hazırlandı":"Excel-файл Dashboard Pro готов", "Dashboard Pro PDF çıktısı hazırlandı":"PDF Dashboard Pro готов", "PDF hazırlanıyor...":"PDF готовится...",
       "Rapor penceresi açılamadı. Tarayıcı popup engelliyor olabilir.":"Окно отчета не открылось. Возможно, браузер блокирует всплывающие окна.", "Bu rapor yalnızca yöneticiye açıktır.":"Этот отчет доступен только менеджеру.", "İşlem fonksiyonu bulunamadı":"Функция действия не найдена", "Bu işlem yalnızca yöneticiye açıktır.":"Это действие доступно только менеджеру.", "Silinecek kayıt bulunamadı.":"Запись для удаления не найдена.", "Bu listedeki görünür kayıtların tamamı silinenlere taşınsın mı?":"Переместить все видимые записи этого списка в удаленные?", "Aktif vardiya bulunamadı":"Активная смена не найдена", "Arıza aktif vardiyada devam ediyor":"Простой продолжается в активной смене", "Bu işlem için yetkin yok":"У вас нет прав для этого действия", "Bu işlem için yetkin yok.":"У вас нет прав для этого действия."
     }
@@ -3191,7 +3191,7 @@
       "Seçiniz":"Select", "Seçmeden devam et":"Continue without selecting", "Başlat":"Start", "Nereden":"From", "Nereye":"To", "Örn":"Ex", "Boş bırakılırsa son değer alınır":"If left empty, the last value will be used",
       "Çalışma Bölgesi":"Work Area", "Çalışma Yeri":"Work Location", "Çalışma":"Work",
       "Ekskavatör Üretim Başlat":"Start Excavator Production", "Kamyon Üretim Başlat":"Start Truck Production", "Yardımcı Makina Üretim Başlat":"Start Auxiliary Machine Production", "Üretim Bitir":"End Production", "Arıza Başlat":"Start Breakdown", "Arıza Kapat":"Close Breakdown", "Kiralık Başlat":"Start Rental", "Kiralık Kapat":"Close Rental",
-      "Bağlı Ekskavatör (opsiyonel)":"Linked Excavator (optional)", "Bağlı Ekskavatör":"Linked Excavator", "Bağlı Üretim":"Linked Production", "Ekskavatör seçersen paket ve rota otomatik gelir.":"If you select an excavator, package and route are filled automatically.", "Ekskavatör bilgileri getirildi":"Excavator information loaded", "Üretim kaydı bulundu":"Production record found", "Bağlı üretim bulundu":"Linked production found",
+      "Bağlı Yükleyici (opsiyonel)":"Linked Excavator (optional)", "Bağlı Yükleyici":"Linked Excavator", "Bağlı Üretim":"Linked Production", "Yükleyici seçersen paket ve rota otomatik gelir.":"If you select an excavator, package and route are filled automatically.", "Yükleyici bilgileri getirildi":"Excavator information loaded", "Üretim kaydı bulundu":"Production record found", "Bağlı üretim bulundu":"Linked production found",
       "Seçilen tarih/vardiya için üretim kaydı bulunamadı.":"No production record found for the selected date/shift.", "Rota ve paket elle girilebilir.":"Route and package can be entered manually.", "Bu tarih/vardiya için üretim kaydı yok.":"No production record for this date/shift.", "Yakıt kaydı yine yapılır.":"Fuel record can still be created.", "Bu tarih için aktif üretim bulunamadı.":"No active production found for this date.", "Sayaç düzeltmesi bağımsız kaydedilir.":"Meter correction is saved independently.",
       "Yardımcı makinalarda üretime alırken yalnızca çalışma bölgesi ve sayaç yeterlidir. Sayaç boş bırakılırsa son bilinen değer otomatik alınır.":"For auxiliary machines, work area and meter are enough when starting production. If the meter is empty, the last known value is used automatically.",
       "Sefer Sayısı":"Trip Count", "Arıza Açıklaması":"Breakdown Description", "Arıza Türü":"Breakdown Type", "Açıklama":"Description", "Süre":"Duration", "Süre (sa)":"Duration (h)", "Süre (dk)":"Duration (min)", "Tanımsız":"Undefined", "Hesaplanamadı":"Could not calculate", "Karşılaştırma yok":"No comparison", "Dikkat":"Attention", "Kritik":"Critical", "Başlık":"Title", "Seviye":"Level",
@@ -3199,7 +3199,7 @@
       "Kamyon ve ekskavatör dışındaki üretimde açık ekipmanlar":"Open production equipment other than trucks and excavators", "Sebep girilmemiş":"No reason entered", "ÇALIŞILAN YER BELİRTİLMEDİ":"WORK AREA NOT SPECIFIED", "HEDEF BELİRTİLMEDİ":"DESTINATION NOT SPECIFIED", "YARDIMCI MAKİNALAR":"AUXILIARY MACHINES", "KİRALIK MAKİNALAR":"RENTAL MACHINES",
       "Toplam Sefer":"Total Trips", "Toplam Verilen Yakıt":"Total Fuel Issued", "Toplam Tonaj":"Total Tonnage", "Toplam Arıza Dakikası":"Total Breakdown Minutes", "Uzun Arıza Sayısı":"Long Breakdown Count", "Kamyon Başına Ort. Sefer":"Avg. Trips per Truck", "Sefer Başına Kamyon Yakıtı":"Truck Fuel per Trip", "Önceki Vardiya Kıyası":"Previous Shift Comparison", "Akıllı Uyarılar":"Smart Warnings", "Vardiya Özeti":"Shift Summary", "Ekskavatör Analizleri":"Excavator Analysis", "Kamyon Analizleri":"Truck Analysis", "Paket Bazlı Tonaj":"Package-Based Tonnage", "Paket faktörü":"Package factor", "Sefer yoğunluğu":"Trip density", "Tonaj katkısı":"Tonnage contribution", "Toplam tonaj katkısı":"Total tonnage contribution", "Ton / saat verimi":"Ton / hour efficiency", "Ton/Saat":"Ton/Hour", "Sefer/Saat":"Trips/Hour", "KM/Sefer":"KM/Trip", "Ton/Sefer":"Ton/Trip", "Yakıt/Sefer":"Fuel/Trip", "Yakıt/Ton":"Fuel/Ton",
       "Bağlı Kamyon":"Linked Truck", "Bağlı Kamyonlar":"Linked Trucks", "Yakıt Almayan Ekipman":"Equipment With No Fuel", "Tüketimi Hesaplanamayan Ekipman":"Equipment With Uncalculated Consumption", "Tüketimi Eşik Dışı Ekipman":"Equipment Outside Consumption Threshold", "Vardiya Durumu":"Shift Status", "Vardiya Tüketimi":"Shift Consumption", "Vardiya Yakıt":"Shift Fuel", "Vardiya Yakıt (L)":"Shift Fuel (L)", "Vardiya Sayaç Farkı":"Shift Meter Difference", "Vardiya Yakıt Kayıt":"Shift Fuel Records",
-      "Yakıt litre değeri yok":"No fuel liter value", "Sayaç değeri yok":"No meter value", "Önceki yakıt sayaç kaydı yok":"No previous fuel meter record", "Sayaç farkı yok veya ters":"No meter difference or reversed", "Bu vardiyada yakıt almadı":"No fuel taken in this shift", "Eşik üstü":"Above threshold", "Ortalama üstü":"Above average", "Alt eşik":"Below lower threshold", "Filtreye uygun kamyon analizi yok.":"No truck analysis matching the filter.", "Filtreye uygun ekskavatör analizi yok.":"No excavator analysis matching the filter.", "Seçilen filtre için paket bazlı tonaj analizi yok.":"No package-based tonnage analysis for the selected filter.",
+      "Yakıt litre değeri yok":"No fuel liter value", "Sayaç değeri yok":"No meter value", "Önceki yakıt sayaç kaydı yok":"No previous fuel meter record", "Sayaç farkı yok veya ters":"No meter difference or reversed", "Bu vardiyada yakıt almadı":"No fuel taken in this shift", "Eşik üstü":"Above threshold", "Ortalama üstü":"Above average", "Alt eşik":"Below lower threshold", "Filtreye uygun kamyon analizi yok.":"No truck analysis matching the filter.", "Filtreye uygun yükleyici analizi yok.":"No excavator analysis matching the filter.", "Seçilen filtre için paket bazlı tonaj analizi yok.":"No package-based tonnage analysis for the selected filter.",
       "Kalem":"Item", "Değer":"Value", "Seçilen Vardiya":"Selected Shift", "Bölge":"Area", "Faktör":"Factor", "Bilgi":"Info", "Kayıt bulunamadı":"No records found", "Rapor":"Report", "Özet":"Summary", "Sefer Kayıtları":"Trip Records", "Yakıt Kayıtları":"Fuel Records", "Üretim Kayıtları":"Production Records", "Arıza Kayıtları":"Breakdown Records", "Kiralık Kayıtları":"Rental Records", "Ekskavatör Analizi":"Excavator Analysis", "Kamyon Analizi":"Truck Analysis",
       "Dashboard Pro ekranı bulunamadı.":"Dashboard Pro screen was not found.", "PDF kütüphanesi yüklenemedi. Sayfayı yenileyip tekrar deneyin.":"PDF library could not be loaded. Refresh the page and try again.", "PDF ekran çıktısı kütüphanesi yüklenemedi. İnternet bağlantısını kontrol edip tekrar deneyin.":"PDF screen capture library could not be loaded. Check your internet connection and try again.", "PDF hazırlanıyor...":"Preparing PDF...", "Dashboard Pro PDF çıktısı hazırlandı":"Dashboard Pro PDF output is ready", "Dashboard Pro PDF çıktı sırasında hata oluştu":"An error occurred while exporting Dashboard Pro PDF", "Önce Dashboard Pro verisinin yüklenmesini bekleyin.":"Wait for Dashboard Pro data to load first.", "Excel kütüphanesi yüklenemedi. Sayfayı yenileyip tekrar deneyin.":"Excel library could not be loaded. Refresh the page and try again.", "Dashboard Pro Excel dosyası hazırlandı":"Dashboard Pro Excel file is ready", "Dashboard Pro export sırasında hata oluştu":"An error occurred during Dashboard Pro export",
       "Yetki Ayrımı":"Permission Separation", "Vardiya Ayarları":"Shift Settings", "Bu bölüm yalnızca yönetici tarafından değiştirilebilir.":"This section can only be changed by a manager.", "Vardiya ayarları yalnızca yönetici tarafından düzenlenir. Operasyon tanımları ekipman ve paket yönetimi içindir.":"Shift settings can only be edited by a manager. Operation definitions are for equipment and package management.", "Vardiya sorumlusu bu sayfada yalnızca ekipman ve paket tanımlarını yönetebilir. Vardiya ayarları sadece yöneticiye açıktır.":"A shift supervisor can only manage equipment and package definitions on this page. Shift settings are available only to the manager.",
@@ -3211,12 +3211,12 @@
       "saat":"час", "Saat":"Час", "sa":"ч", "dk":"мин", "gün":"день", "Gün":"День",
       "Motor Saati":"Моточасы", "Başlangıç KM":"Начальный км", "Bitiş KM":"Конечный км", "Bitiş Motor Saati":"Конечные моточасы", "Başlangıç Sayaç":"Начальный счетчик", "Bitiş Sayaç":"Конечный счетчик", "Sayaç Değeri":"Значение счетчика", "Sayaç Saati":"Моточасы", "Sayaç Farkı":"Разница счетчика", "Sayaç birimi otomatik":"Единица счетчика автоматически", "Son bilinen sayaç":"Последний известный счетчик", "Son bilinen değer":"Последнее известное значение", "KM Değeri":"Значение км", "Bitiş Zamanı":"Время окончания", "Başlangıç Zamanı":"Время начала", "Kayıt Zamanı":"Время записи",
       "Seçiniz":"Выберите", "Seçmeden devam et":"Продолжить без выбора", "Başlat":"Начать", "Nereden":"Откуда", "Nereye":"Куда", "Örn":"Напр", "Boş bırakılırsa son değer alınır":"Если оставить пустым, будет взято последнее значение", "Çalışma Bölgesi":"Рабочая зона", "Çalışma Yeri":"Место работы", "Çalışma":"Работа",
-      "Ekskavatör Üretim Başlat":"Начать производство экскаватора", "Kamyon Üretim Başlat":"Начать производство самосвала", "Yardımcı Makina Üretim Başlat":"Начать работу вспом. техники", "Üretim Bitir":"Завершить производство", "Arıza Başlat":"Начать простой", "Arıza Kapat":"Закрыть простой", "Kiralık Başlat":"Начать аренду", "Kiralık Kapat":"Закрыть аренду", "Bağlı Ekskavatör (opsiyonel)":"Связанный экскаватор (опц.)", "Bağlı Ekskavatör":"Связанный экскаватор", "Bağlı Üretim":"Связанное производство", "Ekskavatör seçersen paket ve rota otomatik gelir.":"Если выбрать экскаватор, пакет и маршрут заполнятся автоматически.", "Ekskavatör bilgileri getirildi":"Данные экскаватора загружены", "Üretim kaydı bulundu":"Запись производства найдена", "Bağlı üretim bulundu":"Связанное производство найдено", "Seçilen tarih/vardiya için üretim kaydı bulunamadı.":"Запись производства для выбранной даты/смены не найдена.", "Rota ve paket elle girilebilir.":"Маршрут и пакет можно ввести вручную.", "Bu tarih/vardiya için üretim kaydı yok.":"Нет записи производства для этой даты/смены.", "Yakıt kaydı yine yapılır.":"Заправку все равно можно создать.", "Bu tarih için aktif üretim bulunamadı.":"Активное производство на эту дату не найдено.", "Sayaç düzeltmesi bağımsız kaydedilir.":"Коррекция счетчика сохраняется отдельно.", "Yardımcı makinalarda üretime alırken yalnızca çalışma bölgesi ve sayaç yeterlidir. Sayaç boş bırakılırsa son bilinen değer otomatik alınır.":"Для вспомогательной техники при запуске достаточно рабочей зоны и счетчика. Если счетчик пустой, автоматически берется последнее известное значение.",
+      "Ekskavatör Üretim Başlat":"Начать производство экскаватора", "Kamyon Üretim Başlat":"Начать производство самосвала", "Yardımcı Makina Üretim Başlat":"Начать работу вспом. техники", "Üretim Bitir":"Завершить производство", "Arıza Başlat":"Начать простой", "Arıza Kapat":"Закрыть простой", "Kiralık Başlat":"Начать аренду", "Kiralık Kapat":"Закрыть аренду", "Bağlı Yükleyici (opsiyonel)":"Связанный экскаватор (опц.)", "Bağlı Yükleyici":"Связанный экскаватор", "Bağlı Üretim":"Связанное производство", "Yükleyici seçersen paket ve rota otomatik gelir.":"Если выбрать экскаватор, пакет и маршрут заполнятся автоматически.", "Yükleyici bilgileri getirildi":"Данные экскаватора загружены", "Üretim kaydı bulundu":"Запись производства найдена", "Bağlı üretim bulundu":"Связанное производство найдено", "Seçilen tarih/vardiya için üretim kaydı bulunamadı.":"Запись производства для выбранной даты/смены не найдена.", "Rota ve paket elle girilebilir.":"Маршрут и пакет можно ввести вручную.", "Bu tarih/vardiya için üretim kaydı yok.":"Нет записи производства для этой даты/смены.", "Yakıt kaydı yine yapılır.":"Заправку все равно можно создать.", "Bu tarih için aktif üretim bulunamadı.":"Активное производство на эту дату не найдено.", "Sayaç düzeltmesi bağımsız kaydedilir.":"Коррекция счетчика сохраняется отдельно.", "Yardımcı makinalarda üretime alırken yalnızca çalışma bölgesi ve sayaç yeterlidir. Sayaç boş bırakılırsa son bilinen değer otomatik alınır.":"Для вспомогательной техники при запуске достаточно рабочей зоны и счетчика. Если счетчик пустой, автоматически берется последнее известное значение.",
       "Sefer Sayısı":"Количество рейсов", "Arıza Açıklaması":"Описание простоя", "Arıza Türü":"Тип простоя", "Açıklama":"Описание", "Süre":"Длительность", "Süre (sa)":"Длительность (ч)", "Süre (dk)":"Длительность (мин)", "Tanımsız":"Не задано", "Hesaplanamadı":"Не удалось рассчитать", "Karşılaştırma yok":"Нет сравнения", "Dikkat":"Внимание", "Kritik":"Критично", "Başlık":"Заголовок", "Seviye":"Уровень",
       "Aktif Vardiya":"Активная смена", "Vardiya tanımı yok":"Смена не задана", "Bu ekranda yalnızca aktif vardiyada açılmış kayıtlar gösterilir.":"На этом экране показаны только записи, открытые в активной смене.", "Aktif Ekskavatör":"Активный экскаватор", "Aktif Kamyon":"Активный самосвал", "Aktif Yardımcı Makina":"Активная вспомогательная техника", "Aktif Kiralık":"Активная аренда", "Aktif Kiralıklar":"Активная аренда", "Arızada Olanlar":"В простое", "Aktif Arızalar":"Активные простои", "Aktif vardiyada arıza yok.":"В активной смене простоев нет.", "Aktif vardiyada ekskavatör girişi yok.":"В активной смене нет записи экскаватора.", "Aktif vardiyada kamyon girişi yok.":"В активной смене нет записи самосвала.", "Aktif vardiyada yardımcı makina yok.":"В активной смене нет вспомогательной техники.", "Aktif vardiyada kiralık makina yok.":"В активной смене нет арендованной техники.", "Kamyon ve ekskavatör dışındaki üretimde açık ekipmanlar":"Открытая техника в производстве кроме самосвалов и экскаваторов", "Sebep girilmemiş":"Причина не указана",
       "ÇALIŞILAN YER BELİRTİLMEDİ":"РАБОЧАЯ ЗОНА НЕ УКАЗАНА", "HEDEF BELİRTİLMEDİ":"НАЗНАЧЕНИЕ НЕ УКАЗАНО", "YARDIMCI MAKİNALAR":"ВСПОМОГАТЕЛЬНАЯ ТЕХНИКА", "KİRALIK MAKİNALAR":"АРЕНДОВАННАЯ ТЕХНИКА",
       "Toplam Sefer":"Всего рейсов", "Toplam Verilen Yakıt":"Всего выданного топлива", "Toplam Tonaj":"Общий тоннаж", "Toplam Arıza Dakikası":"Всего минут простоя", "Uzun Arıza Sayısı":"Количество длительных простоев", "Kamyon Başına Ort. Sefer":"Сред. рейсов на самосвал", "Sefer Başına Kamyon Yakıtı":"Топливо самосвала на рейс", "Önceki Vardiya Kıyası":"Сравнение с прошлой сменой", "Akıllı Uyarılar":"Умные предупреждения", "Vardiya Özeti":"Сводка смены", "Ekskavatör Analizleri":"Анализ экскаваторов", "Kamyon Analizleri":"Анализ самосвалов", "Paket Bazlı Tonaj":"Тоннаж по пакетам", "Paket faktörü":"Коэффициент пакета", "Sefer yoğunluğu":"Интенсивность рейсов", "Tonaj katkısı":"Вклад тоннажа", "Toplam tonaj katkısı":"Общий вклад тоннажа", "Ton / saat verimi":"Эффективность тонн/час", "Ton/Saat":"Тонн/час", "Sefer/Saat":"Рейсов/час", "KM/Sefer":"Км/рейс", "Ton/Sefer":"Тонн/рейс", "Yakıt/Sefer":"Топливо/рейс", "Yakıt/Ton":"Топливо/тонна",
-      "Bağlı Kamyon":"Связанный самосвал", "Bağlı Kamyonlar":"Связанные самосвалы", "Yakıt Almayan Ekipman":"Техника без заправки", "Tüketimi Hesaplanamayan Ekipman":"Техника с нерассчитанным расходом", "Tüketimi Eşik Dışı Ekipman":"Техника вне порога расхода", "Vardiya Durumu":"Статус смены", "Vardiya Tüketimi":"Расход смены", "Vardiya Yakıt":"Топливо смены", "Vardiya Yakıt (L)":"Топливо смены (л)", "Vardiya Sayaç Farkı":"Разница счетчика смены", "Vardiya Yakıt Kayıt":"Записи топлива смены", "Yakıt litre değeri yok":"Нет значения литров топлива", "Sayaç değeri yok":"Нет значения счетчика", "Önceki yakıt sayaç kaydı yok":"Нет предыдущей записи счетчика топлива", "Sayaç farkı yok veya ters":"Нет разницы счетчика или обратное значение", "Bu vardiyada yakıt almadı":"В этой смене не заправлялся", "Eşik üstü":"Выше порога", "Ortalama üstü":"Выше среднего", "Alt eşik":"Ниже нижнего порога", "Filtreye uygun kamyon analizi yok.":"Нет анализа самосвалов по фильтру.", "Filtreye uygun ekskavatör analizi yok.":"Нет анализа экскаваторов по фильтру.", "Seçilen filtre için paket bazlı tonaj analizi yok.":"Нет тоннажа по пакетам для выбранного фильтра.",
+      "Bağlı Kamyon":"Связанный самосвал", "Bağlı Kamyonlar":"Связанные самосвалы", "Yakıt Almayan Ekipman":"Техника без заправки", "Tüketimi Hesaplanamayan Ekipman":"Техника с нерассчитанным расходом", "Tüketimi Eşik Dışı Ekipman":"Техника вне порога расхода", "Vardiya Durumu":"Статус смены", "Vardiya Tüketimi":"Расход смены", "Vardiya Yakıt":"Топливо смены", "Vardiya Yakıt (L)":"Топливо смены (л)", "Vardiya Sayaç Farkı":"Разница счетчика смены", "Vardiya Yakıt Kayıt":"Записи топлива смены", "Yakıt litre değeri yok":"Нет значения литров топлива", "Sayaç değeri yok":"Нет значения счетчика", "Önceki yakıt sayaç kaydı yok":"Нет предыдущей записи счетчика топлива", "Sayaç farkı yok veya ters":"Нет разницы счетчика или обратное значение", "Bu vardiyada yakıt almadı":"В этой смене не заправлялся", "Eşik üstü":"Выше порога", "Ortalama üstü":"Выше среднего", "Alt eşik":"Ниже нижнего порога", "Filtreye uygun kamyon analizi yok.":"Нет анализа самосвалов по фильтру.", "Filtreye uygun yükleyici analizi yok.":"Нет анализа экскаваторов по фильтру.", "Seçilen filtre için paket bazlı tonaj analizi yok.":"Нет тоннажа по пакетам для выбранного фильтра.",
       "Kalem":"Пункт", "Değer":"Значение", "Seçilen Vardiya":"Выбранная смена", "Bölge":"Участок", "Faktör":"Коэффициент", "Bilgi":"Информация", "Kayıt bulunamadı":"Записи не найдены", "Rapor":"Отчет", "Özet":"Сводка", "Sefer Kayıtları":"Записи рейсов", "Yakıt Kayıtları":"Записи топлива", "Üretim Kayıtları":"Записи производства", "Arıza Kayıtları":"Записи простоев", "Kiralık Kayıtları":"Записи аренды", "Ekskavatör Analizi":"Анализ экскаваторов", "Kamyon Analizi":"Анализ самосвалов",
       "Dashboard Pro ekranı bulunamadı.":"Экран Dashboard Pro не найден.", "PDF kütüphanesi yüklenemedi. Sayfayı yenileyip tekrar deneyin.":"Библиотека PDF не загружена. Обновите страницу и попробуйте снова.", "PDF ekran çıktısı kütüphanesi yüklenemedi. İnternet bağlantısını kontrol edip tekrar deneyin.":"Библиотека снимка экрана PDF не загружена. Проверьте интернет и попробуйте снова.", "PDF hazırlanıyor...":"Подготовка PDF...", "Dashboard Pro PDF çıktısı hazırlandı":"PDF Dashboard Pro готов", "Dashboard Pro PDF çıktı sırasında hata oluştu":"Ошибка при экспорте PDF Dashboard Pro", "Önce Dashboard Pro verisinin yüklenmesini bekleyin.":"Сначала дождитесь загрузки данных Dashboard Pro.", "Excel kütüphanesi yüklenemedi. Sayfayı yenileyip tekrar deneyin.":"Библиотека Excel не загружена. Обновите страницу и попробуйте снова.", "Dashboard Pro Excel dosyası hazırlandı":"Excel Dashboard Pro готов", "Dashboard Pro export sırasında hata oluştu":"Ошибка при экспорте Dashboard Pro",
       "Yetki Ayrımı":"Разделение прав", "Vardiya Ayarları":"Настройки смен", "Bu bölüm yalnızca yönetici tarafından değiştirilebilir.":"Этот раздел может изменять только менеджер.", "Vardiya ayarları yalnızca yönetici tarafından düzenlenir. Operasyon tanımları ekipman ve paket yönetimi içindir.":"Настройки смен редактирует только менеджер. Операционные справочники предназначены для техники и пакетов.", "Vardiya sorumlusu bu sayfada yalnızca ekipman ve paket tanımlarını yönetebilir. Vardiya ayarları sadece yöneticiye açıktır.":"Начальник смены на этой странице может управлять только техникой и пакетами. Настройки смен доступны только менеджеру.",
@@ -3448,6 +3448,11 @@
   function num(v){ const n = Number(v); return Number.isFinite(n) ? n : 0; }
   function isTruckEquipment(eq){ return /kamyon/i.test(String(eq?.type || '')); }
   function isExcavatorEquipment(eq){ return /ekskavatör|ekskavator/i.test(String(eq?.type || '')); }
+  function isLoaderEquipment(eq){ return /loder|loader|yükleyici|yukleyici/i.test(String(eq?.type || '') + ' ' + String(eq?.name || '')); }
+  function isLoadingEquipment(eq){ return isExcavatorEquipment(eq) || isLoaderEquipment(eq); }
+  function loadingEquipmentKind(eq){ return isLoaderEquipment(eq) && !isExcavatorEquipment(eq) ? 'loader' : 'excavator'; }
+  function getProductionLoaderId(row){ return String(row?.loader_id || row?.linked_excavator_id || ''); }
+  function getProductionLoaderName(row){ return row?.loader_name || row?.loader_name_snapshot || row?.linked_excavator_name || row?.linked_excavator_name_snapshot || ''; }
   function findEquipmentById(id){ return state.equipments.find(e=>String(e.id)===String(id)); }
   function autoMeterTypeForEquipment(id){
     const eq = findEquipmentById(id);
@@ -4159,7 +4164,7 @@
       const liters = Number(r.liters || 0);
       const eq = findEquipmentById(r.equipment_id);
       if(isTruckEquipment(eq)) summary.truck += liters;
-      else if(isExcavatorEquipment(eq)) summary.excavator += liters;
+      else if(isLoadingEquipment(eq)) summary.excavator += liters;
       else summary.other += liters;
       summary.total += liters;
     });
@@ -4630,14 +4635,14 @@
     const toInp = document.getElementById('m_to_location');
     if(!linkedSel) return;
     const linkedProductionId = linkedSel.value || '';
-    const linkedProd = linkedProductionId ? activeExcavatorProductions().find(r=>String(r.id)===String(linkedProductionId)) : null;
+    const linkedProd = linkedProductionId ? activeLoaderProductions().find(r=>String(r.id)===String(linkedProductionId)) : null;
     if(linkedProd){
       if(packSel) packSel.value = linkedProd.package_id ? String(linkedProd.package_id) : '';
       if(fromInp) fromInp.value = linkedProd.from_location || '';
       if(toInp) toInp.value = linkedProd.to_location || '';
-      if(info) info.innerHTML = `<span class="ok">Ekskavatör bilgileri getirildi</span> • ${escapeHtml(linkedProd.package_name || '-')} • ${escapeHtml(linkedProd.from_location || '-')} → ${escapeHtml(linkedProd.to_location || '-')}`;
+      if(info) info.innerHTML = `<span class="ok">Yükleyici bilgileri getirildi</span> • ${escapeHtml(linkedProd.package_name || '-')} • ${escapeHtml(linkedProd.from_location || '-')} → ${escapeHtml(linkedProd.to_location || '-')}`;
     }else{
-      if(info) info.textContent = 'Ekskavatör seçersen paket ve rota otomatik gelir.';
+      if(info) info.textContent = 'Yükleyici seçersen paket ve rota otomatik gelir.';
     }
   }
 
@@ -4732,8 +4737,9 @@
   }
   function currentOpenBreakdownForEquipment(equipmentId){ return activeBreakdownRows().find(r => String(r.equipment_id)===String(equipmentId)); }
   function currentOpenRentalForEquipment(equipmentId){ return activeRentalRows().find(r => String(r.equipment_id)===String(equipmentId)); }
-  function activeExcavatorProductions(){ return activeProductionRows().filter(r=>isExcavatorEquipment(findEquipmentById(r.equipment_id))); }
+  function activeExcavatorProductions(){ return activeProductionRows().filter(r=>isLoadingEquipment(findEquipmentById(r.equipment_id))); }
   function activeTruckProductions(){ return activeProductionRows().filter(r=>isTruckEquipment(findEquipmentById(r.equipment_id))); }
+  function activeLoaderProductions(){ return activeProductionRows().filter(r=>isLoadingEquipment(findEquipmentById(r.equipment_id))); }
   function deletedRows(){
     const bag = [];
     state.productions.filter(r=>r.deleted_at).forEach(r=>bag.push({...r, _table:'productions', _type:'Üretim'}));
@@ -4795,12 +4801,12 @@
     if(!type){ el.innerHTML = ''; return; }
 
     if(type === 'startProductionExcavator'){
-      const options = state.equipments.filter(isExcavatorEquipment).filter(e=>!currentOpenBreakdownForEquipment(e.id) && !currentOpenProductionForEquipment(e.id) && !e.deleted_at)
+      const options = state.equipments.filter(isLoadingEquipment).filter(e=>!currentOpenBreakdownForEquipment(e.id) && !currentOpenProductionForEquipment(e.id) && !e.deleted_at)
         .map(e=>`<option value="${escapeHtml(e.id)}">${escapeHtml(e.name)}</option>`).join('');
       const packOptions = state.packages.filter(p=>!p.deleted_at).map(p=>`<option value="${escapeHtml(p.id)}">${escapeHtml(p.name)}</option>`).join('');
-      el.innerHTML = modalShell('Ekskavatör Üretim Başlat', `
+      el.innerHTML = modalShell('Yükleyici Üretim Başlat', `
         <div class="form-grid">
-          <div class="form-field"><label>Ekipman</label><select id="m_equipment_id" onchange="updateProductionStartMeterHints()">${state.equipments.filter(isExcavatorEquipment).filter(e=>!currentOpenBreakdownForEquipment(e.id) && !currentOpenProductionForEquipment(e.id) && !e.deleted_at).map(e=>`<option value="${escapeHtml(e.id)}" ${String(data.equipment_id||'')===String(e.id)?'selected':''}>${escapeHtml(e.name)}</option>`).join('')}</select></div>
+          <div class="form-field"><label>Ekipman</label><select id="m_equipment_id" onchange="updateProductionStartMeterHints()">${state.equipments.filter(isLoadingEquipment).filter(e=>!currentOpenBreakdownForEquipment(e.id) && !currentOpenProductionForEquipment(e.id) && !e.deleted_at).map(e=>`<option value="${escapeHtml(e.id)}" ${String(data.equipment_id||'')===String(e.id)?'selected':''}>${escapeHtml(e.name)}</option>`).join('')}</select></div>
           <div class="form-field"><label>Paket</label><select id="m_package_id"><option value="">Seçiniz</option>${packOptions}</select></div>
           <div class="form-field"><label>Nereden</label><input id="m_from_location" placeholder="Örn: Kuzey Ocak"></div>
           <div class="form-field"><label>Nereye</label><input id="m_to_location" placeholder="Örn: Stok 1"></div>
@@ -4816,18 +4822,18 @@
     if(type === 'startProductionTruck'){
       const truckOptions = state.equipments.filter(isTruckEquipment).filter(e=>!currentOpenBreakdownForEquipment(e.id) && !currentOpenProductionForEquipment(e.id) && !e.deleted_at)
         .map(e=>`<option value="${escapeHtml(e.id)}">${escapeHtml(e.name)}</option>`).join('');
-      const excOptions = activeExcavatorProductions().map(r=>`<option value="${escapeHtml(r.id)}">${escapeHtml(r.equipment_name || '-')}</option>`).join('');
+      const excOptions = activeLoaderProductions().map(r=>{ const eq=findEquipmentById(r.equipment_id)||{}; const kind=isLoaderEquipment(eq)&&!isExcavatorEquipment(eq)?'Loder':'Ekskavatör'; return `<option value="${escapeHtml(r.id)}">${escapeHtml(r.equipment_name || '-')} (${kind})</option>`; }).join('');
       const packOptions = state.packages.filter(p=>!p.deleted_at).map(p=>`<option value="${escapeHtml(p.id)}">${escapeHtml(p.name)}</option>`).join('');
       el.innerHTML = modalShell('Kamyon Üretim Başlat', `
         <div class="form-grid">
           <div class="form-field"><label>Kamyon</label><select id="m_equipment_id" onchange="updateProductionStartMeterHints()">${state.equipments.filter(isTruckEquipment).filter(e=>!currentOpenBreakdownForEquipment(e.id) && !currentOpenProductionForEquipment(e.id) && !e.deleted_at).map(e=>`<option value="${escapeHtml(e.id)}" ${String(data.equipment_id||'')===String(e.id)?'selected':''}>${escapeHtml(e.name)}</option>`).join('')}</select></div>
-          <div class="form-field"><label>Bağlı Ekskavatör (opsiyonel)</label><select id="m_linked_production_id" onchange="fillTruckRouteFromExcavator()"><option value="">Seçmeden devam et</option>${excOptions}</select></div>
+          <div class="form-field"><label>Bağlı Yükleyici (zorunlu)</label><select id="m_linked_production_id" onchange="fillTruckRouteFromExcavator()"><option value="">Yükleyici seçiniz</option>${excOptions}</select></div>
           <div class="form-field"><label>Paket</label><select id="m_package_id"><option value="">Seçiniz</option>${packOptions}</select></div>
           <div class="form-field"><label>Nereden</label><input id="m_from_location" placeholder="Örn: Cep 3"></div>
           <div class="form-field"><label>Nereye</label><input id="m_to_location" placeholder="Örn: Kırıcı"></div>
           <div class="form-field"><label id="m_start_meter_label">Başlangıç KM</label><input id="m_start_meter" type="number" step="0.01" placeholder="0"></div>
         </div>
-        <div id="truckAutoInfo" class="subtle" style="margin-top:12px">Ekskavatör seçersen paket ve rota otomatik gelir.</div><div id="m_start_meter_hint" class="subtle" style="margin-top:8px"></div>
+        <div id="truckAutoInfo" class="subtle" style="margin-top:12px">Kamyon üretime alınırken yükleyici zorunludur. Ekskavatör veya loder seçince paket ve rota otomatik gelir.</div><div id="m_start_meter_hint" class="subtle" style="margin-top:8px"></div>
         <div class="actions"><button class="secondary" data-close-modal="1">İptal</button><button type="button" data-action="saveStartProductionTruck">Başlat</button></div>
       `);
       setTimeout(updateProductionStartMeterHints, 0);
@@ -4835,7 +4841,7 @@
     }
 
     if(type === 'startProductionOther'){
-      const otherOptions = state.equipments.filter(e=>!isExcavatorEquipment(e) && !isTruckEquipment(e)).filter(e=>!currentOpenBreakdownForEquipment(e.id) && !currentOpenProductionForEquipment(e.id) && !e.deleted_at)
+      const otherOptions = state.equipments.filter(e=>!isLoadingEquipment(e) && !isTruckEquipment(e)).filter(e=>!currentOpenBreakdownForEquipment(e.id) && !currentOpenProductionForEquipment(e.id) && !e.deleted_at)
         .map(e=>`<option value="${escapeHtml(e.id)}" ${String(data.equipment_id||'')===String(e.id)?'selected':''}>${escapeHtml(e.name)}</option>`).join('');
       el.innerHTML = modalShell('Yardımcı Makina Üretim Başlat', `
         <div class="form-grid">
@@ -5034,7 +5040,7 @@
       const table = data.table;
       const eqOptions = state.equipments.filter(e=>!e.deleted_at).map(e=>`<option value="${escapeHtml(e.id)}" ${String(e.id)===String(row.equipment_id) ? 'selected' : ''}>${escapeHtml(e.name)} (${escapeHtml(e.type || '-')})</option>`).join('');
       const packOptions = state.packages.filter(p=>!p.deleted_at).map(p=>`<option value="${escapeHtml(p.id)}" ${String(p.id)===String(row.package_id) ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('');
-      const excavatorOptions = state.equipments.filter(e=>!e.deleted_at && isExcavatorEquipment(e)).map(e=>`<option value="${escapeHtml(e.id)}" ${String(e.id)===String(row.linked_excavator_id) ? 'selected' : ''}>${escapeHtml(e.name)}</option>`).join('');
+      const excavatorOptions = state.equipments.filter(e=>!e.deleted_at && isLoadingEquipment(e)).map(e=>`<option value="${escapeHtml(e.id)}" ${String(e.id)===String(getProductionLoaderId(row)) ? 'selected' : ''}>${escapeHtml(e.name)}${isLoaderEquipment(e)&&!isExcavatorEquipment(e)?' (Loder)':' (Ekskavatör)'}</option>`).join('');
       if(resolveDbTableName(table) === TABLES.PRODUCTIONS){
         const startAt = toDatetimeLocalValue(row.start_at || row.start_time || row.created_at);
         const endAt = toDatetimeLocalValue(row.end_at || row.end_time || '');
@@ -5048,7 +5054,7 @@
             <div class="form-field"><label>Paket</label><select id="m_edit_package_id"><option value="">Seçiniz</option>${packOptions}</select></div>
             <div class="form-field"><label>Nereden</label><input id="m_edit_from_location" value="${escapeHtml(row.from_location || '')}"></div>
             <div class="form-field"><label>Nereye</label><input id="m_edit_to_location" value="${escapeHtml(row.to_location || '')}"></div>
-            <div class="form-field ${isTruckRow ? '' : 'hidden'}" id="m_edit_linked_excavator_wrap"><label>Bağlı Ekskavatör</label><select id="m_edit_linked_excavator_id"><option value="">Seçiniz</option>${excavatorOptions}</select></div>
+            <div class="form-field ${isTruckRow ? '' : 'hidden'}" id="m_edit_linked_excavator_wrap"><label>Bağlı Yükleyici</label><select id="m_edit_linked_excavator_id"><option value="">Seçiniz</option>${excavatorOptions}</select></div>
             <div class="form-field"><label>Vardiya Tarihi</label><input id="m_edit_shift_date" type="date" value="${escapeHtml(row.shift_date || String(row.created_at || '').slice(0,10) || todayStr())}"></div>
             <div class="form-field"><label>Vardiya</label><select id="m_edit_shift_name"><option value="">Otomatik</option>${shiftOptions}</select></div>
             <div class="form-field"><label>Başlangıç Zamanı</label><input id="m_edit_start_at" type="datetime-local" value="${escapeHtml(startAt)}"></div>
@@ -5085,7 +5091,7 @@
         el.innerHTML = modalShell('Sefer Kaydı Düzenle', `
           <div class="form-grid">
             <div class="form-field"><label>Makine</label><select id="m_edit_equipment_id">${eqOptions}</select></div>
-            <div class="form-field"><label>Bağlı Ekskavatör</label><select id="m_edit_linked_excavator_id"><option value="">Seçiniz</option>${excavatorOptions}</select></div>
+            <div class="form-field"><label>Bağlı Yükleyici</label><select id="m_edit_linked_excavator_id"><option value="">Seçiniz</option>${excavatorOptions}</select></div>
             <div class="form-field"><label>Paket</label><select id="m_edit_package_id"><option value="">Seçiniz</option>${packOptions}</select></div>
             <div class="form-field"><label>Sefer Sayısı</label><input id="m_edit_trip_count" type="number" step="1" value="${escapeHtml(row.trip_count || 0)}"></div>
             <div class="form-field"><label>Nereden</label><input id="m_edit_from_location" value="${escapeHtml(row.from_location || '')}"></div>
@@ -5234,11 +5240,11 @@
         start_meter_type: 'saat',
         start_meter_value: document.getElementById('m_start_meter').value === '' ? (preferredStartMeterForProduction(equipment_id, nowIso()).value ?? 0) : num(document.getElementById('m_start_meter').value)
       };
-      const { error } = await insertWithOptionalColumns(TABLES.PRODUCTIONS, payload, ['equipment_name_snapshot','package_name_snapshot','linked_excavator_name_snapshot','shift_name','shift_date','start_meter_type','start_meter_value']);
+      const { error } = await insertWithOptionalColumns(TABLES.PRODUCTIONS, payload, ['equipment_name_snapshot','package_name_snapshot','linked_excavator_name_snapshot','loader_type','loader_id','loader_name_snapshot','shift_name','shift_date','start_meter_type','start_meter_value']);
       if(error) throw error;
       closeModal();
       await refreshData();
-      showToast('Ekskavatör üretime alındı');
+      showToast(isLoaderEquipment(eq) && !isExcavatorEquipment(eq) ? 'Loder yükleyici olarak üretime alındı' : 'Ekskavatör üretime alındı');
     }catch(err){ alert(err.message || err); }
   }
 
@@ -5251,7 +5257,10 @@
       if(!equipment_id) throw new Error('Kamyon seçiniz');
       if(currentOpenBreakdownForEquipment(equipment_id)) throw new Error('Arızadaki ekipman üretime alınamaz');
       const linkedProductionId = document.getElementById('m_linked_production_id').value || null;
-      const linkedProd = linkedProductionId ? activeExcavatorProductions().find(r=>String(r.id)===String(linkedProductionId)) : null;
+      if(!linkedProductionId) throw new Error('Kamyon üretime alınırken ekskavatör veya loder yükleyici seçmek zorunludur');
+      const linkedProd = linkedProductionId ? activeLoaderProductions().find(r=>String(r.id)===String(linkedProductionId)) : null;
+      if(!linkedProd) throw new Error('Seçilen yükleyici aktif üretimde bulunamadı');
+      const linkedEq = findEquipmentById(linkedProd.equipment_id);
       const package_id = document.getElementById('m_package_id').value || linkedProd?.package_id || null;
       const payload = {
         equipment_id,
@@ -5265,10 +5274,13 @@
         shift_date: todayStr(),
         start_meter_type: 'km',
         start_meter_value: document.getElementById('m_start_meter').value === '' ? (preferredStartMeterForProduction(equipment_id, nowIso()).value ?? 0) : num(document.getElementById('m_start_meter').value),
-        linked_excavator_id: linkedProd?.equipment_id || null,
-        linked_excavator_name_snapshot: linkedProd?.equipment_name || null,
+        linked_excavator_id: isExcavatorEquipment(linkedEq) ? (linkedProd?.equipment_id || null) : null,
+        linked_excavator_name_snapshot: isExcavatorEquipment(linkedEq) ? (linkedProd?.equipment_name || null) : null,
+        loader_type: loadingEquipmentKind(linkedEq),
+        loader_id: linkedProd?.equipment_id || null,
+        loader_name_snapshot: linkedProd?.equipment_name || null,
       };
-      const { error } = await insertWithOptionalColumns(TABLES.PRODUCTIONS, payload, ['equipment_name_snapshot','package_name_snapshot','linked_excavator_name_snapshot','shift_name','shift_date','start_meter_type','start_meter_value']);
+      const { error } = await insertWithOptionalColumns(TABLES.PRODUCTIONS, payload, ['equipment_name_snapshot','package_name_snapshot','linked_excavator_name_snapshot','loader_type','loader_id','loader_name_snapshot','shift_name','shift_date','start_meter_type','start_meter_value']);
       if(error) throw error;
       closeModal();
       await refreshData();
@@ -5340,6 +5352,8 @@
             from_location: prod.from_location || '',
             to_location: prod.to_location || '',
             linked_excavator_id: prod.linked_excavator_id || null,
+            loader_type: prod.loader_type || (prod.linked_excavator_id ? 'excavator' : null),
+            loader_id: getProductionLoaderId(prod) || null,
             production_id: prod.id,
             shift_name: getShiftNameForRow(prod) || resolveShiftNameForDateTime(nowIso()) || '',
             shift_date: prod.shift_date || String(prod.start_at || prod.created_at || nowIso()).slice(0,10) || todayStr(),
@@ -5349,7 +5363,7 @@
           delete tripPayload.equipment_name_snapshot;
           delete tripPayload.package_name_snapshot;
           delete tripPayload.linked_excavator_name_snapshot;
-          const tripRes = await insertWithOptionalColumns(TABLES.TRUCK_TRIPS, tripPayload, ['production_id','shift_name','shift_date','logistics_shift_date','material_type']);
+          const tripRes = await insertWithOptionalColumns(TABLES.TRUCK_TRIPS, tripPayload, ['production_id','shift_name','shift_date','logistics_shift_date','material_type','loader_type','loader_id']);
           if(tripRes.error) throw tripRes.error;
           await updateWithOptionalColumns(TABLES.PRODUCTIONS, { trip_count: productionTripTotal(prod) + enteredTrips }, ['trip_count'], prod.id);
         }
@@ -5730,6 +5744,7 @@
         const package_id = document.getElementById('m_edit_package_id').value || null;
         const isTruck = isTruckEquipment(eq);
         const linked_excavator_id = isTruck ? (document.getElementById('m_edit_linked_excavator_id')?.value || null) : null;
+        if(isTruck && !linked_excavator_id) throw new Error('Kamyon üretim kaydında yükleyici seçimi zorunludur');
         const linkedEq = findEquipmentById(linked_excavator_id);
         const startMeterRaw = document.getElementById('m_edit_start_meter_value')?.value ?? '';
         const endMeterRaw = document.getElementById('m_edit_end_meter_value')?.value ?? '';
@@ -5749,8 +5764,11 @@
           package_name_snapshot: packageName(package_id),
           from_location: document.getElementById('m_edit_from_location').value.trim(),
           to_location: document.getElementById('m_edit_to_location').value.trim(),
-          linked_excavator_id,
-          linked_excavator_name_snapshot: linkedEq?.name || null,
+          linked_excavator_id: isExcavatorEquipment(linkedEq) ? linked_excavator_id : null,
+          linked_excavator_name_snapshot: isExcavatorEquipment(linkedEq) ? (linkedEq?.name || null) : null,
+          loader_type: isTruck ? loadingEquipmentKind(linkedEq) : null,
+          loader_id: isTruck ? (linked_excavator_id || null) : null,
+          loader_name_snapshot: isTruck ? (linkedEq?.name || null) : null,
           shift_name: shiftNameValue,
           shift_date: shiftDateValue,
           status: document.getElementById('m_edit_status')?.value || null,
@@ -6219,7 +6237,7 @@
                     <div class="meta-row"><span class="meta-label">Sayaç</span><span class="meta-value">${escapeHtml(formatMeterValueWithUnit(r.start_meter_value || '-', r.start_meter_type || 'km'))}</span></div>
                   </div>
                   <div class="truck-link-wrap">
-                    <div class="truck-link-title">Bağlı Ekskavatör</div>
+                    <div class="truck-link-title">Bağlı Yükleyici</div>
                     <div class="truck-chip-row"><span class="truck-chip">${escapeHtml(r.linked_excavator_name || '-')}</span></div>
                   </div>
                 </div>
@@ -6398,7 +6416,7 @@
   function dashboardProItemTypeKeyFromText(typeText){
     const t = String(typeText || '').toLocaleLowerCase('tr-TR');
     if(t.includes('kamyon')) return 'truck';
-    if(t.includes('ekskavat')) return 'excavator';
+    if(t.includes('ekskavat') || t.includes('loder') || t.includes('loader') || t.includes('yükleyici') || t.includes('yukleyici')) return 'excavator';
     return 'other';
   }
   function buildDashboardProRangeSummary(buckets){
@@ -6655,7 +6673,7 @@
       </div>
       <div class="grid g1" style="margin-top:16px">
         <div class="dashboard-block">
-          <h3>Ekskavatör Analizleri</h3>
+          <h3>Yükleyici Analizleri</h3>
           <div id="dashboardProExcBody" class="dashboard-scroll"></div>
         </div>
       </div>
@@ -7258,7 +7276,7 @@
         </div>
         <div class="muted" style="margin-top:10px">Paket: <b>${escapeHtml(item.packageName || '-')}</b></div>
       </div>
-    `).join('') + `</div>` : '<div class="empty">Filtreye uygun ekskavatör analizi yok.</div>';
+    `).join('') + `</div>` : '<div class="empty">Filtreye uygun yükleyici analizi yok.</div>';
 
     const packageMap = {};
     filteredTrips.forEach(row=>{
@@ -7327,7 +7345,7 @@
         'Bölge': item.zone || '',
         'Rota': item.route || '',
         'Paket': item.packageName || '',
-        'Bağlı Ekskavatör': item.linkedName || '',
+        'Bağlı Yükleyici': item.linkedName || '',
         'Sefer': item.tripCount || 0,
         'Yakıt (L)': Number((item.fuelLiters || 0).toFixed(1)),
         'KM': Number((item.meterDiff || 0).toFixed(1)),
@@ -8167,12 +8185,12 @@ function applyRecordFilters(rows){
 
 
   function equipmentTypeGroupName(eq){
-    if(isExcavatorEquipment(eq)) return 'Ekskavatörler';
+    if(isLoadingEquipment(eq)) return 'Yükleyiciler';
     if(isTruckEquipment(eq)) return 'Kamyonlar';
     return 'Yardımcı Makinalar';
   }
   function operationGroupOrder(){
-    return ['Ekskavatörler', 'Kamyonlar', 'Yardımcı Makinalar'];
+    return ['Yükleyiciler', 'Kamyonlar', 'Yardımcı Makinalar'];
   }
   function orderedGroupEntries(groups){
     const order = operationGroupOrder();
@@ -8193,7 +8211,7 @@ function applyRecordFilters(rows){
   function starterAction(pageType, eq){
     const payload = encodeModalData({ equipment_id: String(eq?.id || '') });
     if(pageType === 'production'){
-      if(isExcavatorEquipment(eq)) return `data-open-modal="startProductionExcavator" data-modal-data="${payload}"`;
+      if(isLoadingEquipment(eq)) return `data-open-modal="startProductionExcavator" data-modal-data="${payload}"`;
       if(isTruckEquipment(eq)) return `data-open-modal="startProductionTruck" data-modal-data="${payload}"`;
       return `data-open-modal="startProductionOther" data-modal-data="${payload}"`;
     }
@@ -9186,7 +9204,7 @@ async function exportWeeklyExcel(){
         {header:'Tarih', key:'shift_date', width:14},
         {header:'Vardiya', key:'shift_name', width:14},
         {header:'Kamyon', key:'equipment_name', width:22},
-        {header:'Bağlı Ekskavatör', key:'linked_exc_name', width:22},
+        {header:'Bağlı Yükleyici', key:'linked_exc_name', width:22},
         {header:'Paket', key:'package_name', width:18},
         {header:'Rota', key:'route', width:28},
         {header:'Sefer', key:'trip_count', width:10},
@@ -9383,7 +9401,7 @@ async function exportWeeklyExcel(){
       const ws3 = wb.addWorksheet('Sefer');
       ws3.columns = [
         {header:'Kamyon', key:'equipment_name', width:22},
-        {header:'Bağlı Ekskavatör', key:'linked_exc_name', width:22},
+        {header:'Bağlı Yükleyici', key:'linked_exc_name', width:22},
         {header:'Paket', key:'package_name', width:18},
         {header:'Rota', key:'route', width:28},
         {header:'Sefer', key:'trip_count', width:10},
