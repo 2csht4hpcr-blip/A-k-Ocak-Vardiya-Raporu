@@ -7141,19 +7141,60 @@
 
     const alertRules = { ...DEFAULT_ALERT_RULES, ...(state.alertRules || {}) };
     const alerts = [];
-    if(fuelConsumptionNoFuelCount > 0) alerts.push({level:'orange', title:'Yakıt almayan ekipman', text:`Seçilen vardiyada ${fuelConsumptionNoFuelCount} ekipman çalıştı/kayıt gördü ama yakıt almadı.`});
+
+    const activeProductionCount = (summary.productions || []).filter(p=>!p?.end_at && !p?.end_time).length;
+    const closedMissingEndMeterCount = filteredClosedProductions.filter(p=>{
+      const diff = productionMeterDiff(p);
+      return !Number.isFinite(Number(diff)) || Number(diff) <= 0;
+    }).length;
+    const unlinkedTripCount = (summary.trips || []).filter(t=>!t?.production_id).length;
+    const unlinkedFuelCount = (summary.fuels || []).filter(f=>!f?.production_id).length;
+    const unlinkedMeterCount = (summary.meters || []).filter(m=>!m?.production_id).length;
+
+    if(activeProductionCount > 0) alerts.push({level:'orange', title:'Devam eden üretim var', text:`Seçilen aralıkta ${activeProductionCount} üretim henüz kapatılmamış. Bu kayıtlar tamamlanmadan bazı analizler eksik görünebilir.`});
+    if(unlinkedTripCount || unlinkedFuelCount || unlinkedMeterCount) alerts.push({level:'red', title:'Analize girmeyen lojistik kayıtları', text:`Production bağlantısı olmayan kayıt var. Sefer: ${unlinkedTripCount}, yakıt: ${unlinkedFuelCount}, sayaç: ${unlinkedMeterCount}. Kayıtlarda görünür ama Dashboard Pro analizine alınmaz.`});
+    if(closedMissingEndMeterCount > 0) alerts.push({level:'red', title:'Bitiş sayacı eksik', text:`${closedMissingEndMeterCount} tamamlanmış üretimde sayaç farkı yok veya sıfır. Yakıt tüketimi ve verim hesapları güvenilir olmayabilir.`});
+
+    if(fuelConsumptionNoFuelCount > 0) alerts.push({level:'orange', title:'Yakıt kaydı olmayan ekipman', text:`Seçilen aralıkta ${fuelConsumptionNoFuelCount} ekipman çalıştı ancak yakıt kaydı yok.`});
     if(fuelConsumptionInvalidCount > 0) alerts.push({level:'red', title:'Yakıt tüketimi hesaplanamadı', text:`${fuelConsumptionInvalidCount} ekipmanda sayaç farkı veya önceki yakıt sayaç kaydı eksik.`});
     if(fuelConsumptionHighCount > 0) alerts.push({level:'red', title:'Yakıt tüketimi eşik dışı', text:`${fuelConsumptionHighCount} ekipmanda yakıt tüketimi belirlenen eşiklerin dışında.`});
-        if(filteredLongBreakdowns > 0 || filteredBreakdownMinutes >= alertRules.longBreakdownMinutes) alerts.push({level:'red', title:'Uzun süren arıza', text:`Bu seçimde toplam ${formatDurationMinutes(filteredBreakdownMinutes)} arıza süresi var.`});
+    if(filteredLongBreakdowns > 0 || filteredBreakdownMinutes >= alertRules.longBreakdownMinutes) alerts.push({level:'red', title:'Uzun süren arıza', text:`Bu seçimde toplam ${formatDurationMinutes(filteredBreakdownMinutes)} arıza süresi var.`});
+
     const fleetAvgKmPerTrip = truckItems.length ? truckItems.reduce((s,x)=>s + (x.kmPerTrip || 0), 0) / truckItems.length : 0;
+    const truckFuelItems = fuelConsumptionItems.filter(item=>item.type === 'truck' && item.shift?.validCount && Number.isFinite(Number(item.shift?.rate)));
+    const avgTruckFuelRate = truckFuelItems.length ? truckFuelItems.reduce((s,item)=>s + Number(item.shift.rate || 0), 0) / truckFuelItems.length : 0;
     truckItems.forEach(t=>{
+      const fuelItem = fuelConsumptionByEquipmentId.get(String(t.id || ''));
+      const fuelRate = Number(fuelItem?.shift?.rate);
+      if((t.tripCount || 0) > 0 && (t.tonnage || 0) <= 0) alerts.push({level:'red', title:'Kamyon tonajı hesaplanamadı', text:`${t.name}: sefer var ama tonaj 0. Kamyon modeli veya paket faktörü kontrol edilmeli.`});
       if((t.meterDiff || 0) > alertRules.abnormalKmThreshold && (t.tripCount || 0) < alertRules.abnormalKmTripLimit) alerts.push({level:'red', title:'Anormal km farkı', text:`${t.name}: ${t.meterDiff.toFixed(1)} km, ${t.tripCount} sefer.`});
       else if(fleetAvgKmPerTrip > 0 && (t.kmPerTrip || 0) > fleetAvgKmPerTrip * alertRules.kmPerTripRatio) alerts.push({level:'orange', title:'Km / sefer sapması', text:`${t.name}: sefer başına ${t.kmPerTrip.toFixed(1)} km.`});
+      if(Number.isFinite(fuelRate) && fuelRate > 0){
+        if(fuelRate > alertRules.fuelConsumptionTruckMax) alerts.push({level:'red', title:'Kamyon yakıt tüketimi yüksek', text:`${t.name}: ${fuelRate.toFixed(2)} L/km. Eşik: ${Number(alertRules.fuelConsumptionTruckMax || 0).toFixed(2)} L/km.`});
+        else if(avgTruckFuelRate > 0 && fuelRate > avgTruckFuelRate * alertRules.fuelConsumptionHighRatio) alerts.push({level:'orange', title:'Kamyon tüketimi ortalamanın üstünde', text:`${t.name}: ${fuelRate.toFixed(2)} L/km, filo ortalaması ${avgTruckFuelRate.toFixed(2)} L/km.`});
+      }
     });
+
+    const fleetExcTonPerHour = excItems.length ? excItems.reduce((s,x)=>s + (x.tonPerHour || 0), 0) / excItems.length : 0;
     const fleetExcEff = excItems.length ? excItems.reduce((s,x)=>s + (x.efficiency || 0), 0) / excItems.length : 0;
+    const excFuelItems = fuelConsumptionItems.filter(item=>item.type === 'excavator' && item.shift?.validCount && Number.isFinite(Number(item.shift?.rate)));
+    const avgExcFuelRate = excFuelItems.length ? excFuelItems.reduce((s,item)=>s + Number(item.shift.rate || 0), 0) / excFuelItems.length : 0;
     excItems.forEach(e=>{
-      if(fleetExcEff > 0 && (e.efficiency || 0) < fleetExcEff * alertRules.lowExcEfficiencyRatio) alerts.push({level:'orange', title:'Düşük ekskavatör verimi', text:`${e.name}: ${e.efficiency.toFixed(2)} sefer/saat.`});
+      const fuelItem = fuelConsumptionByEquipmentId.get(String(e.id || ''));
+      const fuelRate = Number(fuelItem?.shift?.rate);
+      if((e.tripCount || 0) > 0 && (e.tonnage || 0) <= 0) alerts.push({level:'red', title:'Ekskavatör tonajı hesaplanamadı', text:`${e.name}: bağlı sefer var ama tonaj 0. Kamyon model tonajı, paket faktörü veya linked_excavator_id kontrol edilmeli.`});
+      if(fleetExcEff > 0 && (e.efficiency || 0) < fleetExcEff * alertRules.lowExcEfficiencyRatio) alerts.push({level:'orange', title:'Düşük ekskavatör sefer verimi', text:`${e.name}: ${e.efficiency.toFixed(2)} sefer/saat.`});
+      if(fleetExcTonPerHour > 0 && (e.tonPerHour || 0) < fleetExcTonPerHour * alertRules.lowExcEfficiencyRatio) alerts.push({level:'orange', title:'Düşük ekskavatör ton/saat', text:`${e.name}: ${e.tonPerHour.toFixed(1)} ton/saat, ortalama ${fleetExcTonPerHour.toFixed(1)} ton/saat.`});
+      if(Number.isFinite(fuelRate) && fuelRate > 0){
+        if(fuelRate > alertRules.fuelConsumptionExcavatorMax) alerts.push({level:'red', title:'Ekskavatör yakıt tüketimi yüksek', text:`${e.name}: ${fuelRate.toFixed(2)} L/saat. Eşik: ${Number(alertRules.fuelConsumptionExcavatorMax || 0).toFixed(2)} L/saat.`});
+        else if(avgExcFuelRate > 0 && fuelRate > avgExcFuelRate * alertRules.fuelConsumptionHighRatio) alerts.push({level:'orange', title:'Ekskavatör tüketimi ortalamanın üstünde', text:`${e.name}: ${fuelRate.toFixed(2)} L/saat, ortalama ${avgExcFuelRate.toFixed(2)} L/saat.`});
+      }
     });
+
+    if(filteredTonnage > 0 && fuelPerTon > 0){
+      const highFuelPerTonLimit = 0.20;
+      if(fuelPerTon > highFuelPerTonLimit) alerts.push({level:'orange', title:'Ton başına yakıt yüksek', text:`Seçilen aralıkta ${fuelPerTon.toFixed(3)} L/ton. Verilen yakıt, sayaç ve tonaj dağılımı kontrol edilmeli.`});
+    }
     const maxTruckTrips = Math.max(1, ...truckItems.map(x=>Number(x.tripCount || 0) || 0));
     const maxTruckTonnage = Math.max(1, ...truckItems.map(x=>Number(x.tonnage || 0) || 0));
     const maxExcTrips = Math.max(1, ...excItems.map(x=>Number(x.tripCount || 0) || 0));
