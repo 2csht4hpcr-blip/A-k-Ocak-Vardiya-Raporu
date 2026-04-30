@@ -5441,7 +5441,8 @@
         end_meter_type: isTruck ? 'km' : 'saat',
         end_meter_value: num(document.getElementById('m_end_meter').value)
       };
-      let { error } = await state.sb.from(TABLES.PRODUCTIONS).update(payload).eq('id', prod.id);
+      let updateRes = await updateWithOptionalColumns(TABLES.PRODUCTIONS, payload, ['end_at','end_time','end_meter_type','end_meter_value','updated_at'], prod.id);
+      let { error } = updateRes;
       if(error) throw error;
       if(isTruck){
         const enteredTrips = num(document.getElementById('m_trip_count').value);
@@ -5491,11 +5492,11 @@
       const start_meter_value = num(document.getElementById('m_break_meter_value').value);
       const openProd = currentOpenProductionForEquipment(equipment_id);
       if(openProd){
-        const prodRes = await state.sb.from(TABLES.PRODUCTIONS).update({
+        const prodRes = await updateWithOptionalColumns(TABLES.PRODUCTIONS, {
           end_at: nowIso(),
           end_meter_type: start_meter_type,
           end_meter_value: start_meter_value
-        }).eq('id', openProd.id);
+        }, ['end_at','end_time','end_meter_type','end_meter_value','updated_at'], openProd.id);
         if(prodRes.error) throw prodRes.error;
       }
       const payload = {
