@@ -5108,7 +5108,10 @@
       const table = data.table;
       const eqOptions = state.equipments.filter(e=>!e.deleted_at).map(e=>`<option value="${escapeHtml(e.id)}" ${String(e.id)===String(row.equipment_id) ? 'selected' : ''}>${escapeHtml(e.name)} (${escapeHtml(e.type || '-')})</option>`).join('');
       const packOptions = state.packages.filter(p=>!p.deleted_at).map(p=>`<option value="${escapeHtml(p.id)}" ${String(p.id)===String(row.package_id) ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('');
-      const excavatorOptions = state.equipments.filter(e=>!e.deleted_at && isLoadingEquipment(e)).map(e=>`<option value="${escapeHtml(e.id)}" ${String(e.id)===String(getProductionLoaderId(row)) ? 'selected' : ''}>${escapeHtml(e.name)}${isLoaderEquipment(e)&&!isExcavatorEquipment(e)?' (Loder)':' (Ekskavatör)'}</option>`).join('');
+      const currentLoaderNameForEdit = String(getProductionLoaderName(row) || row.loader_name || row.loader_name_snapshot || row.linked_excavator_name || row.linked_excavator_name_snapshot || '').trim();
+      const loaderByNameForEdit = currentLoaderNameForEdit ? state.equipments.find(e=>!e.deleted_at && isLoadingEquipment(e) && String(e.name || '').trim().toLocaleLowerCase('tr-TR') === currentLoaderNameForEdit.toLocaleLowerCase('tr-TR')) : null;
+      const selectedLoaderIdForEdit = String(getProductionLoaderId(row) || loaderByNameForEdit?.id || '');
+      const excavatorOptions = state.equipments.filter(e=>!e.deleted_at && isLoadingEquipment(e)).map(e=>`<option value="${escapeHtml(e.id)}" ${String(e.id)===selectedLoaderIdForEdit ? 'selected' : ''}>${escapeHtml(e.name)}${isLoaderEquipment(e)&&!isExcavatorEquipment(e)?' (Loder)':' (Ekskavatör)'}</option>`).join('');
       if(resolveDbTableName(table) === TABLES.PRODUCTIONS){
         const startAt = toDatetimeLocalValue(row.start_at || row.start_time || row.created_at);
         const endAt = toDatetimeLocalValue(row.end_at || row.end_time || '');
@@ -5868,9 +5871,11 @@
           from_location: document.getElementById('m_edit_from_location').value.trim(),
           to_location: document.getElementById('m_edit_to_location').value.trim(),
           linked_excavator_id: isExcavatorEquipment(linkedEq) ? linked_excavator_id : null,
+          linked_excavator_name: isExcavatorEquipment(linkedEq) ? (linkedEq?.name || null) : null,
           linked_excavator_name_snapshot: isExcavatorEquipment(linkedEq) ? (linkedEq?.name || null) : null,
           loader_type: isTruck ? loadingEquipmentKind(linkedEq) : null,
           loader_id: isTruck ? (linked_excavator_id || null) : null,
+          loader_name: isTruck ? (linkedEq?.name || null) : null,
           loader_name_snapshot: isTruck ? (linkedEq?.name || null) : null,
           shift_name: shiftNameValue,
           shift_date: shiftDateValue,
@@ -5914,7 +5919,12 @@
           production_id: document.getElementById('m_edit_production_id')?.value || null,
           shift_name: document.getElementById('m_edit_shift_name')?.value || null,
           shift_date: document.getElementById('m_edit_shift_date')?.value || null,
-          linked_excavator_id,
+          linked_excavator_id: isExcavatorEquipment(linkedEq) ? linked_excavator_id : null,
+          linked_excavator_name: isExcavatorEquipment(linkedEq) ? (linkedEq?.name || null) : null,
+          loader_type: linked_excavator_id ? loadingEquipmentKind(linkedEq) : null,
+          loader_id: linked_excavator_id || null,
+          loader_name: linkedEq?.name || null,
+          loader_name_snapshot: linkedEq?.name || null,
           trip_count: num(document.getElementById('m_edit_trip_count').value),
           from_location: document.getElementById('m_edit_from_location').value.trim(),
           to_location: document.getElementById('m_edit_to_location').value.trim(),
@@ -5993,12 +6003,14 @@
         delete payload.material_type;
       }
       const updateRes = table === 'truck_trips'
-        ? await updateWithOptionalColumns(table, payload, ['production_id','shift_name','material_type','shift_date','recorded_at'], row.id)
+        ? await updateWithOptionalColumns(table, payload, ['production_id','shift_name','material_type','shift_date','recorded_at','loader_type','loader_id','loader_name','loader_name_snapshot','linked_excavator_id','linked_excavator_name'], row.id)
         : table === 'fuel_logs'
           ? await updateWithOptionalColumns(table, payload, ['production_id','shift_name','shift_date','source','recorded_at'], row.id)
           : table === 'meter_logs'
             ? await updateWithOptionalColumns(table, payload, ['production_id','shift_name','shift_date','recorded_at','start_meter_value','end_meter_value'], row.id)
-            : await state.sb.from(resolveDbTableName(table)).update(payload).eq('id', row.id);
+            : resolveDbTableName(table) === TABLES.PRODUCTIONS
+              ? await updateWithOptionalColumns(table, payload, ['equipment_name_snapshot','package_name_snapshot','linked_excavator_id','linked_excavator_name','linked_excavator_name_snapshot','loader_type','loader_id','loader_name','loader_name_snapshot','shift_name','shift_date','production_mode','work_mode','trip_count','start_meter_value','end_meter_value'], row.id)
+              : await state.sb.from(resolveDbTableName(table)).update(payload).eq('id', row.id);
       if(updateRes.error) throw updateRes.error;
       if(table === 'truck_trips' && row.production_id){
         const relatedProd = state.productions.find(p=>String(p.id) === String(row.production_id));
@@ -6022,6 +6034,10 @@
           to_location: payload.to_location,
           linked_excavator_id: payload.linked_excavator_id,
           linked_excavator_name: payload.linked_excavator_name_snapshot,
+          loader_type: payload.loader_type,
+          loader_id: payload.loader_id,
+          loader_name: payload.loader_name || payload.loader_name_snapshot,
+          loader_name_snapshot: payload.loader_name_snapshot,
           shift_name: payload.shift_name,
           shift_date: payload.shift_date
         };
@@ -6032,7 +6048,7 @@
           shift_date: payload.shift_date,
           logistics_shift_date: payload.shift_date
         };
-        const tripLinkRes = await updateWhereWithOptionalColumns(TABLES.TRUCK_TRIPS, relatedTripPayload, ['production_id','package_name','linked_excavator_id','linked_excavator_name','shift_name','shift_date'], 'production_id', row.id);
+        const tripLinkRes = await updateWhereWithOptionalColumns(TABLES.TRUCK_TRIPS, relatedTripPayload, ['production_id','package_name','linked_excavator_id','linked_excavator_name','loader_type','loader_id','loader_name','loader_name_snapshot','shift_name','shift_date'], 'production_id', row.id);
         if(tripLinkRes.error) throw tripLinkRes.error;
         const fuelLinkRes = await updateWhereWithOptionalColumns(TABLES.FUEL_LOGS, relatedFuelMeterPayload, ['production_id','shift_name','shift_date','logistics_shift_date'], 'production_id', row.id);
         if(fuelLinkRes.error) throw fuelLinkRes.error;
