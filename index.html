@@ -3451,7 +3451,18 @@
   function isLoaderEquipment(eq){ return /loder|loader|yükleyici|yukleyici/i.test(String(eq?.type || '') + ' ' + String(eq?.name || '')); }
   function isLoadingEquipment(eq){ return isExcavatorEquipment(eq) || isLoaderEquipment(eq); }
   function loadingEquipmentKind(eq){ return isLoaderEquipment(eq) && !isExcavatorEquipment(eq) ? 'loader' : 'excavator'; }
-  function productionWorkMode(row){ return String(row?.production_mode || row?.work_mode || 'loading'); }
+  function productionWorkMode(row){
+    const explicit = String(row?.production_mode || row?.work_mode || '').toLowerCase().trim();
+    if(explicit) return explicit;
+    const eq = findEquipmentById(row?.equipment_id);
+    const isLoderOnly = isLoaderEquipment(eq) && !isExcavatorEquipment(eq);
+    if(isLoderOnly){
+      const hasPackage = !!String(row?.package_id || row?.package_name || row?.package_name_snapshot || '').trim();
+      const hasTo = !!String(row?.to_location || '').trim();
+      if(!hasPackage && !hasTo) return 'helper';
+    }
+    return 'loading';
+  }
   function isHelperWorkProduction(row){ return productionWorkMode(row) === 'helper'; }
   function isLoadingWorkProduction(row){ return !isHelperWorkProduction(row); }
   function isLoaderAnalysisProduction(row){ return isLoadingEquipment(findEquipmentById(row?.equipment_id)) && isLoadingWorkProduction(row); }
@@ -4080,13 +4091,23 @@
     }
     state.equipments = (results[TABLES.EQUIPMENTS]?.data || []).map(e=>({ ...e, truck_model_id: e.truck_model_id || (state.equipmentModelMap || {})[String(e.id)] || '' }));
     state.packages = (results[TABLES.PACKAGES]?.data || []).map(p=>({ ...p, tonnage_factor: Number.isFinite(Number(p.tonnage_factor)) ? Number(p.tonnage_factor) : Number((state.packageTonnageFactors || {})[String(p.id)] || 1) }));
-    state.productions = (results[TABLES.PRODUCTIONS]?.data || []).map(r=>({
-      ...r,
-      equipment_name: r.equipment_name || r.equipment_name_snapshot || (findEquipmentById(r.equipment_id)?.name || ''),
-      package_name: r.package_name || r.package_name_snapshot || packageName(r.package_id) || '',
-      linked_excavator_name: r.linked_excavator_name || r.linked_excavator_name_snapshot || (findEquipmentById(r.linked_excavator_id)?.name || ''),
-      material_type: r.material_type || packageMaterialTypeById(r.package_id) || ''
-    }));
+    state.productions = (results[TABLES.PRODUCTIONS]?.data || []).map(r=>{
+      const loaderId = r.loader_id || r.linked_excavator_id || '';
+      const loaderEq = findEquipmentById(loaderId);
+      return {
+        ...r,
+        equipment_name: r.equipment_name || r.equipment_name_snapshot || (findEquipmentById(r.equipment_id)?.name || ''),
+        package_name: r.package_name || r.package_name_snapshot || packageName(r.package_id) || '',
+        linked_excavator_name: r.linked_excavator_name || r.linked_excavator_name_snapshot || (findEquipmentById(r.linked_excavator_id)?.name || ''),
+        loader_id: loaderId,
+        loader_name: r.loader_name || r.loader_name_snapshot || r.linked_excavator_name || r.linked_excavator_name_snapshot || (loaderEq?.name || ''),
+        loader_name_snapshot: r.loader_name_snapshot || r.loader_name || r.linked_excavator_name || r.linked_excavator_name_snapshot || (loaderEq?.name || ''),
+        loader_type: r.loader_type || (loaderId ? loadingEquipmentKind(loaderEq) : ''),
+        production_mode: r.production_mode || r.work_mode || '',
+        work_mode: r.work_mode || r.production_mode || '',
+        material_type: r.material_type || packageMaterialTypeById(r.package_id) || ''
+      };
+    });
     state.breakdowns = (results[TABLES.BREAKDOWNS]?.data || []).map(r=>({ ...r, equipment_name: r.equipment_name || r.equipment_name_snapshot || (findEquipmentById(r.equipment_id)?.name || '') }));
     state.rentals = (results[TABLES.RENTALS]?.data || []).map(r=>({ ...r, equipment_name: r.equipment_name || r.equipment_name_snapshot || (findEquipmentById(r.equipment_id)?.name || ''), location: r.location || r.from_location || '' }));
     state.fuel_logs = (results[TABLES.FUEL_LOGS]?.data || []).map(r=>({
@@ -6160,7 +6181,7 @@
     const groupedHelpers = {};
     activeHelpers.forEach(r=>{
       const eq = findEquipmentById(r.equipment_id);
-      const rawName = eq?.type || '';
+      const rawName = (isLoaderEquipment(eq) && !isExcavatorEquipment(eq) && isHelperWorkProduction(r)) ? 'Loder / Yardımcı İşler' : (eq?.type || '');
       const key = normalizeGroupName(rawName) || 'YARDIMCI MAKİNALAR';
       if(!groupedHelpers[key]) groupedHelpers[key] = { label: key, rows: [] };
       groupedHelpers[key].rows.push(r);
