@@ -6425,7 +6425,11 @@
     }));
     const closedProductions = productions.filter(r=>!!r.end_at);
 
-    const trips = finalRows.filter(r=>Number(r.total_trips || 0) > 0).map(r=>({
+    // Dashboard Pro final view içinde ekskavatör satırında da bağlı kamyon seferleri gösterilir.
+    // Paket analizi ve toplam sefer/tonaj yalnızca gerçek kamyon seferlerinden hesaplanır;
+    // aksi halde aynı sefer hem kamyon paketinde hem ekskavatör paketinde tekrar sayılır.
+    const tripFinalRows = finalRows.filter(r=>dashboardProItemTypeKeyFromText(r.equipment_type) === 'truck' && Number(r.total_trips || 0) > 0);
+    const trips = tripFinalRows.map(r=>({
       id:`dash_trip_${r.production_id || r.id}`,
       production_id:r.production_id || r.id,
       equipment_id:r.equipment_id,
@@ -6438,6 +6442,8 @@
       from_location:r.from_location,
       to_location:r.to_location,
       created_at:r.created_at,
+      linked_excavator_id:r.linked_excavator_id || '',
+      linked_excavator_name:r.linked_excavator_name || '',
       _dashboard_tonnage:Number(r.total_tonnage || 0) || 0
     }));
     const fuels = finalRows.filter(r=>Number(r.total_given_fuel || 0) > 0).map(r=>({
@@ -6494,8 +6500,8 @@
     const truckAnalysis = mappedItems.filter(x=>x.type === 'truck');
     const excavatorAnalysis = mappedItems.filter(x=>x.type === 'excavator');
 
-    const totalTripCount = finalRows.reduce((s,r)=>s + (Number(r.total_trips || 0) || 0), 0);
-    const totalTonnage = finalRows.reduce((s,r)=>s + (Number(r.total_tonnage || 0) || 0), 0);
+    const totalTripCount = tripFinalRows.reduce((s,r)=>s + (Number(r.total_trips || 0) || 0), 0);
+    const totalTonnage = tripFinalRows.reduce((s,r)=>s + (Number(r.total_tonnage || 0) || 0), 0);
     const totalFuelLiters = finalRows.reduce((s,r)=>s + (Number(r.total_given_fuel || 0) || 0), 0);
     const totalWorkHours = closedProductions.reduce((sum,row)=>sum + productionDurationHours(row), 0);
     const totalKm = truckAnalysis.reduce((sum,item)=>sum + (Number(item.meterDiff || 0) || 0), 0);
