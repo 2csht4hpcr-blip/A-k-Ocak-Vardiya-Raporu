@@ -4246,6 +4246,11 @@
     const msg = String(err?.message || err || '').toLowerCase();
     return Array.isArray(cols) && cols.some(c=>msg.includes(String(c).toLowerCase()));
   }
+  function missingOptionalColumnFromError(err, cols){
+    const msg = String(err?.message || err || '').toLowerCase();
+    if(!Array.isArray(cols)) return '';
+    return cols.find(c=>msg.includes(String(c).toLowerCase())) || '';
+  }
   function normalizePayloadForTable(table, payload){
     const dbTable = resolveDbTableName(table);
     const p = { ...(payload || {}) };
@@ -4309,9 +4314,17 @@
     let res = await tryInsert(payload);
     if(!res.error) return res;
     if(optionalColumnError(res.error, optionalCols)){
-      const cloned = {...payload};
-      (optionalCols || []).forEach(k=>delete cloned[k]);
-      res = await tryInsert(cloned);
+      let cloned = {...payload};
+      const cols = Array.isArray(optionalCols) ? [...optionalCols] : [];
+      for(let i=0;i<cols.length && res.error;i++){
+        const missing = missingOptionalColumnFromError(res.error, cols) || cols[i];
+        delete cloned[missing];
+        res = await tryInsert(cloned);
+        if(!res.error) return res;
+      }
+      const stripped = {...payload};
+      (optionalCols || []).forEach(k=>delete stripped[k]);
+      res = await tryInsert(stripped);
       if(!res.error) return res;
     }
     const fallback = {...payload};
@@ -4324,9 +4337,14 @@
     let res = await state.sb.from(resolveDbTableName(table)).update(payload).eq('id', id);
     if(!res.error) return res;
     if(optionalColumnError(res.error, optionalCols)){
-      const cloned = {...payload};
-      (optionalCols || []).forEach(k=>delete cloned[k]);
-      res = await state.sb.from(resolveDbTableName(table)).update(cloned).eq('id', id);
+      let cloned = {...payload};
+      const cols = Array.isArray(optionalCols) ? [...optionalCols] : [];
+      for(let i=0;i<cols.length && res.error;i++){
+        const missing = missingOptionalColumnFromError(res.error, cols) || cols[i];
+        delete cloned[missing];
+        res = await state.sb.from(resolveDbTableName(table)).update(cloned).eq('id', id);
+        if(!res.error) return res;
+      }
     }
     return res;
   }
@@ -4335,9 +4353,14 @@
     let res = await state.sb.from(resolveDbTableName(table)).update(payload).eq(filterCol, filterVal);
     if(!res.error) return res;
     if(optionalColumnError(res.error, optionalCols)){
-      const cloned = {...payload};
-      (optionalCols || []).forEach(k=>delete cloned[k]);
-      res = await state.sb.from(resolveDbTableName(table)).update(cloned).eq(filterCol, filterVal);
+      let cloned = {...payload};
+      const cols = Array.isArray(optionalCols) ? [...optionalCols] : [];
+      for(let i=0;i<cols.length && res.error;i++){
+        const missing = missingOptionalColumnFromError(res.error, cols) || cols[i];
+        delete cloned[missing];
+        res = await state.sb.from(resolveDbTableName(table)).update(cloned).eq(filterCol, filterVal);
+        if(!res.error) return res;
+      }
     }
     return res;
   }
@@ -5305,13 +5328,17 @@
         to_location: isHelperMode ? '' : document.getElementById('m_to_location').value.trim(),
         production_mode: selectedMode,
         work_mode: selectedMode,
+        loader_type: isHelperMode ? null : loadingEquipmentKind(eq),
+        loader_id: isHelperMode ? null : equipment_id,
+        loader_name: isHelperMode ? null : (eq?.name || ''),
+        loader_name_snapshot: isHelperMode ? null : (eq?.name || ''),
         start_at: nowIso(),
         shift_name: resolveShiftNameForDateTime(nowIso()) || 'Tanımsız',
         shift_date: todayStr(),
         start_meter_type: 'saat',
         start_meter_value: document.getElementById('m_start_meter').value === '' ? (preferredStartMeterForProduction(equipment_id, nowIso()).value ?? 0) : num(document.getElementById('m_start_meter').value)
       };
-      const { error } = await insertWithOptionalColumns(TABLES.PRODUCTIONS, payload, ['equipment_name_snapshot','package_name_snapshot','linked_excavator_name_snapshot','loader_type','loader_id','loader_name_snapshot','production_mode','work_mode','shift_name','shift_date','start_meter_type','start_meter_value']);
+      const { error } = await insertWithOptionalColumns(TABLES.PRODUCTIONS, payload, ['equipment_name_snapshot','package_name_snapshot','linked_excavator_name','linked_excavator_name_snapshot','loader_type','loader_id','loader_name','loader_name_snapshot','production_mode','work_mode','shift_name','shift_date','start_meter_type','start_meter_value']);
       if(error) throw error;
       closeModal();
       await refreshData();
@@ -5346,14 +5373,16 @@
         start_meter_type: 'km',
         start_meter_value: document.getElementById('m_start_meter').value === '' ? (preferredStartMeterForProduction(equipment_id, nowIso()).value ?? 0) : num(document.getElementById('m_start_meter').value),
         linked_excavator_id: isExcavatorEquipment(linkedEq) ? (linkedProd?.equipment_id || null) : null,
-        linked_excavator_name_snapshot: isExcavatorEquipment(linkedEq) ? (linkedProd?.equipment_name || null) : null,
+        linked_excavator_name: isExcavatorEquipment(linkedEq) ? (linkedProd?.equipment_name || linkedEq?.name || null) : null,
+        linked_excavator_name_snapshot: isExcavatorEquipment(linkedEq) ? (linkedProd?.equipment_name || linkedEq?.name || null) : null,
         loader_type: loadingEquipmentKind(linkedEq),
         loader_id: linkedProd?.equipment_id || null,
-        loader_name_snapshot: linkedProd?.equipment_name || null,
+        loader_name: linkedProd?.equipment_name || linkedEq?.name || null,
+        loader_name_snapshot: linkedProd?.equipment_name || linkedEq?.name || null,
         production_mode: 'loading',
         work_mode: 'loading',
       };
-      const { error } = await insertWithOptionalColumns(TABLES.PRODUCTIONS, payload, ['equipment_name_snapshot','package_name_snapshot','linked_excavator_name_snapshot','loader_type','loader_id','loader_name_snapshot','production_mode','work_mode','shift_name','shift_date','start_meter_type','start_meter_value']);
+      const { error } = await insertWithOptionalColumns(TABLES.PRODUCTIONS, payload, ['equipment_name_snapshot','package_name_snapshot','linked_excavator_name','linked_excavator_name_snapshot','loader_type','loader_id','loader_name','loader_name_snapshot','production_mode','work_mode','shift_name','shift_date','start_meter_type','start_meter_value']);
       if(error) throw error;
       closeModal();
       await refreshData();
