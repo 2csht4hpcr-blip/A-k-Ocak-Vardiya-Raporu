@@ -3452,8 +3452,12 @@
   function isLoadingEquipment(eq){ return isExcavatorEquipment(eq) || isLoaderEquipment(eq); }
   function loadingEquipmentKind(eq){ return isLoaderEquipment(eq) && !isExcavatorEquipment(eq) ? 'loader' : 'excavator'; }
   function productionWorkMode(row){
-    const explicit = String(row?.production_mode || row?.work_mode || '').toLowerCase().trim();
-    if(explicit) return explicit;
+    const explicitRaw = String(row?.production_mode || row?.work_mode || '').toLocaleLowerCase('tr-TR').trim();
+    if(explicitRaw){
+      if(explicitRaw.includes('helper') || explicitRaw.includes('support') || explicitRaw.includes('yardım') || explicitRaw.includes('yardim')) return 'helper';
+      if(explicitRaw.includes('load') || explicitRaw.includes('yük') || explicitRaw.includes('yuk')) return 'loading';
+      return explicitRaw;
+    }
     const eq = findEquipmentById(row?.equipment_id);
     const isLoderOnly = isLoaderEquipment(eq) && !isExcavatorEquipment(eq);
     if(isLoderOnly){
@@ -6144,6 +6148,57 @@
     }catch(err){ alert(err.message || err); }
   }
 
+  function normDashLinkValue(v){ return String(v || '').toLocaleLowerCase('tr-TR').trim(); }
+  function dashRowStartMs(row){
+    const t = new Date(row?.start_at || row?.start_time || row?.created_at || 0).getTime();
+    return Number.isFinite(t) ? t : 0;
+  }
+  function dashboardTruckLoaderRow(truckRow, loaderRows){
+    const directId = String(getProductionLoaderId(truckRow) || '').trim();
+    if(directId){
+      const direct = (loaderRows || []).find(l=>String(l.equipment_id || '') === directId);
+      if(direct) return direct;
+    }
+    const truckPackageId = String(truckRow?.package_id || '').trim();
+    const truckPackageName = normDashLinkValue(truckRow?.package_name || truckRow?.package_name_snapshot || '');
+    const truckFrom = normDashLinkValue(truckRow?.from_location || '');
+    const truckTo = normDashLinkValue(truckRow?.to_location || '');
+    const truckShift = String(getRowShiftBucketKey(truckRow) || '');
+    const truckStart = dashRowStartMs(truckRow);
+    const candidates = (loaderRows || []).filter(l=>{
+      if(isHelperWorkProduction(l)) return false;
+      if(truckShift && String(getRowShiftBucketKey(l) || '') !== truckShift) return false;
+      const samePackage = truckPackageId
+        ? String(l.package_id || '') === truckPackageId
+        : (truckPackageName && normDashLinkValue(l.package_name || l.package_name_snapshot || '') === truckPackageName);
+      if(!samePackage) return false;
+      if(truckFrom && normDashLinkValue(l.from_location || '') !== truckFrom) return false;
+      if(truckTo && normDashLinkValue(l.to_location || '') !== truckTo) return false;
+      return true;
+    }).sort((a,b)=>{
+      const da = dashRowStartMs(a), db = dashRowStartMs(b);
+      const aBefore = da <= truckStart ? 0 : 1;
+      const bBefore = db <= truckStart ? 0 : 1;
+      if(aBefore !== bBefore) return aBefore - bBefore;
+      return Math.abs(truckStart - da) - Math.abs(truckStart - db);
+    });
+    return candidates[0] || null;
+  }
+  function dashboardTruckLoaderName(truckRow, loaderRows){
+    const directName = String(getProductionLoaderName(truckRow) || '').trim();
+    if(directName && directName !== '-') return directName;
+    const loader = dashboardTruckLoaderRow(truckRow, loaderRows);
+    return loader ? (loader.equipment_name || loader.equipment_name_snapshot || findEquipmentById(loader.equipment_id)?.name || '-') : '-';
+  }
+  function dashboardLinkedTrucksForLoader(loaderRow, activeTrucks, activeLoaders){
+    return (activeTrucks || []).filter(t=>{
+      const directId = String(getProductionLoaderId(t) || '').trim();
+      if(directId && directId === String(loaderRow.equipment_id || '')) return true;
+      const resolved = dashboardTruckLoaderRow(t, activeLoaders || []);
+      return resolved && String(resolved.equipment_id || '') === String(loaderRow.equipment_id || '');
+    });
+  }
+
   function renderDashboard(){
     const snapshot = getCurrentShiftSnapshot();
     const currentShift = snapshot.currentShift;
@@ -6198,7 +6253,7 @@
     });
 
     function linkedTruckChips(excRow){
-      const trucks = activeTrucks.filter(t => String(getProductionLoaderId(t) || t.linked_excavator_id || '') === String(excRow.equipment_id || ''));
+      const trucks = dashboardLinkedTrucksForLoader(excRow, activeTrucks, activeExc);
       return trucks.length ? `<div class="truck-chip-row">${trucks.map(t=>`<span class="truck-chip">${escapeHtml(t.equipment_name || '-')}</span>`).join('')}</div>` : '<span class="muted">Bağlı kamyon yok</span>';
     }
 
@@ -6309,7 +6364,7 @@
                   </div>
                   <div class="truck-link-wrap">
                     <div class="truck-link-title">Bağlı Yükleyici</div>
-                    <div class="truck-chip-row"><span class="truck-chip">${escapeHtml(getProductionLoaderName(r) || r.linked_excavator_name || '-')}</span></div>
+                    <div class="truck-chip-row"><span class="truck-chip">${escapeHtml(dashboardTruckLoaderName(r, activeExc))}</span></div>
                   </div>
                 </div>
               `).join('')}
@@ -8415,7 +8470,11 @@ function applyRecordFilters(rows){
     const groups = {};
 
     activeRows.forEach(r=>{
-      const key = equipmentTypeGroupName(findEquipmentById(r.equipment_id));
+      const eq = findEquipmentById(r.equipment_id);
+      let key = equipmentTypeGroupName(eq);
+      if(pageType === 'production' && isLoaderEquipment(eq) && !isExcavatorEquipment(eq) && isHelperWorkProduction(r)){
+        key = 'Yardımcı Makinalar';
+      }
       if(!groups[key]) groups[key] = [];
       groups[key].push(r);
     });
