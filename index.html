@@ -318,6 +318,11 @@
     @keyframes finalTaskDropPulse{0%{transform:scale(1);box-shadow:0 0 0 rgba(16,185,129,0)}40%{transform:scale(1.012);box-shadow:0 18px 34px rgba(16,185,129,.22)}100%{transform:scale(1);box-shadow:0 6px 16px rgba(15,23,42,.05)}}
     .record-quality-card,.unified-record-card{box-shadow:0 12px 26px rgba(15,23,42,.10), inset 0 1px 0 rgba(255,255,255,.88)!important;transition:transform .16s ease,box-shadow .16s ease}
     .record-quality-card:hover,.unified-record-card:hover{transform:translateY(-3px);box-shadow:0 18px 36px rgba(15,23,42,.16), inset 0 1px 0 rgba(255,255,255,.92)!important}
+
+    .pro-drill-card{border:1px solid #c7d2fe;border-radius:22px;padding:16px;background:linear-gradient(180deg,#ffffff 0%,#f5f3ff 100%);box-shadow:0 16px 32px rgba(79,70,229,.10), inset 0 1px 0 rgba(255,255,255,.9);transform:translateZ(0)}
+    .pro-drill-card:hover{box-shadow:0 22px 42px rgba(79,70,229,.16), inset 0 1px 0 rgba(255,255,255,.9);transform:translateY(-2px)}
+    .pro-quality-3d{box-shadow:0 18px 38px rgba(15,23,42,.13), inset 0 1px 0 rgba(255,255,255,.9);border:1px solid rgba(148,163,184,.45)}
+
   </style>
 </head>
 <body>
@@ -3318,6 +3323,358 @@
     }
   };
   Object.keys(I18N_FINAL_SWEEP).forEach(lang=>Object.assign(I18N[lang], I18N_FINAL_SWEEP[lang] || {}));
+
+
+
+  // v8 language complete sweep: remaining Turkish dynamic labels, warnings, placeholders and Dashboard Pro additions.
+  const I18N_ALL_TURKISH_SWEEP_V8 = {
+    en: {
+      " (Ekskavatör)":" (Excavator)", " (aktif üretimde)":" (in active production)", " zaman aşımı":" timeout", " • Tüm vardiyalar":" • All shifts",
+      "AKTİF":"ACTIVE", "EKSİK":"MISSING", "Aktif Ekipman Toplamı":"Total Active Equipment", "Aktif üretimler - açık olduğu için eksik sayılmaz":"Active productions - not counted as missing because they are open",
+      "Analize girmeyen lojistik kayıtları":"Logistics records not included in analysis", "Analize hazır":"Ready for analysis", "Arıza Kaydı":"Breakdown Record", "Açık Arıza":"Open Breakdown",
+      "Arıza yeni vardiya için yeni kayıt olarak devam ettirildi":"Breakdown continued as a new record for the new shift", "Bağlı ekskavatör verisi bulunan sefer kaydı yok.":"No trip record with linked excavator data.",
+      "Başlangıç sayaç yok":"No start meter", "Bitiş sayacı eksik":"End meter missing", "Bitiş sayaç yok":"No end meter",
+      "Bu delici zaten aktif üretimde":"This drill is already in active production", "Bu ekipman aktif vardiyada zaten arızalı görünüyor":"This equipment already appears as broken down in the active shift",
+      "Bu ekipman zaten aktif üretimde. Aynı ekipman için ikinci açık üretim kaydı açılamaz.":"This equipment is already in active production. A second open production record cannot be created for the same equipment.",
+      "Dashboard Pro PDF çıktı sırasında hata oluştu: ":"An error occurred while creating the Dashboard Pro PDF: ", "Dashboard Pro export sırasında hata oluştu: ":"An error occurred during Dashboard Pro export: ",
+      "Delici Metraj Düzenle":"Edit Drill Meterage", "Delici Metraj Girişi":"Drill Meterage Entry", "Delici Metraj Kayıtları":"Drill Meterage Records",
+      "Delici metraj 0’dan büyük olmalı":"Drill meterage must be greater than 0", "Delici metraj için bağlı üretim kaydı bulunmalı":"A linked production record is required for drill meterage", "Delici metraj kaydı üretim bağlantısıyla eklendi":"Drill meterage record added with production link", "Delici metraj kaydı üretim kaydına bağlı olmalı":"Drill meterage record must be linked to a production record",
+      "Delici seçiniz":"Select drill", "Delici yakıt/saat yüksek":"High drill fuel/hour", "Delici Üretim Başlat":"Start Drill Production", "Delici üretime alındı":"Drill started in production",
+      "Devam eden üretim var":"Ongoing production exists", "Düşük ekskavatör sefer verimi":"Low excavator trip efficiency", "Düşük ekskavatör ton/saat":"Low excavator ton/hour", "Ekipman Performansı":"Equipment Performance",
+      "Eksik kayıtlar - tamamlanacak işler":"Missing records - tasks to complete", "Ekskavatör Yakıtı (L)":"Excavator Fuel (L)", "Ekskavatör tonajı hesaplanamadı":"Excavator tonnage could not be calculated", "Ekskavatör tüketimi ortalamanın üstünde":"Excavator consumption is above average", "Ekskavatör yakıt tüketimi yüksek":"High excavator fuel consumption",
+      "Excel dosyası hazırlandı":"Excel file is ready", "Excel export sırasında hata oluştu: ":"An error occurred during Excel export: ", "Gündüz, Gece":"Day, Night", "Haftalık Operasyon Raporu":"Weekly Operation Report",
+      "Hatalı kayıtlar - kontrol edilmeli":"Incorrect records - must be checked", "Kamyon Verilen Yakıt (L)":"Truck Issued Fuel (L)", "Kamyon Yakıt Tüketimi (L/km)":"Truck Fuel Consumption (L/km)",
+      "Kamyon sefer kaydı bulunamadı.":"No truck trip record found.", "Kamyon tonajı hesaplanamadı":"Truck tonnage could not be calculated", "Kamyon tüketimi ortalamanın üstünde":"Truck consumption is above average", "Kamyon yakıt tüketimi yüksek":"High truck fuel consumption",
+      "Kamyon üretim kaydında yükleyici seçimi zorunludur":"Loader selection is required in truck production record", "Kamyon üretime alınırken ekskavatör veya loder yükleyici seçmek zorunludur":"An excavator or loader must be selected when starting truck production",
+      "Kayıt Kalite Kontrol Paneli":"Record Quality Control Panel", "Kayıt Sayısı":"Record Count", "Kayıt Tarihi":"Record Date", "Kayıtlar Genel Kalite Kontrol Paneli":"Records General Quality Control Panel", "Kayıtlar Özeti":"Records Summary",
+      "Kiralık Kaydı":"Rental Record", "Kritik uyarı görünmüyor. Günlük kayıtlar tutarlı görünüyor.":"No critical warning appears. Daily records look consistent.", "Kullanıcı kaydı güncellenemedi: ":"User record could not be updated: ", "Kullanıcı yetkileri güncellendi":"User permissions updated",
+      "Loder / Yardımcı İşler":"Loader / Auxiliary Jobs", "Loder yardımcı işler için üretime alındı":"Loader started for auxiliary jobs", "Loder yükleyici olarak üretime alındı":"Loader started as loader", "Lojistik Kayıt Kalite Kontrol Paneli":"Logistics Record Quality Control Panel",
+      "Negatif sayaç farkı":"Negative meter difference", "Nereden / Çalışma Alanı":"From / Work Area", "Rapor Türü":"Report Type", "Sayaç Baş.":"Meter Start", "Sayaç Bit.":"Meter End", "Sayaç Kayıtları":"Meter Records", "Sayaç Tipi":"Meter Type", "Sayaç farkı 0":"Meter difference is 0", "Sayaç kaydı yok":"No meter record",
+      "Sefer Kaydı":"Trip Record", "Sefer kaydı var fakat tonaj 0 görünüyor. Kamyon tonajı veya paket katsayılarını kontrol edin.":"Trip record exists but tonnage appears as 0. Check truck tonnage or package coefficients.", "Sefer kaydı yok":"No trip record",
+      "Seçilen ekipman delici değil":"Selected equipment is not a drill", "Seçilen yükleyici aktif üretimde bulunamadı":"Selected loader was not found in active production", "Tam kayıtlar":"Complete records",
+      "Ton Başına Yakılan Yakıt (L/ton)":"Fuel Burned per Ton (L/ton)", "Ton başına yakıt yüksek":"High fuel per ton", "Toplam Verilen Yakıt (L)":"Total Issued Fuel (L)", "Toplam Yakıt (L)":"Total Fuel (L)", "Toplam Yakıt Tüketimi (L)":"Total Fuel Consumption (L)", "Tüm bağlantılar tamam":"All links complete", "Tüm vardiyalar":"All shifts", "Vardiya seçiniz":"Select shift",
+      "Yakıt (L)":"Fuel (L)", "Yakıt 0 olamaz":"Fuel cannot be 0", "Yakıt Kaydı":"Fuel Record", "Yakıt kaydı olmayan ekipman":"Equipment without fuel record", "Yakıt kaydı var ancak sefer görünmüyor. Günlük kayıtları kontrol edin.":"Fuel record exists but no trip is visible. Check daily records.", "Yakıt kaydı yok":"No fuel record", "Yakıt/km yüksek":"High fuel/km", "Yakıt/saat yüksek":"High fuel/hour",
+      "Yükleyici":"Loader", "Yükleyici bağı yok":"No loader link", "Yükleyici Üretim Başlat":"Start Loader Production", "Yükleyiciler":"Loaders", "sayaç":"meter", "seçiniz":"select", "yakıt":"fuel", "yardım":"auxiliary", "yük":"load", "yükleyici":"loader",
+      "ÇALIŞMA ALANI BELİRTİLMEDİ":"WORK AREA NOT SPECIFIED", "Çalışma Alanı":"Work Area", "Önceki vardiyadan devam eden arıza":"Breakdown continuing from previous shift",
+      "Örn: 0.85":"Ex: 0.85", "Örn: 90":"Ex: 90", "Örn: Cep 3":"Ex: Pocket 3", "Örn: Cevher-1":"Ex: Ore-1", "Örn: EXC-12":"Ex: EXC-12", "Örn: Ekskavatör":"Ex: Excavator", "Örn: HD785":"Ex: HD785", "Örn: KARASAY":"Ex: KARASAY", "Örn: KARASAY 1205 kotu":"Ex: KARASAY 1205 elevation", "Örn: Kuzey Ocak":"Ex: North Pit", "Örn: Ocak 2":"Ex: Pit 2", "Örn: Patern D-24 / Delgi Grubu 1":"Ex: Pattern D-24 / Drill Group 1", "Örn: Stok 1":"Ex: Stock 1",
+      "Üretim ID":"Production ID", "Üretim Kaydı":"Production Record", "İstek":"Request", "İşlem fonksiyonu bulunamadı: ":"Action function not found: ", "✔ Sayaç":"✔ Meter", "✔ Yakıt":"✔ Fuel", "❌ Sayaç":"❌ Meter", "❌ Yakıt":"❌ Fuel"
+    },
+    ru: {
+      " (Ekskavatör)":" (Экскаватор)", " (aktif üretimde)":" (в активной работе)", " zaman aşımı":" тайм-аут", " • Tüm vardiyalar":" • Все смены",
+      "AKTİF":"АКТИВНО", "EKSİK":"ОТСУТСТВУЕТ", "Aktif Ekipman Toplamı":"Всего активной техники", "Aktif üretimler - açık olduğu için eksik sayılmaz":"Активные работы не считаются отсутствующими, потому что они открыты",
+      "Analize girmeyen lojistik kayıtları":"Логистические записи, не включенные в анализ", "Analize hazır":"Готово к анализу", "Arıza Kaydı":"Запись простоя", "Açık Arıza":"Открытый простой",
+      "Arıza yeni vardiya için yeni kayıt olarak devam ettirildi":"Простой продолжен новой записью для новой смены", "Bağlı ekskavatör verisi bulunan sefer kaydı yok.":"Нет записи рейса с данными привязанного экскаватора.",
+      "Başlangıç sayaç yok":"Нет начального счетчика", "Bitiş sayacı eksik":"Конечный счетчик отсутствует", "Bitiş sayaç yok":"Нет конечного счетчика",
+      "Bu delici zaten aktif üretimde":"Этот буровой станок уже в активной работе", "Bu ekipman aktif vardiyada zaten arızalı görünüyor":"Эта техника уже отмечена как неисправная в активной смене",
+      "Bu ekipman zaten aktif üretimde. Aynı ekipman için ikinci açık üretim kaydı açılamaz.":"Эта техника уже в активной работе. Нельзя открыть вторую активную запись производства для той же техники.",
+      "Dashboard Pro PDF çıktı sırasında hata oluştu: ":"Ошибка при создании PDF Dashboard Pro: ", "Dashboard Pro export sırasında hata oluştu: ":"Ошибка при экспорте Dashboard Pro: ",
+      "Delici Metraj Düzenle":"Изменить метраж бурения", "Delici Metraj Girişi":"Ввод метража бурения", "Delici Metraj Kayıtları":"Записи метража бурения",
+      "Delici metraj 0’dan büyük olmalı":"Метраж бурения должен быть больше 0", "Delici metraj için bağlı üretim kaydı bulunmalı":"Для метража бурения нужна привязанная запись производства", "Delici metraj kaydı üretim bağlantısıyla eklendi":"Запись метража бурения добавлена с привязкой к производству", "Delici metraj kaydı üretim kaydına bağlı olmalı":"Запись метража бурения должна быть привязана к производственной записи",
+      "Delici seçiniz":"Выберите буровой станок", "Delici yakıt/saat yüksek":"Высокий расход бурового станка л/час", "Delici Üretim Başlat":"Начать работу бурового станка", "Delici üretime alındı":"Буровой станок запущен в работу",
+      "Devam eden üretim var":"Есть продолжающаяся работа", "Düşük ekskavatör sefer verimi":"Низкая рейсовая эффективность экскаватора", "Düşük ekskavatör ton/saat":"Низкая производительность экскаватора т/час", "Ekipman Performansı":"Производительность техники",
+      "Eksik kayıtlar - tamamlanacak işler":"Отсутствующие записи — задачи к заполнению", "Ekskavatör Yakıtı (L)":"Топливо экскаватора (л)", "Ekskavatör tonajı hesaplanamadı":"Тоннаж экскаватора не рассчитан", "Ekskavatör tüketimi ortalamanın üstünde":"Расход экскаватора выше среднего", "Ekskavatör yakıt tüketimi yüksek":"Высокий расход топлива экскаватора",
+      "Excel dosyası hazırlandı":"Excel-файл готов", "Excel export sırasında hata oluştu: ":"Ошибка при экспорте Excel: ", "Gündüz, Gece":"День, Ночь", "Haftalık Operasyon Raporu":"Недельный операционный отчет",
+      "Hatalı kayıtlar - kontrol edilmeli":"Ошибочные записи — требуется проверка", "Kamyon Verilen Yakıt (L)":"Выданное топливо самосвала (л)", "Kamyon Yakıt Tüketimi (L/km)":"Расход топлива самосвала (л/км)",
+      "Kamyon sefer kaydı bulunamadı.":"Запись рейса самосвала не найдена.", "Kamyon tonajı hesaplanamadı":"Тоннаж самосвала не рассчитан", "Kamyon tüketimi ortalamanın üstünde":"Расход самосвала выше среднего", "Kamyon yakıt tüketimi yüksek":"Высокий расход топлива самосвала",
+      "Kamyon üretim kaydında yükleyici seçimi zorunludur":"В производственной записи самосвала обязателен выбор погрузчика", "Kamyon üretime alınırken ekskavatör veya loder yükleyici seçmek zorunludur":"При запуске самосвала обязательно выбрать экскаватор или погрузчик",
+      "Kayıt Kalite Kontrol Paneli":"Панель контроля качества записей", "Kayıt Sayısı":"Количество записей", "Kayıt Tarihi":"Дата записи", "Kayıtlar Genel Kalite Kontrol Paneli":"Общая панель контроля качества записей", "Kayıtlar Özeti":"Сводка записей",
+      "Kiralık Kaydı":"Запись аренды", "Kritik uyarı görünmüyor. Günlük kayıtlar tutarlı görünüyor.":"Критических предупреждений нет. Дневные записи выглядят согласованными.", "Kullanıcı kaydı güncellenemedi: ":"Не удалось обновить пользователя: ", "Kullanıcı yetkileri güncellendi":"Права пользователя обновлены",
+      "Loder / Yardımcı İşler":"Погрузчик / вспомогательные работы", "Loder yardımcı işler için üretime alındı":"Погрузчик запущен для вспомогательных работ", "Loder yükleyici olarak üretime alındı":"Погрузчик запущен как погрузчик", "Lojistik Kayıt Kalite Kontrol Paneli":"Панель контроля качества логистических записей",
+      "Negatif sayaç farkı":"Отрицательная разница счетчика", "Nereden / Çalışma Alanı":"Откуда / рабочая зона", "Rapor Türü":"Тип отчета", "Sayaç Baş.":"Нач. счетчик", "Sayaç Bit.":"Кон. счетчик", "Sayaç Kayıtları":"Записи счетчика", "Sayaç Tipi":"Тип счетчика", "Sayaç farkı 0":"Разница счетчика 0", "Sayaç kaydı yok":"Нет записи счетчика",
+      "Sefer Kaydı":"Запись рейса", "Sefer kaydı var fakat tonaj 0 görünüyor. Kamyon tonajı veya paket katsayılarını kontrol edin.":"Запись рейса есть, но тоннаж равен 0. Проверьте тоннаж самосвала или коэффициенты пакета.", "Sefer kaydı yok":"Нет записи рейса",
+      "Seçilen ekipman delici değil":"Выбранная техника не является буровым станком", "Seçilen yükleyici aktif üretimde bulunamadı":"Выбранный погрузчик не найден в активной работе", "Tam kayıtlar":"Полные записи",
+      "Ton Başına Yakılan Yakıt (L/ton)":"Топливо на тонну (л/т)", "Ton başına yakıt yüksek":"Высокий расход топлива на тонну", "Toplam Verilen Yakıt (L)":"Всего выдано топлива (л)", "Toplam Yakıt (L)":"Всего топлива (л)", "Toplam Yakıt Tüketimi (L)":"Общий расход топлива (л)", "Tüm bağlantılar tamam":"Все связи заполнены", "Tüm vardiyalar":"Все смены", "Vardiya seçiniz":"Выберите смену",
+      "Yakıt (L)":"Топливо (л)", "Yakıt 0 olamaz":"Топливо не может быть 0", "Yakıt Kaydı":"Запись топлива", "Yakıt kaydı olmayan ekipman":"Техника без записи топлива", "Yakıt kaydı var ancak sefer görünmüyor. Günlük kayıtları kontrol edin.":"Запись топлива есть, но рейс не виден. Проверьте дневные записи.", "Yakıt kaydı yok":"Нет записи топлива", "Yakıt/km yüksek":"Высокий расход топлива/км", "Yakıt/saat yüksek":"Высокий расход топлива/час",
+      "Yükleyici":"Погрузчик", "Yükleyici bağı yok":"Нет связи с погрузчиком", "Yükleyici Üretim Başlat":"Начать работу погрузчика", "Yükleyiciler":"Погрузчики", "sayaç":"счетчик", "seçiniz":"выберите", "yakıt":"топливо", "yardım":"помощь", "yük":"загрузка", "yükleyici":"погрузчик",
+      "ÇALIŞMA ALANI BELİRTİLMEDİ":"РАБОЧАЯ ЗОНА НЕ УКАЗАНА", "Çalışma Alanı":"Рабочая зона", "Önceki vardiyadan devam eden arıza":"Простой, продолжающийся с предыдущей смены",
+      "Örn: 0.85":"Напр.: 0.85", "Örn: 90":"Напр.: 90", "Örn: Cep 3":"Напр.: Карман 3", "Örn: Cevher-1":"Напр.: Руда-1", "Örn: EXC-12":"Напр.: EXC-12", "Örn: Ekskavatör":"Напр.: Экскаватор", "Örn: HD785":"Напр.: HD785", "Örn: KARASAY":"Напр.: KARASAY", "Örn: KARASAY 1205 kotu":"Напр.: KARASAY отм. 1205", "Örn: Kuzey Ocak":"Напр.: Северный карьер", "Örn: Ocak 2":"Напр.: Карьер 2", "Örn: Patern D-24 / Delgi Grubu 1":"Напр.: Паттерн D-24 / Буровая группа 1", "Örn: Stok 1":"Напр.: Склад 1",
+      "Üretim ID":"ID производства", "Üretim Kaydı":"Производственная запись", "İstek":"Запрос", "İşlem fonksiyonu bulunamadı: ":"Функция действия не найдена: ", "✔ Sayaç":"✔ Счетчик", "✔ Yakıt":"✔ Топливо", "❌ Sayaç":"❌ Счетчик", "❌ Yakıt":"❌ Топливо"
+    }
+  };
+  Object.keys(I18N_ALL_TURKISH_SWEEP_V8).forEach(lang=>Object.assign(I18N[lang], I18N_ALL_TURKISH_SWEEP_V8[lang] || {}));
+
+
+
+  // Dashboard / Dashboard Pro / Records final i18n audit supplement - 2026-05-06
+  const I18N_DASHBOARD_RECORDS_FINAL_20260506 = {
+    en: {
+      "Aktif Vardiya": "Active Shift",
+      "Vardiya tanımı yok": "No shift definition",
+      "Bu ekranda yalnızca aktif vardiyada açılmış kayıtlar gösterilir.": "Only records opened in the active shift are shown on this screen.",
+      "Aktif Yükleyici": "Active Loader",
+      "Aktif Yükleyiciler": "Active Loaders",
+      "Aktif Kamyon": "Active Truck",
+      "Aktif Kamyonlar": "Active Trucks",
+      "Aktif Yardımcı Makina": "Active Auxiliary Machine",
+      "Aktif Yardımcı Makinalar": "Active Auxiliary Machines",
+      "Aktif Delici": "Active Drill",
+      "Aktif Deliciler": "Active Drills",
+      "Aktif Arızalar": "Active Breakdowns",
+      "Aktif Kiralık": "Active Rental",
+      "Aktif Kiralıklar": "Active Rentals",
+      "Aktif vardiyada yükleyici girişi yok.": "No loader entry in the active shift.",
+      "Aktif vardiyada kamyon girişi yok.": "No truck entry in the active shift.",
+      "Aktif vardiyada yardımcı makina yok.": "No auxiliary machine in the active shift.",
+      "Aktif vardiyada kiralık makina yok.": "No rental machine in the active shift.",
+      "Aktif vardiyada arıza yok.": "No breakdown in the active shift.",
+      "Yükleme modundaki yükleyiciler dışındaki açık yardımcı işler": "Open auxiliary jobs excluding loaders in loading mode",
+      "Çalışma alanı ve delgi grubu bazlı takip": "Tracking by work area and drilling group",
+      "Ekskavatör:": "Excavator:",
+      "Yardımcı:": "Auxiliary:",
+      "Bağlı Kamyonlar": "Linked Trucks",
+      "Bağlı kamyon yok": "No linked truck",
+      "Sebep girilmemiş": "No reason entered",
+      "Çalışma": "Work",
+      "Geçmiş Vardiya Analizi": "Past Shift Analysis",
+      "Karar odaklı görünüm: vardiya üretimi, ekipman verimi, yakıt davranışı ve kritik uyarılar tek panelde.": "Decision-focused view: shift production, equipment efficiency, fuel behavior and critical alerts in one panel.",
+      "Başlangıç Tarihi": "Start Date",
+      "Bitiş Tarihi": "End Date",
+      "Tüm vardiyalar": "All shifts",
+      "Ekskavatör/Yükleyici": "Excavator/Loader",
+      "Sıralama": "Sorting",
+      "Sefer çoktan aza": "Trips high to low",
+      "Verim yüksekten düşüğe": "Efficiency high to low",
+      "Yakıt çoktan aza": "Fuel high to low",
+      "Saat/Km çoktan aza": "Hour/Km high to low",
+      "Ada göre": "By name",
+      "PDF Çıktı Al": "Export PDF",
+      "Toplam Verilen Yakıt": "Total Fuel Issued",
+      "Toplam Yakıt Tüketimi": "Total Fuel Consumption",
+      "Kamyon Yakıt Tüketimi": "Truck Fuel Consumption",
+      "Ton Başına Yakılan Yakıt": "Fuel Burned per Ton",
+      "Tüm Ekipman": "All Equipment",
+      "Akıllı Uyarılar": "Smart Alerts",
+      "Yükleyici Analizleri": "Loader Analyses",
+      "Yakıt Tüketimi": "Fuel Consumption",
+      "Yakıt sekmesindeki tam depo kabulüne göre hesaplanır: verilen litre / iki yakıt kaydı arasındaki sayaç farkı. Kamyonlarda": "Calculated by the full-tank assumption in the Fuel tab: issued liters / meter difference between two fuel records. For trucks",
+      "Seçilen filtre için yakıt tüketimi analizi yok.": "No fuel consumption analysis for the selected filter.",
+      "Birim:": "Unit:",
+      "Tam depo varsayımı": "Full-tank assumption",
+      "Vardiya tüketimi:": "Shift consumption:",
+      "Günlük ort.": "Daily avg.",
+      "Haftalık ort.": "Weekly avg.",
+      "Yakıt:": "Fuel:",
+      "Sayaç farkı:": "Meter difference:",
+      "Kayıt:": "Record:",
+      "Seçilen tarih/vardiya filtresi için tamamlanmış veri bulunamadı.": "No completed data was found for the selected date/shift filter.",
+      "Ekskavatör analizi yok.": "No excavator analysis.",
+      "Yakıt tüketimi analizi yok.": "No fuel consumption analysis.",
+      "Sayaç farkı bulunan yakıt kayıtlarından hesaplandı": "Calculated from fuel records with meter difference",
+      "Kamyon tüketimi:": "Truck consumption:",
+      "Seçilen filtre için kritik uyarı görünmüyor.": "No critical alert appears for the selected filter.",
+      "Çalışma Saati": "Working Hours",
+      "Verilen Yakıt": "Fuel Issued",
+      "Yakıt/Metre": "Fuel/Meter",
+      "Metraj katkısı": "Meterage contribution",
+      "Sefer yoğunluğu": "Trip density",
+      "Tonaj katkısı": "Tonnage contribution",
+      "Filtreye uygun yükleyici analizi yok.": "No loader analysis matching the filter.",
+      "Paket faktörü:": "Package factor:",
+      "Toplam tonaj katkısı": "Total tonnage contribution",
+      "Seçilen filtre için paket bazlı tonaj analizi yok.": "No package-based tonnage analysis for the selected filter.",
+      "Kayıtlar yükleniyor...": "Loading records...",
+      "Kayıtlar yüklenirken hata oluştu:": "An error occurred while loading records:",
+      "Tek Gün": "Single Day",
+      "Sayfa Başına": "Per Page",
+      "Varsayılan görünüm son 7 gün ile açılır.": "The default view opens with the last 7 days.",
+      "Toplam": "Total",
+      "kayıt": "record",
+      "Toplam kayıt": "Total records",
+      "Görünenleri Sil": "Delete Visible",
+      "Kayıt yok.": "No records.",
+      "Önceki": "Previous",
+      "Sonraki": "Next",
+      "Arızayı Bitir": "End Breakdown",
+      "Kayıtlar Genel Kalite Kontrol Paneli": "Records General Quality Control Panel",
+      "Kayıt Kalite Kontrol Paneli": "Record Quality Control Panel",
+      "Eksik kayıtlar - tamamlanacak işler": "Missing records - tasks to complete",
+      "Hatalı kayıtlar - kontrol edilmeli": "Invalid records - needs review",
+      "Tam kayıtlar": "Complete records",
+      "Analize hazır": "Ready for analysis",
+      "Kontrol gerekli": "Check required",
+      "Kontrolü Yenile": "Refresh Control",
+      "Aktif Üretim": "Active Production",
+      "Tam Kayıt": "Complete Record",
+      "Eksik Kayıt": "Missing Record",
+      "Hatalı Kayıt": "Invalid Record",
+      "Kayıt Kalitesi": "Record Quality",
+      "Final saha modu aktif: Yeni üretim sadece aktif vardiyada açılır; kapanmış vardiyalar için sadece eksik lojistik girişleri tamamlanır.": "Final field mode active: new production can only be opened in the active shift; only missing logistics entries are completed for closed shifts.",
+      "Üretim Merkezli Kayıt Kontrolü": "Production-Centered Record Control",
+      "Seçili filtrede üretim kaydı bulunamadı.": "No production record found in the selected filter.",
+      "Başlangıç / Bitiş": "Start / End",
+      "Her kart 1 üretim kaydıdır. Sayaç, yakıt, sefer ve delici metraj bağlantıları production_id üzerinden kontrol edilir.": "Each card is one production record. Meter, fuel, trip and drill meterage links are checked through production_id.",
+      "Hatalı:": "Invalid:",
+      "Performans için ilk 60 üretim kartı gösteriliyor. Filtreleri daraltarak daha net inceleyebilirsin.": "For performance, the first 60 production cards are shown. Narrow the filters for a clearer review.",
+      "Vardiya Sonu Eksik Giriş Merkezi": "End-of-Shift Missing Entry Center",
+      "Sayaç, sefer, yakıt ve delici metraj eksikleri production_id üzerinden kontrol edilir. Eksik girişler buradan tamamlanır": "Missing meter, trip, fuel and drill meterage entries are checked through production_id. Missing entries are completed here",
+      "Kontrol Paneli üzerinden tamamlanır.": "Completed through the Control Panel.",
+      "Mevcut": "Existing",
+      "düzenle": "edit",
+      "Üretimi incele": "Review Production",
+      "Performans için ilk": "First",
+      "kayıt gösteriliyor. Daha fazlası için Kayıtlar filtresini daraltın.": "records are shown for performance. Narrow the Records filter for more.",
+      "Üretim ID": "Production ID",
+      "✔ Sayaç": "✔ Meter",
+      "❌ Sayaç": "❌ Meter",
+      "✔ Yakıt": "✔ Fuel",
+      "❌ Yakıt": "❌ Fuel",
+      "✔ Sefer": "✔ Trip",
+      "❌ Sefer": "❌ Trip",
+      "✔ Metraj": "✔ Meterage",
+      "❌ Metraj": "❌ Meterage",
+      "Yükleyici": "Loader",
+      "Delici": "Drill",
+      "Kamyon": "Truck",
+      "Ekskavatör": "Excavator",
+      "Yardımcı Makina": "Auxiliary Machine",
+      "Kiralık": "Rental",
+      "Arıza": "Breakdown",
+      "Üretim": "Production",
+      "Sayaç": "Meter",
+      "Yakıt": "Fuel",
+      "Sefer": "Trip",
+      "Metraj": "Meterage"
+    },
+    ru: {
+      "Aktif Vardiya": "Активная смена",
+      "Vardiya tanımı yok": "Смена не задана",
+      "Bu ekranda yalnızca aktif vardiyada açılmış kayıtlar gösterilir.": "На этом экране показаны только записи, открытые в активной смене.",
+      "Aktif Yükleyici": "Активный погрузчик",
+      "Aktif Yükleyiciler": "Активные погрузчики",
+      "Aktif Kamyon": "Активный самосвал",
+      "Aktif Kamyonlar": "Активные самосвалы",
+      "Aktif Yardımcı Makina": "Активная вспомогательная техника",
+      "Aktif Yardımcı Makinalar": "Активная вспомогательная техника",
+      "Aktif Delici": "Активный буровой станок",
+      "Aktif Deliciler": "Активные буровые станки",
+      "Aktif Arızalar": "Активные простои",
+      "Aktif Kiralık": "Активная аренда",
+      "Aktif Kiralıklar": "Активная аренда",
+      "Aktif vardiyada yükleyici girişi yok.": "В активной смене нет записи погрузчика.",
+      "Aktif vardiyada kamyon girişi yok.": "В активной смене нет записи самосвала.",
+      "Aktif vardiyada yardımcı makina yok.": "В активной смене нет вспомогательной техники.",
+      "Aktif vardiyada kiralık makina yok.": "В активной смене нет арендованной техники.",
+      "Aktif vardiyada arıza yok.": "В активной смене нет простоя.",
+      "Yükleme modundaki yükleyiciler dışındaki açık yardımcı işler": "Открытые вспомогательные работы кроме погрузчиков в режиме погрузки",
+      "Çalışma alanı ve delgi grubu bazlı takip": "Учет по рабочей зоне и буровой группе",
+      "Ekskavatör:": "Экскаватор:",
+      "Yardımcı:": "Вспомогательная:",
+      "Bağlı Kamyonlar": "Связанные самосвалы",
+      "Bağlı kamyon yok": "Связанных самосвалов нет",
+      "Sebep girilmemiş": "Причина не указана",
+      "Çalışma": "Работа",
+      "Geçmiş Vardiya Analizi": "Анализ прошлой смены",
+      "Karar odaklı görünüm: vardiya üretimi, ekipman verimi, yakıt davranışı ve kritik uyarılar tek panelde.": "Панель для решений: производство смены, эффективность техники, поведение топлива и критические предупреждения.",
+      "Başlangıç Tarihi": "Дата начала",
+      "Bitiş Tarihi": "Дата окончания",
+      "Tüm vardiyalar": "Все смены",
+      "Ekskavatör/Yükleyici": "Экскаватор/погрузчик",
+      "Sıralama": "Сортировка",
+      "Sefer çoktan aza": "Рейсы: по убыванию",
+      "Verim yüksekten düşüğe": "Эффективность: по убыванию",
+      "Yakıt çoktan aza": "Топливо: по убыванию",
+      "Saat/Km çoktan aza": "Часы/км: по убыванию",
+      "Ada göre": "По имени",
+      "PDF Çıktı Al": "Экспорт PDF",
+      "Toplam Verilen Yakıt": "Всего выдано топлива",
+      "Toplam Yakıt Tüketimi": "Общий расход топлива",
+      "Kamyon Yakıt Tüketimi": "Расход топлива самосвала",
+      "Ton Başına Yakılan Yakıt": "Топливо на тонну",
+      "Tüm Ekipman": "Вся техника",
+      "Akıllı Uyarılar": "Умные предупреждения",
+      "Yükleyici Analizleri": "Анализ погрузчиков",
+      "Yakıt Tüketimi": "Расход топлива",
+      "Yakıt sekmesindeki tam depo kabulüne göre hesaplanır: verilen litre / iki yakıt kaydı arasındaki sayaç farkı. Kamyonlarda": "Рассчитывается по допущению полного бака во вкладке топлива: выданные литры / разница счетчика между двумя записями топлива. Для самосвалов",
+      "Seçilen filtre için yakıt tüketimi analizi yok.": "Нет анализа расхода топлива для выбранного фильтра.",
+      "Birim:": "Ед. изм.:",
+      "Tam depo varsayımı": "Допущение полного бака",
+      "Vardiya tüketimi:": "Расход за смену:",
+      "Günlük ort.": "Сред. за день",
+      "Haftalık ort.": "Сред. за неделю",
+      "Yakıt:": "Топливо:",
+      "Sayaç farkı:": "Разница счетчика:",
+      "Kayıt:": "Запись:",
+      "Seçilen tarih/vardiya filtresi için tamamlanmış veri bulunamadı.": "Для выбранного фильтра дата/смена завершенные данные не найдены.",
+      "Ekskavatör analizi yok.": "Нет анализа экскаватора.",
+      "Yakıt tüketimi analizi yok.": "Нет анализа расхода топлива.",
+      "Sayaç farkı bulunan yakıt kayıtlarından hesaplandı": "Рассчитано по записям топлива с разницей счетчика",
+      "Kamyon tüketimi:": "Расход самосвала:",
+      "Seçilen filtre için kritik uyarı görünmüyor.": "Для выбранного фильтра критических предупреждений нет.",
+      "Çalışma Saati": "Рабочие часы",
+      "Verilen Yakıt": "Выданное топливо",
+      "Yakıt/Metre": "Топливо/метр",
+      "Metraj katkısı": "Вклад метража",
+      "Sefer yoğunluğu": "Интенсивность рейсов",
+      "Tonaj katkısı": "Вклад тоннажа",
+      "Filtreye uygun yükleyici analizi yok.": "Нет анализа погрузчика для выбранного фильтра.",
+      "Paket faktörü:": "Коэффициент пакета:",
+      "Toplam tonaj katkısı": "Общий вклад тоннажа",
+      "Seçilen filtre için paket bazlı tonaj analizi yok.": "Нет анализа тоннажа по пакетам для выбранного фильтра.",
+      "Kayıtlar yükleniyor...": "Загрузка записей...",
+      "Kayıtlar yüklenirken hata oluştu:": "Ошибка при загрузке записей:",
+      "Tek Gün": "Один день",
+      "Sayfa Başına": "На страницу",
+      "Varsayılan görünüm son 7 gün ile açılır.": "По умолчанию открываются последние 7 дней.",
+      "Toplam": "Всего",
+      "kayıt": "запись",
+      "Toplam kayıt": "Всего записей",
+      "Görünenleri Sil": "Удалить видимые",
+      "Kayıt yok.": "Нет записей.",
+      "Önceki": "Предыдущая",
+      "Sonraki": "Следующая",
+      "Arızayı Bitir": "Завершить простой",
+      "Kayıtlar Genel Kalite Kontrol Paneli": "Общая панель контроля качества записей",
+      "Kayıt Kalite Kontrol Paneli": "Панель контроля качества записей",
+      "Eksik kayıtlar - tamamlanacak işler": "Отсутствующие записи — задачи к заполнению",
+      "Hatalı kayıtlar - kontrol edilmeli": "Ошибочные записи — требуется проверка",
+      "Tam kayıtlar": "Полные записи",
+      "Analize hazır": "Готово к анализу",
+      "Kontrol gerekli": "Нужна проверка",
+      "Kontrolü Yenile": "Обновить контроль",
+      "Aktif Üretim": "Активное производство",
+      "Tam Kayıt": "Полная запись",
+      "Eksik Kayıt": "Отсутствующая запись",
+      "Hatalı Kayıt": "Ошибочная запись",
+      "Kayıt Kalitesi": "Качество записей",
+      "Final saha modu aktif: Yeni üretim sadece aktif vardiyada açılır; kapanmış vardiyalar için sadece eksik lojistik girişleri tamamlanır.": "Финальный полевой режим активен: новое производство открывается только в активной смене; для закрытых смен заполняются только недостающие логистические записи.",
+      "Üretim Merkezli Kayıt Kontrolü": "Контроль записей на основе производства",
+      "Seçili filtrede üretim kaydı bulunamadı.": "В выбранном фильтре производственная запись не найдена.",
+      "Başlangıç / Bitiş": "Начало / окончание",
+      "Her kart 1 üretim kaydıdır. Sayaç, yakıt, sefer ve delici metraj bağlantıları production_id üzerinden kontrol edilir.": "Каждая карточка — одна производственная запись. Связи счетчика, топлива, рейсов и метража бурения проверяются через production_id.",
+      "Hatalı:": "Ошибочные:",
+      "Performans için ilk 60 üretim kartı gösteriliyor. Filtreleri daraltarak daha net inceleyebilirsin.": "Для производительности показаны первые 60 производственных карточек. Сузьте фильтры для более точной проверки.",
+      "Vardiya Sonu Eksik Giriş Merkezi": "Центр недостающих вводов в конце смены",
+      "Sayaç, sefer, yakıt ve delici metraj eksikleri production_id üzerinden kontrol edilir. Eksik girişler buradan tamamlanır": "Недостающие счетчик, рейсы, топливо и метраж бурения проверяются через production_id. Недостающие вводы заполняются здесь",
+      "Kontrol Paneli üzerinden tamamlanır.": "Заполняется через панель контроля.",
+      "Mevcut": "Существующая",
+      "düzenle": "изменить",
+      "Üretimi incele": "Проверить производство",
+      "Performans için ilk": "Для производительности первые",
+      "kayıt gösteriliyor. Daha fazlası için Kayıtlar filtresini daraltın.": "записей показано. Для большего количества сузьте фильтр записей.",
+      "Üretim ID": "ID производства",
+      "✔ Sayaç": "✔ Счетчик",
+      "❌ Sayaç": "❌ Счетчик",
+      "✔ Yakıt": "✔ Топливо",
+      "❌ Yakıt": "❌ Топливо",
+      "✔ Sefer": "✔ Рейс",
+      "❌ Sefer": "❌ Рейс",
+      "✔ Metraj": "✔ Метраж",
+      "❌ Metraj": "❌ Метраж",
+      "Yükleyici": "Погрузчик",
+      "Delici": "Буровой станок",
+      "Kamyon": "Самосвал",
+      "Ekskavatör": "Экскаватор",
+      "Yardımcı Makina": "Вспомогательная техника",
+      "Kiralık": "Аренда",
+      "Arıza": "Простой",
+      "Üretim": "Производство",
+      "Sayaç": "Счетчик",
+      "Yakıt": "Топливо",
+      "Sefer": "Рейс",
+      "Metraj": "Метраж"
+    }
+  };
+  Object.keys(I18N_DASHBOARD_RECORDS_FINAL_20260506).forEach(lang=>Object.assign(I18N[lang], I18N_DASHBOARD_RECORDS_FINAL_20260506[lang] || {}));
 
   function getNoTranslateTerms(){
     try{
@@ -7028,7 +7385,8 @@
   }
   function dashboardProItemTypeKeyFromText(typeText){
     const t = String(typeText || '').toLocaleLowerCase('tr-TR');
-    if(t.includes('kamyon')) return 'truck';
+    if(t.includes('kamyon') || t.includes('truck')) return 'truck';
+    if(t.includes('delgi') || t.includes('delici') || t.includes('drill')) return 'drill';
     if(t.includes('ekskavat') || t.includes('loder') || t.includes('loader') || t.includes('yükleyici') || t.includes('yukleyici')) return 'excavator';
     return 'other';
   }
@@ -7119,10 +7477,10 @@
     const itemMap = new Map();
     finalRows.forEach(r=>{
       const type = dashboardProItemTypeKeyForRow(r);
-      if(type !== 'truck' && type !== 'excavator') return;
+      if(type !== 'truck' && type !== 'excavator' && type !== 'drill') return;
       const id = String(r.equipment_id || '');
       if(!id) return;
-      if(!itemMap.has(id)) itemMap.set(id, { id, type, name:r.equipment_name || '-', zone:r.from_location || '-', route:[r.from_location||'',r.to_location||''].filter(Boolean).join(' → '), packageName:r.package_name || '-', linkedName:'-', linkedExcavatorId:'', tripCount:0, fuelLiters:0, tonnage:0, meterDiff:0, workHours:0, linkedTruckCount:0 });
+      if(!itemMap.has(id)) itemMap.set(id, { id, type, name:r.equipment_name || '-', zone:r.from_location || '-', route:[r.from_location||'',r.to_location||''].filter(Boolean).join(' → '), packageName:r.package_name || '-', linkedName:'-', linkedExcavatorId:'', tripCount:0, fuelLiters:0, tonnage:0, meterDiff:0, workHours:0, linkedTruckCount:0, drilledMeters:0 });
       const item = itemMap.get(id);
       if(type === 'truck'){
         item.tripCount += Number(r.total_trips || 0) || 0;
@@ -7131,6 +7489,7 @@
       item.fuelLiters += Number(r.total_given_fuel || 0) || 0;
       item.meterDiff += Number(r.meter_diff || 0) || 0;
       item.workHours += productionDurationHours(r) || 0;
+      if(type === 'drill') item.drilledMeters += Number(r.drilled_meter || r.total_drilled_meter || r.drill_meterage || 0) || 0;
       if(!item.route || item.route === '-') item.route = [r.from_location||'',r.to_location||''].filter(Boolean).join(' → ');
       if(!item.packageName || item.packageName === '-') item.packageName = r.package_name || '-';
     });
@@ -7158,6 +7517,33 @@
       if(item) item.linkedTruckCount = set.size;
     });
 
+
+    const allowedBucketKeys = new Set(selectedBuckets.map(b=>String(b.shift_key || '')).filter(Boolean));
+    const drillLogsForRange = (state.drill_meterage_logs || []).filter(row=>{
+      if(row?.deleted_at) return false;
+      let key = '';
+      if(row.production_id){
+        const prod = getProductionRowById(row.production_id);
+        key = prod ? getRowShiftBucketKey(prod) : '';
+      }
+      if(!key) key = getRowShiftBucketKey(row);
+      return key && allowedBucketKeys.has(String(key));
+    });
+    drillLogsForRange.forEach(row=>{
+      const production = row.production_id ? getProductionRowById(row.production_id) : null;
+      const equipmentId = String(row.equipment_id || production?.equipment_id || '');
+      if(!equipmentId) return;
+      const eq = findEquipmentById(equipmentId) || {};
+      const name = row.equipment_name || row.equipment_name_snapshot || production?.equipment_name || eq.name || '-';
+      if(!itemMap.has(equipmentId)) itemMap.set(equipmentId, { id:equipmentId, type:'drill', name, zone:production?.from_location || '-', route:[production?.from_location||'',production?.to_location||''].filter(Boolean).join(' → '), packageName:production?.package_name || packageName(production?.package_id) || '-', linkedName:'-', linkedExcavatorId:'', tripCount:0, fuelLiters:0, tonnage:0, meterDiff:0, workHours:0, linkedTruckCount:0, drilledMeters:0 });
+      const item = itemMap.get(equipmentId);
+      item.type = 'drill';
+      item.drilledMeters += Number(row.drilled_meter || row.meterage || row.meters || 0) || 0;
+      item.workHours += production ? (productionDurationHours(production) || 0) : 0;
+      if(production && (!item.packageName || item.packageName === '-')) item.packageName = production.package_name || packageName(production.package_id) || '-';
+      if(production && (!item.route || item.route === '-')) item.route = [production.from_location||'',production.to_location||''].filter(Boolean).join(' → ');
+    });
+
     const mappedItems = Array.from(itemMap.values()).map(item=>({
       ...item,
       efficiency: item.workHours ? (item.tripCount / item.workHours) : 0,
@@ -7165,10 +7551,13 @@
       kmPerTrip: item.tripCount ? (item.meterDiff / item.tripCount) : 0,
       tonPerTrip: item.tripCount ? (item.tonnage / item.tripCount) : 0,
       tonPerKm: item.meterDiff ? (item.tonnage / item.meterDiff) : 0,
-      tonPerHour: item.workHours ? (item.tonnage / item.workHours) : 0
+      tonPerHour: item.workHours ? (item.tonnage / item.workHours) : 0,
+      meterPerHour: item.workHours ? ((Number(item.drilledMeters || 0) || 0) / item.workHours) : 0,
+      fuelPerMeter: (Number(item.drilledMeters || 0) || 0) ? (item.fuelLiters / (Number(item.drilledMeters || 0) || 1)) : 0
     }));
     const truckAnalysis = mappedItems.filter(x=>x.type === 'truck');
     const excavatorAnalysis = mappedItems.filter(x=>x.type === 'excavator');
+    const drillAnalysis = mappedItems.filter(x=>x.type === 'drill');
 
     const totalTripCount = tripFinalRows.reduce((s,r)=>s + (Number(r.total_trips || 0) || 0), 0);
     const totalTonnage = tripFinalRows.reduce((s,r)=>s + (Number(r.total_tonnage || 0) || 0), 0);
@@ -7176,6 +7565,8 @@
     const totalWorkHours = closedProductions.reduce((sum,row)=>sum + productionDurationHours(row), 0);
     const totalKm = truckAnalysis.reduce((sum,item)=>sum + (Number(item.meterDiff || 0) || 0), 0);
     const totalEngineHours = excavatorAnalysis.reduce((sum,item)=>sum + (Number(item.workHours || 0) || 0), 0);
+    const totalDrilledMeters = drillAnalysis.reduce((sum,item)=>sum + (Number(item.drilledMeters || 0) || 0), 0);
+    const totalDrillHours = drillAnalysis.reduce((sum,item)=>sum + (Number(item.workHours || 0) || 0), 0);
     const first = selectedBuckets[selectedBuckets.length - 1] || selectedBuckets[0];
     const last = selectedBuckets[0] || first;
     const label = selectedBuckets.length === 1 ? `${first.shift_date} • ${first.shift_name}` : `${first.shift_date} - ${last.shift_date}${state.dashboardProFilters?.shift_name ? ' • ' + state.dashboardProFilters.shift_name : ' • Tüm vardiyalar'}`;
@@ -7203,6 +7594,9 @@
       avg_fuel_per_trip:totalTripCount ? totalFuelLiters / totalTripCount : 0,
       truck_analysis:truckAnalysis,
       excavator_analysis:excavatorAnalysis,
+      drill_analysis:drillAnalysis,
+      total_drilled_meters:totalDrilledMeters,
+      total_drill_hours:totalDrillHours,
       total_breakdown_minutes:0,
       long_breakdown_count:0
     };
@@ -7214,10 +7608,11 @@
     const key = dashboardProEquipmentTypeKeyForItem(item);
     if(key === 'truck') return 'Kamyon';
     if(key === 'excavator') return item?.kind === 'loader' ? 'Loder' : 'Yükleyici';
+    if(key === 'drill') return 'Delici';
     return 'Yardımcı Makina';
   }
   function dashboardProEquipmentFilterOptions(summary, selectedType){
-    const items = [...(summary?.truck_analysis || []), ...(summary?.excavator_analysis || [])];
+    const items = [...(summary?.truck_analysis || []), ...(summary?.excavator_analysis || []), ...(summary?.drill_analysis || [])];
     const seen = new Set();
     return items.filter(item=>{
       const typeOk = !selectedType || dashboardProEquipmentTypeKeyForItem(item) === selectedType;
@@ -7261,7 +7656,8 @@
             <select id="dashboardProEquipmentTypeFilter">
               <option value="">Tümü</option>
               <option value="truck">Kamyon</option>
-              <option value="excavator">Ekskavatör</option>
+              <option value="excavator">Ekskavatör/Yükleyici</option>
+              <option value="drill">Delici</option>
             </select>
           </div>
           <div>
@@ -7316,6 +7712,11 @@
           <div class="pro-stat-value" id="proFuelPerTonStat">-</div>
           <div class="pro-stat-sub" id="proFuelPerTonSub"></div>
         </div>
+        <div class="pro-stat-card">
+          <div class="pro-stat-head"><div class="pro-stat-title">Delici Metraj</div><div class="pro-stat-chip">m/saat</div></div>
+          <div class="pro-stat-value" id="proDrillMeterStat">-</div>
+          <div class="pro-stat-sub" id="proDrillMeterSub"></div>
+        </div>
       </div>
       <div class="grid g1" style="margin-top:16px">
         <div class="dashboard-block">
@@ -7327,6 +7728,12 @@
         <div class="dashboard-block">
           <h3>Yükleyici Analizleri</h3>
           <div id="dashboardProExcBody" class="dashboard-scroll"></div>
+        </div>
+      </div>
+      <div class="grid g1" style="margin-top:16px">
+        <div class="dashboard-block">
+          <h3>Delici Analizleri</h3>
+          <div id="dashboardProDrillBody" class="dashboard-scroll"></div>
         </div>
       </div>
       <div class="grid g1" style="margin-top:16px">
@@ -7681,10 +8088,11 @@
       document.getElementById('dashboardProAlertsBody').innerHTML = '<div class="empty">Seçilen tarih/vardiya filtresi için tamamlanmış veri bulunamadı.</div>';
       document.getElementById('dashboardProTruckBody').innerHTML = '<div class="empty">Kamyon analizi yok.</div>';
       document.getElementById('dashboardProExcBody').innerHTML = '<div class="empty">Ekskavatör analizi yok.</div>';
+      const drillBody = document.getElementById('dashboardProDrillBody'); if(drillBody) drillBody.innerHTML = '<div class="empty">Delici analizi yok.</div>';
       document.getElementById('dashboardProPackageBody').innerHTML = '<div class="empty">Paket tonaj analizi yok.</div>';
       const fuelConsumptionBody = document.getElementById('dashboardProFuelConsumptionBody'); if(fuelConsumptionBody) fuelConsumptionBody.innerHTML = '<div class="empty">Yakıt tüketimi analizi yok.</div>';
-      ['proTripsStat','proFuelStat','proConsumedFuelStat','proTruckKmFuelStat','proMeterStat','proFuelPerTonStat'].forEach(id=>{ const el=document.getElementById(id); if(el) el.textContent='-'; });
-      ['proTripsSub','proFuelSub','proConsumedFuelSub','proTruckKmFuelSub','proMeterSub','proFuelPerTonSub'].forEach(id=>{ const el=document.getElementById(id); if(el) el.textContent='Veri yok'; });
+      ['proTripsStat','proFuelStat','proConsumedFuelStat','proTruckKmFuelStat','proMeterStat','proFuelPerTonStat','proDrillMeterStat'].forEach(id=>{ const el=document.getElementById(id); if(el) el.textContent='-'; });
+      ['proTripsSub','proFuelSub','proConsumedFuelSub','proTruckKmFuelSub','proMeterSub','proFuelPerTonSub','proDrillMeterSub'].forEach(id=>{ const el=document.getElementById(id); if(el) el.textContent='Veri yok'; });
       return;
     }
     const summary = buildDashboardProRangeSummary(selectedBuckets);
@@ -7699,7 +8107,7 @@
     const selectedType = String(filters.equipment_type || '');
     const selectedEquipmentId = String(filters.equipment_id || '');
 
-    const allItems = [...summary.truck_analysis, ...summary.excavator_analysis];
+    const allItems = [...summary.truck_analysis, ...summary.excavator_analysis, ...(summary.drill_analysis || [])];
     const equipmentOptions = dashboardProEquipmentFilterOptions(summary, selectedType);
     if(selectedEquipmentId && !equipmentOptions.some(item=>String(item.id || '') === selectedEquipmentId)){
       state.dashboardProFilters.equipment_id = '';
@@ -7716,6 +8124,7 @@
     };
     const truckItems = summary.truck_analysis.filter(applyFilter);
     const excItems = summary.excavator_analysis.filter(applyFilter);
+    const drillItems = (summary.drill_analysis || []).filter(applyFilter);
     const sort = filters.sort || 'trip_desc';
     const sorter = (a,b)=>{
       if(sort === 'trip_desc') return (b.tripCount || 0) - (a.tripCount || 0);
@@ -7726,9 +8135,11 @@
     };
     truckItems.sort(sorter);
     excItems.sort(sorter);
+    drillItems.sort(sorter);
 
     const allowedTruckIds = new Set(truckItems.map(item=>String(item.id || '')).filter(Boolean));
     const allowedExcIds = new Set(excItems.map(item=>String(item.id || '')).filter(Boolean));
+    const allowedDrillIds = new Set(drillItems.map(item=>String(item.id || '')).filter(Boolean));
     const anyFilterActive = !!(selectedType || selectedEquipmentId);
 
     const filteredTrips = !anyFilterActive ? [...summary.trips] : summary.trips.filter(row=>{
@@ -7742,13 +8153,15 @@
       const eqId = String(row.equipment_id || '');
       if(selectedType === 'truck') return allowedTruckIds.has(eqId);
       if(selectedType === 'excavator') return allowedExcIds.has(eqId);
-      return allowedTruckIds.has(eqId) || allowedExcIds.has(eqId);
+      if(selectedType === 'drill') return allowedDrillIds.has(eqId);
+      return allowedTruckIds.has(eqId) || allowedExcIds.has(eqId) || allowedDrillIds.has(eqId);
     });
     const filteredClosedProductions = !anyFilterActive ? [...summary.closedProductions] : summary.closedProductions.filter(row=>{
       const eqId = String(row.equipment_id || '');
       if(selectedType === 'truck') return allowedTruckIds.has(eqId);
       if(selectedType === 'excavator') return allowedExcIds.has(eqId);
-      return allowedTruckIds.has(eqId) || allowedExcIds.has(eqId);
+      if(selectedType === 'drill') return allowedDrillIds.has(eqId);
+      return allowedTruckIds.has(eqId) || allowedExcIds.has(eqId) || allowedDrillIds.has(eqId);
     });
     const filteredBreakdowns = !anyFilterActive ? [...summary.breakdowns] : summary.breakdowns.filter(row=>{
       const eqId = String(row.equipment_id || '');
@@ -7814,6 +8227,11 @@
     document.getElementById('proMeterSub').innerHTML = `Tonaj, filtre aralığındaki seferlerden paket faktörü ile hesaplanır.`;
     document.getElementById('proFuelPerTonStat').textContent = filteredTonnage > 0 ? `${fuelPerTon.toFixed(2)} L/ton` : '-';
     document.getElementById('proFuelPerTonSub').innerHTML = `Tüm üretim ekipmanları dahil: toplam yakıt tüketimi / toplam tonaj.`;
+    const filteredDrilledMeters = drillItems.reduce((sum,item)=>sum + (Number(item.drilledMeters || 0) || 0), 0);
+    const filteredDrillHours = drillItems.reduce((sum,item)=>sum + (Number(item.workHours || 0) || 0), 0);
+    const filteredDrillMeterPerHour = filteredDrillHours > 0 ? (filteredDrilledMeters / filteredDrillHours) : 0;
+    const drillStatEl = document.getElementById('proDrillMeterStat'); if(drillStatEl) drillStatEl.textContent = filteredDrilledMeters > 0 ? `${filteredDrilledMeters.toFixed(0)} m` : '-';
+    const drillSubEl = document.getElementById('proDrillMeterSub'); if(drillSubEl) drillSubEl.innerHTML = `${drillItems.length} delici • ${filteredDrillHours.toFixed(1)} saat • ${filteredDrillMeterPerHour.toFixed(1)} m/saat`;
 
     const alertRules = { ...DEFAULT_ALERT_RULES, ...(state.alertRules || {}) };
     const alerts = [];
@@ -7875,8 +8293,36 @@
     const maxTruckTonnage = Math.max(1, ...truckItems.map(x=>Number(x.tonnage || 0) || 0));
     const maxExcTrips = Math.max(1, ...excItems.map(x=>Number(x.tripCount || 0) || 0));
     const maxExcTonPerHour = Math.max(1, ...excItems.map(x=>Number(x.tonPerHour || 0) || 0));
+    const maxDrillMeters = Math.max(1, ...drillItems.map(x=>Number(x.drilledMeters || 0) || 0));
+    const maxDrillMeterPerHour = Math.max(1, ...drillItems.map(x=>Number(x.meterPerHour || 0) || 0));
 
     document.getElementById('dashboardProAlertsBody').innerHTML = alerts.length ? alerts.map(a=>`<div class="pro-alert-card ${a.level === 'red' ? 'red' : 'orange'}"><div class="pro-alert-head"><div class="pro-alert-title">${escapeHtml(a.title)}</div><span class="pill ${a.level === 'red' ? 'red' : 'orange'}">${a.level === 'red' ? 'Kritik' : 'Dikkat'}</span></div><div class="pro-alert-text">${escapeHtml(a.text)}</div></div>`).join('') : '<div class="empty">Seçilen filtre için kritik uyarı görünmüyor.</div>';
+
+
+    const drillBody = document.getElementById('dashboardProDrillBody');
+    if(drillBody) drillBody.innerHTML = drillItems.length ? `<div class="pro-item-grid">` + drillItems.map(item=>`
+      <div class="pro-item-card pro-drill-card">
+        <div class="pro-item-top">
+          <div><div class="pro-item-name">${escapeHtml(item.name)}</div><div class="pro-item-route">${escapeHtml(item.route || '-')}</div></div>
+          <div class="pro-item-badges"><span class="pill">${escapeHtml(item.packageName || '-')}</span><span class="${metricStatusClass(item.meterPerHour, 20, 8, true)}">m/saat ${(item.meterPerHour || 0).toFixed(1)}</span></div>
+        </div>
+        <div class="pro-kpi-row">
+          <div class="pro-kpi"><div class="k-label">Metraj</div><div class="k-value">${(item.drilledMeters || 0).toFixed(0)}</div></div>
+          <div class="pro-kpi"><div class="k-label">Çalışma Saati</div><div class="k-value">${(item.workHours || 0).toFixed(1)}</div></div>
+          <div class="pro-kpi"><div class="k-label">Metre/Saat</div><div class="k-value">${(item.meterPerHour || 0).toFixed(1)}</div></div>
+          <div class="pro-kpi"><div class="k-label">Verilen Yakıt</div><div class="k-value">${dashboardProGivenFuelText(fuelConsumptionByEquipmentId, item)}</div></div>
+          <div class="pro-kpi"><div class="k-label">Yakıt/Metre</div><div class="k-value">${(item.fuelPerMeter || 0).toFixed(2)}</div></div>
+        </div>
+        <div class="pro-bar-wrap">
+          <div class="muted">Metraj katkısı</div>
+          <div class="pro-bar-track"><div class="pro-bar-fill green" style="width:${Math.max(8, Math.min(100, ((item.drilledMeters || 0) / maxDrillMeters) * 100))}%"></div></div>
+        </div>
+        <div class="pro-bar-wrap">
+          <div class="muted">Metre / saat verimi</div>
+          <div class="pro-bar-track"><div class="pro-bar-fill orange" style="width:${Math.max(8, Math.min(100, ((item.meterPerHour || 0) / maxDrillMeterPerHour) * 100))}%"></div></div>
+        </div>
+      </div>
+    `).join('') + `</div>` : '<div class="empty">Filtreye uygun delici analizi yok.</div>';
 
     document.getElementById('dashboardProTruckBody').innerHTML = truckItems.length ? `<div class="pro-item-grid">` + truckItems.map(item=>`
       <div class="pro-item-card">
