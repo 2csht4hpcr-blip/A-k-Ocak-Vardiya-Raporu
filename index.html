@@ -431,6 +431,11 @@
         <button class="menu-btn" data-page="users" data-i18n-key="Kullanıcılar">Kullanıcılar</button>
         <button class="menu-btn" data-page="reports" data-i18n-key="Raporlar">Raporlar</button>
       </div>
+
+      <div class="menu-group" data-super-admin-menu="1">
+        <div class="menu-title" data-i18n-key="SaaS Yönetimi">SaaS Yönetimi</div>
+        <button class="menu-btn" data-page="saasAdmin" data-i18n-key="Firmalar ve Sahalar">Firmalar ve Sahalar</button>
+      </div>
     </aside>
 
     <main class="main">
@@ -12025,7 +12030,7 @@ async function exportWeeklyExcel(){
     el.innerHTML = `
       <div class="card pro-hero" style="margin-bottom:14px">
         <h2 class="section-title" style="color:#fff">SaaS Yönetimi</h2>
-        <div class="muted">Super Admin paneli: firma, saha ve firma yöneticisi davet işlemleri buradan yapılır. Müşteri firma adminleri bu alanı göremez.</div>
+        <div class="muted">Super Admin paneli: firma ve saha tanımları buradan eklenir. Kullanıcı davet ekranındaki Firma/Saha açılır pencereleri bu listedeki tanımlardan otomatik beslenir. Müşteri firma adminleri bu alanı göremez.</div>
       </div>
       <div class="saas-kpi-grid">
         <div class="saas-kpi"><div class="saas-kpi-label">Firma</div><div class="saas-kpi-value">${companies.length}</div><div class="muted">Aktif: ${activeCompanies}</div></div>
@@ -12182,6 +12187,19 @@ async function exportWeeklyExcel(){
     }
   }
 
+  function syncInviteSiteOptions(){
+    try{
+      const siteSelect = document.getElementById('invite_site_id');
+      if(!siteSelect) return;
+      const companyId = isSuperAdmin() ? String(document.getElementById('invite_company_id')?.value || state.profile?.company_id || '') : String(state.profile?.company_id || '');
+      const sites = (state.sites || []).filter(site=>{
+        if(companyId) return String(site.company_id || '') === String(companyId);
+        return isSuperAdmin() || !state.profile?.company_id || String(site.company_id || '') === String(state.profile.company_id);
+      });
+      siteSelect.innerHTML = `<option value="">Varsayılan saha</option>${sites.map(site=>`<option value="${escapeHtml(site.id)}">${escapeHtml(site.name || site.code || site.id)}</option>`).join('')}`;
+    }catch(e){}
+  }
+
 function renderUsers(){
     const el = document.getElementById('users');
     if(!el) return;
@@ -12206,6 +12224,7 @@ function renderUsers(){
         <h2 class="section-title">Kullanıcı Yönetimi</h2>
         <div class="toolbar">
           ${superAdminInfo}
+          ${isSuperAdmin() ? `<button onclick="showPage('saasAdmin')">Firma/Saha Yönetimi</button>` : ''}
           <button class="secondary" onclick="refreshData()">Listeyi Yenile</button>
         </div>
         <div class="notice" style="margin-bottom:12px">
@@ -12218,7 +12237,7 @@ function renderUsers(){
             <div class="form-field"><label>Ad Soyad</label><input id="invite_full_name" placeholder="Ad Soyad" /></div>
             <div class="form-field"><label>Email</label><input id="invite_email" placeholder="ornek@firma.com" /></div>
             <div class="form-field"><label>Rol</label><select id="invite_role">${inviteRoleOptions}</select></div>
-            ${isSuperAdmin() ? `<div class="form-field"><label>Firma</label><select id="invite_company_id">${companyOptions}</select></div>` : ''}
+            ${isSuperAdmin() ? `<div class="form-field"><label>Firma</label><select id="invite_company_id" onchange="syncInviteSiteOptions()">${companyOptions}</select></div>` : ''}
             <div class="form-field"><label>Saha</label><select id="invite_site_id"><option value="">Varsayılan saha</option>${siteOptions}</select></div>
           </div>
           <div class="actions">
@@ -12662,7 +12681,7 @@ function renderUsers(){
   document.getElementById('newPassword')?.addEventListener('keydown', e=>{ if(e.key==='Enter') saveNewPasswordFromLink(); });
   document.getElementById('newPasswordConfirm')?.addEventListener('keydown', e=>{ if(e.key==='Enter') saveNewPasswordFromLink(); });
 
-  Object.assign(window, { openModal, closeModal, existingLogisticsRowForProduction, assertNoDuplicateProductionLog, assertProductionStartAllowedFinal, markQualityPanelStabilizedDone, fillTruckRouteFromExcavator, updateAutoMeterLabels, updateProductionStartMeterHints, updateTripProductionContext, updateFuelProductionContext, updateMeterCorrectionContext, toggleProductionEditLinkedField, refreshLogisticsEquipmentSelect, markShiftSelectManual, continueBreakdownToCurrentShift, finishBreakdownFromWarning, saveStartProductionExcavator, saveStartProductionTruck, saveStartProductionDrill, saveStartProductionOther, saveEndProduction, saveStartBreakdown, saveEndBreakdown, saveStartRental, saveEndRental, saveNewTrip, saveNewFuel, saveNewMeter, saveNewDrillMeterage, updateDrillMeterageProductionContext, confirmSoftDelete, restoreDeleted, deleteAllDeletedRecordsNow, deleteDeletedOlderThan30Days, saveEditRecord, saveDefinition, deleteTruckModel, toggleDefinitionTruckModelField, renderShiftConfigInputs, saveShiftConfigFromForm, renderShiftConfigCardRefresh, applyRecordFiltersFromUI, resetRecordFilters, bulkDeleteRecordTable, exportRecordsToExcel, saveUserRoleSettings, toggleUserActive, inviteUserFromPanel, renderSaasAdmin, syncSaasAdminSiteOptions, createSaasCompany, createSaasSite, toggleSaasCompany, toggleSaasSite, inviteCompanyAdminFromSaasPanel, sendPasswordResetEmail, saveNewPasswordFromLink, refreshData, exportDailyPdf, exportWeeklyExcel, exportShiftReport });
+  Object.assign(window, { openModal, closeModal, existingLogisticsRowForProduction, assertNoDuplicateProductionLog, assertProductionStartAllowedFinal, markQualityPanelStabilizedDone, fillTruckRouteFromExcavator, updateAutoMeterLabels, updateProductionStartMeterHints, updateTripProductionContext, updateFuelProductionContext, updateMeterCorrectionContext, toggleProductionEditLinkedField, refreshLogisticsEquipmentSelect, markShiftSelectManual, continueBreakdownToCurrentShift, finishBreakdownFromWarning, saveStartProductionExcavator, saveStartProductionTruck, saveStartProductionDrill, saveStartProductionOther, saveEndProduction, saveStartBreakdown, saveEndBreakdown, saveStartRental, saveEndRental, saveNewTrip, saveNewFuel, saveNewMeter, saveNewDrillMeterage, updateDrillMeterageProductionContext, confirmSoftDelete, restoreDeleted, deleteAllDeletedRecordsNow, deleteDeletedOlderThan30Days, saveEditRecord, saveDefinition, deleteTruckModel, toggleDefinitionTruckModelField, renderShiftConfigInputs, saveShiftConfigFromForm, renderShiftConfigCardRefresh, applyRecordFiltersFromUI, resetRecordFilters, bulkDeleteRecordTable, exportRecordsToExcel, saveUserRoleSettings, toggleUserActive, inviteUserFromPanel, syncInviteSiteOptions, renderSaasAdmin, syncSaasAdminSiteOptions, createSaasCompany, createSaasSite, toggleSaasCompany, toggleSaasSite, inviteCompanyAdminFromSaasPanel, sendPasswordResetEmail, saveNewPasswordFromLink, refreshData, exportDailyPdf, exportWeeklyExcel, exportShiftReport });
 
   (async function autoSession(){
     try{
