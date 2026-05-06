@@ -240,6 +240,34 @@
     .dashboard-pro-pdf-mode .dashboard-scroll{max-height:none!important;overflow:visible!important}
     .dashboard-pro-pdf-mode{background:#f4f6f8!important;padding:4px}
 
+    .record-quality-panel{border:1px solid #dbeafe;border-radius:20px;background:linear-gradient(180deg,#ffffff 0%,#f8fbff 100%);box-shadow:0 12px 30px rgba(15,23,42,.07);padding:16px;margin-bottom:14px}
+    .record-quality-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;margin-bottom:12px}
+    .record-quality-title{font-size:20px;font-weight:900;color:#0f172a;margin:0}
+    .record-quality-sub{font-size:12px;color:#64748b;line-height:1.45;margin-top:4px;max-width:860px}
+    .record-quality-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin:12px 0}
+    .record-quality-card{padding:12px 13px;border-radius:16px;border:1px solid #e2e8f0;background:#fff;box-shadow:0 6px 16px rgba(15,23,42,.04)}
+    .record-quality-label{font-size:11px;font-weight:800;letter-spacing:.35px;text-transform:uppercase;color:#64748b}
+    .record-quality-value{font-size:26px;font-weight:900;color:#0f172a;margin-top:6px}
+    .record-quality-card.good{border-color:#bbf7d0;background:linear-gradient(180deg,#fff 0%,#f0fdf4 100%)}
+    .record-quality-card.warn{border-color:#fed7aa;background:linear-gradient(180deg,#fff 0%,#fff7ed 100%)}
+    .record-quality-card.bad{border-color:#fecaca;background:linear-gradient(180deg,#fff 0%,#fef2f2 100%)}
+    .record-quality-issue{display:grid;grid-template-columns:120px 1.2fr 2fr 1fr;gap:8px;align-items:start;padding:10px 12px;border:1px solid #e2e8f0;border-radius:14px;background:#fff;margin-top:8px}
+    .record-quality-sev{font-size:11px;font-weight:900;text-transform:uppercase;border-radius:999px;padding:5px 9px;text-align:center}
+    .record-quality-sev.kritik{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca}
+    .record-quality-sev.uyarı{background:#fff7ed;color:#c2410c;border:1px solid #fed7aa}
+    .record-quality-sev.bilgi{background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe}
+    .record-quality-topic{font-size:13px;font-weight:900;color:#0f172a}
+    .record-quality-detail{font-size:13px;color:#475569;line-height:1.45}
+    .record-quality-action{font-size:12px;color:#334155;font-weight:800;text-align:right}
+    .record-quality-score-wrap{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px}
+    .record-quality-score-track{flex:1;min-width:180px;height:12px;border-radius:999px;background:#e2e8f0;overflow:hidden}
+    .record-quality-score-fill{height:100%;border-radius:999px;background:linear-gradient(90deg,#dc2626 0%,#f59e0b 50%,#16a34a 100%)}
+    .record-audit-card{border:1px solid #e2e8f0;border-radius:18px;background:linear-gradient(180deg,#fff 0%,#f8fafc 100%);padding:14px;margin-top:12px}
+    .record-audit-list{display:grid;gap:8px;margin-top:10px}
+    .record-audit-row{display:grid;grid-template-columns:150px 1fr 1.1fr;gap:8px;padding:9px 10px;border-radius:12px;background:#fff;border:1px solid #e2e8f0;font-size:12px;color:#334155}
+    .record-audit-action{font-weight:900;color:#0f172a}
+    @media(max-width:820px){.record-quality-issue,.record-audit-row{grid-template-columns:1fr}.record-quality-action{text-align:left}}
+
   </style>
 </head>
 <body>
@@ -278,9 +306,9 @@
 
       <div class="menu-group">
         <div class="menu-title">Lojistik</div>
+        <button class="menu-btn" data-page="meter">Sayaç</button>
         <button class="menu-btn" data-page="trip">Sefer</button>
         <button class="menu-btn" data-page="fuel">Yakıt</button>
-        <button class="menu-btn" data-page="meter">Sayaç</button>
       </div>
 
       <div class="menu-group">
@@ -347,6 +375,8 @@
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <script>
 (function(){
+  const DEVELOPMENT_BUILD_NAME = 'index_maden_takip_sistemi_gelistirme_2026-05-06';
+  // v8 stabilizasyon: mevcut çalışan akış korunur; yeni loader/arıza/vardiya mantığı fallback ile eklenir.
   function loadShiftConfig(){
     try{
       const raw = localStorage.getItem("maden_shift_config");
@@ -916,68 +946,122 @@
       return null;
     }
   }
-  function rowsNeedingPreviousShiftLogisticsEntry(type){
-    const targetBucket = getLatestCompletedOperationalShiftBucket() || getPreviousShiftBucketInfo();
-    if(!targetBucket?.shift_key) return [];
-
-    const targetProductions = (state.productions || [])
-      .filter(r=>!r?.deleted_at && String(getRowShiftBucketKey(r) || '') === String(targetBucket.shift_key || ''));
-
-    const targetRentals = (state.rentals || [])
-      .filter(r=>!r?.deleted_at && String(getRowShiftBucketKey(r) || '') === String(targetBucket.shift_key || ''));
-
-    let sourceRows = [];
-    let existingRows = [];
-    let keyForSource = null;
-    let keyForExisting = null;
-
+  function getLogisticsTaskSourceKey(type, row){
+    const productionId = String(row?.id || row?.production_id || '').trim();
+    if(productionId) return `${type}|pid|${productionId}`;
+    return `${type}|legacy|${logisticsMissingSourceKey(type, row)}`;
+  }
+  function getLogisticsTaskExistingKey(type, row){
+    const productionId = String(row?.production_id || '').trim();
+    if(productionId) return `${type}|pid|${productionId}`;
+    return `${type}|legacy|${logisticsExistingKey(type, row)}`;
+  }
+  function getProductionCompletionMs(row){
+    try{
+      const candidates = [row?.end_at, row?.end_time, row?.updated_at, row?.created_at, row?.start_at, row?.start_time].filter(Boolean);
+      for(const v of candidates){
+        const ms = new Date(v).getTime();
+        if(Number.isFinite(ms) && ms > 0) return ms;
+      }
+      const bucket = resolveShiftBucketForRow(row);
+      const endMs = getShiftBucketEndMs(bucket?.shift_name, bucket?.shift_date);
+      return Number.isFinite(endMs) ? endMs : 0;
+    }catch(e){ return 0; }
+  }
+  function isClosedOperationalRow(row){
+    if(!row || row.deleted_at) return false;
+    if(isOpenRow(row)) return false;
+    const bucket = resolveShiftBucketForRow(row);
+    const endMs = getShiftBucketEndMs(bucket?.shift_name, bucket?.shift_date);
+    if(Number.isFinite(endMs) && endMs > Date.now()) return false;
+    return true;
+  }
+  function getLogisticsTaskSourceRows(type){
+    const productions = (state.productions || []).filter(isClosedOperationalRow);
+    const rentals = (state.rentals || []).filter(isClosedOperationalRow);
     if(type === 'trip'){
-      sourceRows = targetProductions.filter(r=>isTruckEquipment(findEquipmentById(r.equipment_id)));
-      existingRows = state.truck_trips.filter(r=>!r?.deleted_at);
-      keyForSource = r=>logisticsMissingSourceKey('trip', r);
-      keyForExisting = r=>logisticsExistingKey('trip', r);
-    }else if(type === 'fuel'){
-      sourceRows = [...targetProductions, ...targetRentals];
-      existingRows = state.fuel_logs.filter(r=>!r?.deleted_at);
-      keyForSource = r=>logisticsMissingSourceKey('fuel', r);
-      keyForExisting = r=>logisticsExistingKey('fuel', r);
-    }else if(type === 'meter'){
-      sourceRows = [...targetProductions, ...targetRentals];
-      existingRows = state.meter_logs.filter(r=>!r?.deleted_at);
-      keyForSource = r=>logisticsMissingSourceKey('meter', r);
-      keyForExisting = r=>logisticsExistingKey('meter', r);
-    }else{
-      return [];
+      return productions.filter(r=>isTruckEquipment(findEquipmentById(r.equipment_id)));
     }
-
-    const existingKeys = new Set(existingRows.map(r=>keyForExisting(r)).filter(Boolean));
+    if(type === 'fuel' || type === 'meter'){
+      return [...productions, ...rentals];
+    }
+    return [];
+  }
+  function getLogisticsExistingRows(type){
+    if(type === 'trip') return (state.truck_trips || []).filter(r=>!r?.deleted_at);
+    if(type === 'fuel') return (state.fuel_logs || []).filter(r=>!r?.deleted_at);
+    if(type === 'meter') return (state.meter_logs || []).filter(r=>!r?.deleted_at);
+    return [];
+  }
+  function rowsNeedingPreviousShiftLogisticsEntry(type){
+    const sourceRows = getLogisticsTaskSourceRows(type);
+    const existingRows = getLogisticsExistingRows(type);
+    const existingKeys = new Set(existingRows.map(r=>getLogisticsTaskExistingKey(type, r)).filter(Boolean));
     return dedupeRowsByKey(
-      sourceRows.sort((a,b)=>new Date(a.start_at || a.start_time || a.created_at || 0) - new Date(b.start_at || b.start_time || b.created_at || 0)),
-      keyForSource
+      sourceRows.sort((a,b)=>getProductionCompletionMs(b) - getProductionCompletionMs(a)),
+      r=>getLogisticsTaskSourceKey(type, r)
     ).filter(r=>{
-      const key = keyForSource(r);
+      const key = getLogisticsTaskSourceKey(type, r);
       return !!key && !existingKeys.has(key);
     });
   }
+  function rowsCompletedLogisticsEntry(type){
+    const existingRows = getLogisticsExistingRows(type);
+    return existingRows
+      .filter(r=>String(r.production_id || '').trim())
+      .sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0));
+  }
+  function buildLogisticsTaskPrefill(type, row){
+    const bucket = resolveShiftBucketForRow(row) || {};
+    const shiftDate = String(bucket.shift_date || String(row.start_at || row.start_time || row.created_at || '').slice(0,10) || '').slice(0,10);
+    const base = {
+      production_id: row.id || row.production_id || '',
+      equipment_id: row.equipment_id || '',
+      equipment_type: detectEquipmentTypeKeyById(row.equipment_id || ''),
+      shift_name: getShiftNameForRow(row) || bucket.shift_name || '',
+      date: shiftDate,
+      package_id: row.package_id || '',
+      package_name: row.package_name || '',
+      from_location: row.from_location || '',
+      to_location: row.to_location || ''
+    };
+    if(type === 'trip') return { prefill: base };
+    if(type === 'fuel') return { prefill: base };
+    if(type === 'meter') return { prefill: base };
+    return { prefill: base };
+  }
+  function renderLogisticsTaskLine(type, row){
+    const bucket = resolveShiftBucketForRow(row) || {};
+    const shiftLabel = escapeHtml(getShiftNameForRow(row) || bucket.shift_name || '-');
+    const dateLabel = escapeHtml(String(bucket.shift_date || String(row.start_at || row.start_time || row.created_at || '').slice(0,10) || '-'));
+    const route = row.to_location ? ` • ${escapeHtml(row.from_location || '-')} → ${escapeHtml(row.to_location || '-')}` : '';
+    const pkg = row.package_name ? ` • ${escapeHtml(row.package_name || '-')}` : '';
+    const baseText = `${escapeHtml(row.equipment_name || '-')}${pkg}${route} • ${shiftLabel} • ${dateLabel}`;
+    const modalType = type === 'trip' ? 'newTrip' : type === 'fuel' ? 'newFuel' : 'newMeter';
+    const btnText = type === 'trip' ? 'Sefer gir' : type === 'fuel' ? 'Yakıt gir' : 'Sayaç gir';
+    const action = canEditOperations() ? `<div class="warning-line-actions"><button class="secondary" type="button" data-open-modal="${modalType}" data-modal-data="${encodeModalData(buildLogisticsTaskPrefill(type, row))}">${btnText}</button></div>` : '';
+    return `<div class="warning-line"><span class="warning-line-text">${baseText}</span>${action}</div>`;
+  }
+  function renderLogisticsCompletedSummary(type, typeLabel){
+    const completed = rowsCompletedLogisticsEntry(type);
+    if(!completed.length) return `<div class="subtle" style="margin-top:10px">Tamamlanan ${escapeHtml(typeLabel)} girişi henüz yok.</div>`;
+    const latest = completed.slice(0,5).map(r=>{
+      const prod = r.production_id ? getProductionRowById(r.production_id) : null;
+      const name = escapeHtml(r.equipment_name || prod?.equipment_name || '-');
+      const shift = escapeHtml(getShiftNameForRow(r) || getShiftNameForRow(prod) || '-');
+      const date = escapeHtml(String(logisticsExplicitShiftDate(r) || prod?.created_at || r.created_at || '').slice(0,10) || '-');
+      let value = '';
+      if(type === 'trip') value = `${escapeHtml(String(r.trip_count || 0))} sefer`;
+      if(type === 'fuel') value = `${escapeHtml(String(r.liters || 0))} lt`;
+      if(type === 'meter') value = escapeHtml(formatMeterValueWithUnit(r.meter_value || r.value || '', r.meter_type || ''));
+      return `<div class="list-item"><b>${name}</b> • ${shift} • ${date} <span class="pill green">${value}</span></div>`;
+    }).join('');
+    return `<div class="subtle" style="margin-top:10px"><b>Tamamlanan ${escapeHtml(typeLabel)} girişleri</b><div style="margin-top:8px">${latest}</div></div>`;
+  }
   function renderPreviousShiftLogisticsWarning(type, typeLabel){
     const missingRows = rowsNeedingPreviousShiftLogisticsEntry(type);
-    if(!missingRows.length) return '';
-    return renderShiftWarningList(`Üretimden düşen makinalar için ${typeLabel} girişi eksik`, missingRows, row=>{
-      const shiftLabel = escapeHtml(getShiftNameForRow(row) || '-');
-      const dateLabel = escapeHtml(String(resolveShiftBucketForRow(row)?.shift_date || String(row.start_at || row.start_time || row.created_at || '').slice(0,10)));
-      const baseText = `${escapeHtml(row.equipment_name || '-')}${type === 'trip' ? ` • ${escapeHtml(row.package_name || '-')}` : ''} • ${shiftLabel} • ${dateLabel}`;
-      let actionHtml = '';
-      if(canEditOperations()){
-        if(type === 'trip'){
-          actionHtml = `<div class="warning-line-actions"><button class="secondary" type="button" data-open-modal="newTrip" data-modal-data="${encodeModalData({ prefill: { equipment_id: row.equipment_id || '', package_id: row.package_id || '', from_location: row.from_location || '', to_location: row.to_location || '', shift_name: getShiftNameForRow(row) || '', date: String(resolveShiftBucketForRow(row)?.shift_date || row.start_at || row.start_time || row.created_at || '').slice(0,10), production_id: row.id || '' } })}">Sefer gir</button></div>`;
-        }else if(type === 'fuel'){
-          actionHtml = `<div class="warning-line-actions"><button class="secondary" type="button" data-open-modal="newFuel" data-modal-data="${encodeModalData({ prefill: { equipment_type: detectEquipmentTypeKeyById(row.equipment_id || ''), equipment_id: row.equipment_id || '', shift_name: getShiftNameForRow(row) || '', date: String(resolveShiftBucketForRow(row)?.shift_date || row.start_at || row.start_time || row.created_at || '').slice(0,10), production_id: row.id || '' } })}">Yakıt gir</button></div>`;
-        }else if(type === 'meter'){
-          actionHtml = `<div class="warning-line-actions"><button class="secondary" type="button" data-open-modal="newMeter" data-modal-data="${encodeModalData({ prefill: { equipment_type: detectEquipmentTypeKeyById(row.equipment_id || ''), equipment_id: row.equipment_id || '', shift_name: getShiftNameForRow(row) || '', date: String(resolveShiftBucketForRow(row)?.shift_date || row.start_at || row.start_time || row.created_at || '').slice(0,10), production_id: row.id || '' } })}">Sayaç gir</button></div>`;
-        }
-      }
-      return `<div class="warning-line"><span class="warning-line-text">${baseText}</span>${actionHtml}</div>`;
-    });
+    const missingHtml = missingRows.length ? renderShiftWarningList(`Eksik ${typeLabel} görevleri`, missingRows, row=>renderLogisticsTaskLine(type, row)) : `<div class="notice">Eksik ${escapeHtml(typeLabel)} görevi yok.</div>`;
+    return `${missingHtml}${renderLogisticsCompletedSummary(type, typeLabel)}`;
   }
   function filterRowsForActiveAndPreviousShiftOrRecent(rows){
     try{
@@ -1126,7 +1210,7 @@
     const tripsByExcavator = {};
     tripRows.forEach(r=>{
       const truckId = String(r.equipment_id || '');
-      const excId = String(r.loader_id || r.linked_excavator_id || '');
+      const excId = getTripLoaderId(r);
       const cnt = Number(r.trip_count || 0);
       if(truckId) tripsByTruck[truckId] = (tripsByTruck[truckId] || 0) + cnt;
       if(excId) tripsByExcavator[excId] = (tripsByExcavator[excId] || 0) + cnt;
@@ -1421,7 +1505,7 @@
     const totalKm = truckProductions.reduce((s,r)=>s + productionMeterDiff(r), 0);
     const totalEngineHours = excavatorProductions.reduce((s,r)=>s + productionMeterDiff(r), 0);
     const activeTruckCount = Math.max(uniqueCount(trips, r=>r.equipment_id), uniqueCount(truckProductions, r=>r.equipment_id));
-    const activeExcavatorCount = Math.max(uniqueCount(excavatorProductions, r=>r.equipment_id), uniqueCount(trips, r=>r.loader_id || r.linked_excavator_id));
+    const activeExcavatorCount = Math.max(uniqueCount(excavatorProductions, r=>r.equipment_id), uniqueCount(trips, r=>getTripLoaderId(r)));
     const avgTripPerTruck = activeTruckCount ? (totalTripCount / activeTruckCount) : 0;
     const avgFuelPerTrip = totalTripCount ? (totalFuelLiters / totalTripCount) : 0;
     const tripPerWorkHour = totalWorkHours ? (totalTripCount / totalWorkHours) : 0;
@@ -1454,7 +1538,7 @@
     const tripsByExc = {};
     const tonnageByExc = {};
     trips.forEach(r=>{
-      const id = String(r.loader_id || r.linked_excavator_id || '');
+      const id = getTripLoaderId(r);
       if(!id) return;
       tripsByExc[id] = (tripsByExc[id] || 0) + (Number(r.trip_count || 0) || 0);
       tonnageByExc[id] = (tonnageByExc[id] || 0) + getTripRowTonnage(r);
@@ -1473,7 +1557,7 @@
       excavatorProductionMap[id] = r;
     });
     trips.forEach(r=>{
-      const id = String(r.loader_id || r.linked_excavator_id || '');
+      const id = getTripLoaderId(r);
       if(!id || excavatorProductionMap[id]) return;
       const eq = findEquipmentById(id) || {};
       excavatorProductionMap[id] = {
@@ -1523,13 +1607,13 @@
 
     const excavatorIds = Array.from(new Set([
       ...excavatorProductions.map(r=>String(r.equipment_id || '')),
-      ...trips.map(r=>String(r.loader_id || r.linked_excavator_id || '')),
+      ...trips.map(r=>getTripLoaderId(r)),
       ...fuels.filter(r=>isLoadingEquipment(findEquipmentById(r.equipment_id)) && state.productions.some(p=>String(p.equipment_id||'')===String(r.equipment_id||'') && isLoadingWorkProduction(p))).map(r=>String(r.equipment_id || '')),
       ...meters.filter(r=>isLoadingEquipment(findEquipmentById(r.equipment_id)) && state.productions.some(p=>String(p.equipment_id||'')===String(r.equipment_id||'') && isLoadingWorkProduction(p))).map(r=>String(r.equipment_id || ''))
     ].filter(Boolean)));
     const excavatorAnalysis = excavatorIds.map(id=>{
       const prodRows = excavatorProductions.filter(r=>String(r.equipment_id||'') === id);
-      const tripRowsForExc = trips.filter(t=>String(t.loader_id || t.linked_excavator_id || '') === id);
+      const tripRowsForExc = trips.filter(t=>getTripLoaderId(t) === id);
       const prod = excavatorProductionMap[id] || prodRows[0] || tripRowsForExc[0] || {};
       const eq = findEquipmentById(id) || {};
       const meterWindow = shiftEquipmentMeterWindow(id, shiftName, shiftDate);
@@ -1545,7 +1629,7 @@
         zone:prod.from_location || prod.to_location || '',
         route:`${prod.from_location || '-'} → ${prod.to_location || '-'}`,
         packageName:prod.package_name || packageName(prod.package_id) || '-',
-        linkedTruckCount: uniqueCount(trips.filter(t=>String(t.loader_id || t.linked_excavator_id || '') === id), r=>r.equipment_id),
+        linkedTruckCount: uniqueCount(trips.filter(t=>getTripLoaderId(t) === id), r=>r.equipment_id),
         tripCount,
         fuelLiters:fuelsByEquipment[id] || 0,
         tonnage,
@@ -3408,6 +3492,7 @@
     PACKAGES: 'packages',
     SHIFT_DEFINITIONS: 'shift_definitions',
     APP_SETTINGS: 'app_settings',
+    RECORD_AUDIT_LOGS: 'record_audit_logs',
     DASHBOARD_SHIFT_SUMMARY: 'v_shift_summary_safe',
     DASHBOARD_EQUIPMENT_SHIFT_SUMMARY: 'v_equipment_shift_summary_safe',
     DASHBOARD_PRO_SHIFT_SUMMARY: 'v_dashboard_pro_shift_summary_safe',
@@ -3416,6 +3501,64 @@
 
   function resolveDbTableName(name){
     return String(name || '') === 'productions' ? TABLES.PRODUCTIONS : String(name || '');
+  }
+
+
+  function auditKey(){ return 'maden_record_audit_logs_v1'; }
+  function loadLocalAuditLogs(){
+    try{
+      const raw = localStorage.getItem(auditKey());
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    }catch(e){ return []; }
+  }
+  function saveLocalAuditLogs(rows){
+    try{ localStorage.setItem(auditKey(), JSON.stringify((rows || []).slice(0, 500))); }catch(e){}
+  }
+  function summarizeAuditPayload(payload){
+    try{
+      const src = payload && typeof payload === 'object' ? payload : {};
+      const keys = ['equipment_id','equipment_name','equipment_name_snapshot','production_id','shift_name','shift_date','start_at','end_at','start_time','end_time','start_meter_value','end_meter_value','meter_value','trip_count','liters','fuel_liters','loader_id','loader_name','deleted_at'];
+      const out = {};
+      keys.forEach(k=>{ if(Object.prototype.hasOwnProperty.call(src,k) && src[k] !== undefined) out[k] = src[k]; });
+      return out;
+    }catch(e){ return {}; }
+  }
+  async function addRecordAuditLog(action, tableName, recordId, payload, options){
+    try{
+      const row = {
+        id: `audit_${Date.now()}_${Math.random().toString(36).slice(2,8)}`,
+        action: String(action || ''),
+        table_name: resolveDbTableName(tableName),
+        record_id: recordId ? String(recordId) : null,
+        user_id: state.user?.id || null,
+        user_email: state.user?.email || '',
+        created_at: nowIso(),
+        summary: summarizeAuditPayload(payload),
+        source: options?.source || 'index'
+      };
+      const local = [row, ...loadLocalAuditLogs()].slice(0, 500);
+      saveLocalAuditLogs(local);
+      if(state.sb && resolveDbTableName(tableName) !== TABLES.RECORD_AUDIT_LOGS){
+        try{
+          const body = {
+            table_name: row.table_name,
+            record_id: row.record_id,
+            action: row.action,
+            old_data: options?.old_data || null,
+            new_data: options?.new_data || row.summary || null,
+            reason: options?.reason || payload?.delete_reason || payload?.reason || '',
+            created_by: state.user?.id || null,
+            created_at: row.created_at
+          };
+          await state.sb.from(TABLES.RECORD_AUDIT_LOGS).insert([body]);
+        }catch(e){}
+      }
+      return row;
+    }catch(e){ return null; }
+  }
+  function latestAuditLogs(limit){
+    return loadLocalAuditLogs().slice(0, Number(limit || 8));
   }
 
   const debugBox = document.getElementById('debugBox');
@@ -3467,9 +3610,9 @@
     if(isLoderOnly){
       const hasPackage = !isEmptyDashValue(row?.package_id) || !isEmptyDashValue(row?.package_name) || !isEmptyDashValue(row?.package_name_snapshot);
       const hasTo = !isEmptyDashValue(row?.to_location);
-      const hasLoaderLink = !isEmptyDashValue(row?.loader_id) || !isEmptyDashValue(row?.linked_excavator_id);
-      // Loder yükleme modu ekskavatör gibi kabul edilir. Yardımcı işlerde paket/hedef/yükleyici bağlantısı olmaz.
-      if(!hasPackage || !hasTo || hasLoaderLink) return 'helper';
+      // Standart: loder yükleme modunda ekskavatör gibi davranır. Yardımcı mod ancak paket/hedef yoksa varsayılır.
+      // loader_id alanı loderin kendi kimliğini taşıyabilir; bu tek başına helper anlamına gelmez.
+      if(!hasPackage || !hasTo) return 'helper';
     }
     return 'loading';
   }
@@ -3477,7 +3620,32 @@
   function isLoadingWorkProduction(row){ return !isHelperWorkProduction(row); }
   function isLoaderAnalysisProduction(row){ return isLoadingEquipment(findEquipmentById(row?.equipment_id)) && isLoadingWorkProduction(row); }
   function getProductionLoaderId(row){ return String(row?.loader_id || row?.linked_excavator_id || ''); }
-  function getProductionLoaderName(row){ return row?.loader_name || row?.loader_name_snapshot || row?.linked_excavator_name || row?.linked_excavator_name_snapshot || ''; }
+  function getProductionLoaderName(row){
+    const id = getProductionLoaderId(row);
+    const eq = id ? findEquipmentById(id) : null;
+    return row?.loader_name || row?.loader_name_snapshot || row?.linked_excavator_name || row?.linked_excavator_name_snapshot || eq?.name || '';
+  }
+  function getProductionLoaderType(row){
+    const id = getProductionLoaderId(row);
+    const eq = id ? findEquipmentById(id) : null;
+    return row?.loader_type || (eq ? loadingEquipmentKind(eq) : (row?.linked_excavator_id ? 'excavator' : '')) || '';
+  }
+  function getTripLoaderId(row){ return String(row?.loader_id || row?.linked_excavator_id || ''); }
+  function getTripLoaderName(row){
+    const id = getTripLoaderId(row);
+    const eq = id ? findEquipmentById(id) : null;
+    return row?.loader_name || row?.loader_name_snapshot || row?.linked_excavator_name || row?.linked_excavator_name_snapshot || eq?.name || '';
+  }
+  function buildLoaderSnapshotFromProduction(prod){
+    const loaderId = getProductionLoaderId(prod) || String(prod?.equipment_id || '');
+    const loaderEq = findEquipmentById(loaderId) || findEquipmentById(prod?.equipment_id);
+    return {
+      loader_id: loaderId || null,
+      loader_name: getProductionLoaderName(prod) || prod?.equipment_name || prod?.equipment_name_snapshot || loaderEq?.name || null,
+      loader_name_snapshot: getProductionLoaderName(prod) || prod?.equipment_name || prod?.equipment_name_snapshot || loaderEq?.name || null,
+      loader_type: getProductionLoaderType(prod) || (loaderEq ? loadingEquipmentKind(loaderEq) : null)
+    };
+  }
   function findEquipmentById(id){ return state.equipments.find(e=>String(e.id)===String(id)); }
   function autoMeterTypeForEquipment(id){
     const eq = findEquipmentById(id);
@@ -3965,6 +4133,22 @@
     }
   }
 
+  function getShiftStartIsoByBucket(bucket){
+    try{
+      if(!bucket?.shift_name || !bucket?.shift_date) return '';
+      const cfg = shiftConfigByName(bucket.shift_name);
+      if(!cfg?.start) return '';
+      const day = parseDayKey(bucket.shift_date);
+      if(!day) return '';
+      const [sh, sm] = String(cfg.start || '').split(':').map(Number);
+      if([sh, sm].some(n=>!Number.isFinite(n))) return '';
+      const start = new Date(day.getFullYear(), day.getMonth(), day.getDate(), sh, sm, 0, 0);
+      return asLocalIsoString(start);
+    }catch(e){
+      return '';
+    }
+  }
+
   function getEffectiveProductionEndTime(row){
     try{
       if(!row || row.deleted_at) return '';
@@ -4092,6 +4276,54 @@
     }
   }
 
+  async function autoClosePreviousShiftOpenBreakdowns(){
+    try{
+      const openRows = (state.breakdowns || []).filter(r=>{
+        if(!r || r.deleted_at) return false;
+        return !(r.end_at || r.end_time) && !!(r.start_at || r.start_time || r.created_at);
+      });
+      if(!openRows.length) return false;
+
+      let changed = false;
+      const nowMs = Date.now();
+
+      for(const row of openRows){
+        const bucket = resolveShiftBucketForRow(row);
+        if(!bucket?.shift_name || !bucket?.shift_date) continue;
+
+        const shiftEndMs = getShiftBucketEndMs(bucket.shift_name, bucket.shift_date);
+        if(!Number.isFinite(shiftEndMs) || shiftEndMs <= 0 || shiftEndMs > nowMs) continue;
+
+        const endedAt = getShiftEndIsoByBucket(bucket);
+        if(!endedAt) continue;
+
+        const startRaw = row.start_at || row.start_time || row.created_at || '';
+        const startMs = new Date(startRaw).getTime();
+        const endMs = new Date(endedAt).getTime();
+        if(!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs < startMs) continue;
+
+        const payload = {
+          end_at: endedAt,
+          end_time: endedAt,
+          updated_at: nowIso()
+        };
+        const res = await updateWithOptionalColumns(TABLES.BREAKDOWNS || 'breakdowns', payload, ['end_at', 'end_time', 'updated_at'], row.id);
+        if(res?.error){
+          console.error('breakdown autoclose update error', { id: row.id, error: res.error, bucket, endedAt });
+          continue;
+        }
+        row.end_at = endedAt;
+        row.end_time = endedAt;
+        row.updated_at = payload.updated_at;
+        changed = true;
+      }
+      return changed;
+    }catch(err){
+      console.error('autoClosePreviousShiftOpenBreakdowns', err);
+      return false;
+    }
+  }
+
   async function loadAllSafe(){
     const tables = [TABLES.EQUIPMENTS, TABLES.PACKAGES, TABLES.PRODUCTIONS, TABLES.BREAKDOWNS, TABLES.RENTALS, TABLES.FUEL_LOGS, TABLES.METER_LOGS, TABLES.TRUCK_TRIPS, TABLES.DASHBOARD_PRO_FINAL];
     if(canManageUsers()) tables.push(TABLES.PROFILES);
@@ -4102,7 +4334,7 @@
     state.equipments = (results[TABLES.EQUIPMENTS]?.data || []).map(e=>({ ...e, truck_model_id: e.truck_model_id || (state.equipmentModelMap || {})[String(e.id)] || '' }));
     state.packages = (results[TABLES.PACKAGES]?.data || []).map(p=>({ ...p, tonnage_factor: Number.isFinite(Number(p.tonnage_factor)) ? Number(p.tonnage_factor) : Number((state.packageTonnageFactors || {})[String(p.id)] || 1) }));
     state.productions = (results[TABLES.PRODUCTIONS]?.data || []).map(r=>{
-      const loaderId = r.loader_id || r.linked_excavator_id || '';
+      const loaderId = getProductionLoaderId(r) || '';
       const loaderEq = findEquipmentById(loaderId);
       return {
         ...r,
@@ -4130,13 +4362,21 @@
       equipment_name: r.equipment_name || (findEquipmentById(r.equipment_id)?.name || '') || '',
       created_at: r.created_at || r.recorded_at || nowIso()
     }));
-    state.truck_trips = (results[TABLES.TRUCK_TRIPS]?.data || []).map(r=>({
-      ...r,
-      equipment_name: r.equipment_name || (findEquipmentById(r.equipment_id)?.name || '') || '',
-      package_name: r.package_name || packageName(r.package_id) || '',
-      linked_excavator_name: r.linked_excavator_name || (findEquipmentById(r.linked_excavator_id)?.name || '') || '',
-      created_at: r.created_at || r.recorded_at || nowIso()
-    }));
+    state.truck_trips = (results[TABLES.TRUCK_TRIPS]?.data || []).map(r=>{
+      const loaderId = getTripLoaderId(r) || '';
+      const loaderEq = findEquipmentById(loaderId);
+      return {
+        ...r,
+        equipment_name: r.equipment_name || (findEquipmentById(r.equipment_id)?.name || '') || '',
+        package_name: r.package_name || packageName(r.package_id) || '',
+        linked_excavator_name: r.linked_excavator_name || (findEquipmentById(r.linked_excavator_id)?.name || '') || '',
+        loader_id: loaderId || r.loader_id || '',
+        loader_name: r.loader_name || r.loader_name_snapshot || r.linked_excavator_name || r.linked_excavator_name_snapshot || loaderEq?.name || '',
+        loader_name_snapshot: r.loader_name_snapshot || r.loader_name || r.linked_excavator_name || r.linked_excavator_name_snapshot || loaderEq?.name || '',
+        loader_type: r.loader_type || (loaderEq ? loadingEquipmentKind(loaderEq) : (r.linked_excavator_id ? 'excavator' : '')),
+        created_at: r.created_at || r.recorded_at || nowIso()
+      };
+    });
     state.dashboardProFinal = (results[TABLES.DASHBOARD_PRO_FINAL]?.data || []).map(r=>{
       const prodRow = (state.productions || []).find(p=>String(p.id || '') === String(r.production_id || r.id || '')) || {};
       const eqRow = findEquipmentById(r.equipment_id || prodRow.equipment_id);
@@ -4150,10 +4390,10 @@
         package_name: r.package_name || prodRow.package_name || prodRow.package_name_snapshot || packageName(r.package_id || prodRow.package_id) || '',
         linked_excavator_id: r.linked_excavator_id || prodRow.linked_excavator_id || '',
         linked_excavator_name: r.linked_excavator_name || prodRow.linked_excavator_name || prodRow.linked_excavator_name_snapshot || '',
-        loader_type: r.loader_type || prodRow.loader_type || (prodRow.linked_excavator_id ? 'excavator' : ''),
-        loader_id: r.loader_id || prodRow.loader_id || prodRow.linked_excavator_id || '',
-        loader_name: r.loader_name || r.loader_name_snapshot || prodRow.loader_name || prodRow.loader_name_snapshot || prodRow.linked_excavator_name || prodRow.linked_excavator_name_snapshot || '',
-        loader_name_snapshot: r.loader_name_snapshot || prodRow.loader_name_snapshot || '',
+        loader_type: r.loader_type || getProductionLoaderType(prodRow) || (prodRow.linked_excavator_id ? 'excavator' : ''),
+        loader_id: r.loader_id || getProductionLoaderId(prodRow) || '',
+        loader_name: r.loader_name || r.loader_name_snapshot || getProductionLoaderName(prodRow) || '',
+        loader_name_snapshot: r.loader_name_snapshot || prodRow.loader_name_snapshot || getProductionLoaderName(prodRow) || '',
         production_mode: r.production_mode || prodRow.production_mode || prodRow.work_mode || 'loading',
         work_mode: r.work_mode || prodRow.work_mode || prodRow.production_mode || 'loading',
         total_trips: Number(r.total_trips || 0) || 0,
@@ -4169,9 +4409,10 @@
 
     if(!state._autoClosingPreviousShift){
       state._autoClosingPreviousShift = true;
-      const changed = await autoClosePreviousShiftOpenProductions();
+      const prodChanged = await autoClosePreviousShiftOpenProductions();
+      const breakChanged = await autoClosePreviousShiftOpenBreakdowns();
       state._autoClosingPreviousShift = false;
-      if(changed) return await loadAllSafe();
+      if(prodChanged || breakChanged) return await loadAllSafe();
     }
 
     const bad = Object.entries(results).filter(([_,v])=>v?.error).map(([k,v])=>({table:k,error:v.error.message}));
@@ -4192,7 +4433,7 @@
     return isOpenRow(row) && !isRowAssignedToCurrentShift(row);
   }
   function activeProductionRows(){ return state.productions.filter(r => isOpenRow(r) && isRowAssignedToCurrentShift(r)); }
-  function activeBreakdownRows(){ return state.breakdowns.filter(r => isOpenRow(r)); }
+  function activeBreakdownRows(){ return state.breakdowns.filter(r => isOpenRow(r) && isRowAssignedToCurrentShift(r)); }
   function activeRentalRows(){ return state.rentals.filter(r => isOpenRow(r) && isRowAssignedToCurrentShift(r) && !currentOpenBreakdownForEquipment(r.equipment_id)); }
   function countByEquipmentType(rows){
     const result = { excavator:0, truck:0, other:0 };
@@ -4309,11 +4550,15 @@
       const normalizedBody = normalizePayloadForTable(table, body);
       let res = await state.sb.from(resolveDbTableName(table)).insert([normalizedBody]).select();
       body = normalizedBody;
-      if(!res.error) return { ...res, inserted: body };
+      if(!res.error){
+        const insertedId = Array.isArray(res.data) && res.data[0]?.id ? res.data[0].id : body?.id || null;
+        await addRecordAuditLog('insert', table, insertedId, body);
+        return { ...res, inserted: body };
+      }
       const msg = String(res.error?.message || '').toLowerCase();
       if(msg.includes('permission') || msg.includes('select') || msg.includes('returning') || msg.includes('policy')){
         const bare = await state.sb.from(resolveDbTableName(table)).insert([body]);
-        if(!bare.error) return { data:[body], error:null, inserted: body };
+        if(!bare.error){ await addRecordAuditLog('insert', table, null, body); return { data:[body], error:null, inserted: body }; }
       }
       return { ...res, inserted: body };
     }
@@ -4341,7 +4586,7 @@
   async function updateWithOptionalColumns(table, payload, optionalCols, id){
     payload = normalizePayloadForTable(table, payload);
     let res = await state.sb.from(resolveDbTableName(table)).update(payload).eq('id', id);
-    if(!res.error) return res;
+    if(!res.error){ await addRecordAuditLog('update', table, id, payload); return res; }
     if(optionalColumnError(res.error, optionalCols)){
       let cloned = {...payload};
       const cols = Array.isArray(optionalCols) ? [...optionalCols] : [];
@@ -4357,7 +4602,7 @@
   async function updateWhereWithOptionalColumns(table, payload, optionalCols, filterCol, filterVal){
     payload = normalizePayloadForTable(table, payload);
     let res = await state.sb.from(resolveDbTableName(table)).update(payload).eq(filterCol, filterVal);
-    if(!res.error) return res;
+    if(!res.error){ await addRecordAuditLog('update_where', table, `${filterCol}=${filterVal}`, payload); return res; }
     if(optionalColumnError(res.error, optionalCols)){
       let cloned = {...payload};
       const cols = Array.isArray(optionalCols) ? [...optionalCols] : [];
@@ -4469,32 +4714,74 @@
       return { value: latest, source: 'latest_known', sourceLabel: latest !== null ? `Son bilinen sayaç: ${latest} ${unit}` : `Sayaç birimi otomatik: ${unit}`, unit, shift_name:'', shift_date:'' };
     }
   }
-  async function syncNextShiftProductionStartMeters(equipment_id, sourceShiftName, sourceShiftDate, closingMeterValue, previousLatestValue){
+  async function syncNextShiftProductionStartMeters(equipment_id, sourceShiftName, sourceShiftDate, closingMeterValue, previousLatestValue, forceChain=false){
     try{
       const nextBucket = getNextShiftBucketFrom(sourceShiftName, sourceShiftDate);
       const closingValue = Number(closingMeterValue);
-      if(!nextBucket || !equipment_id || !Number.isFinite(closingValue)) return { updated:0 };
-      const candidates = (state.productions || []).filter(r=>{
-        if(!r || r.deleted_at) return false;
-        if(String(r.equipment_id || '') !== String(equipment_id || '')) return false;
+      if(!nextBucket || !equipment_id || !Number.isFinite(closingValue)) return { updated:0, meter_logs_updated:0 };
+
+      const sameEquipment = r => String(r?.equipment_id || '') === String(equipment_id || '');
+      const inNextBucket = r => {
         const bucket = resolveShiftBucketForRow(r);
         return !!bucket && String(bucket.shift_key || '') === String(nextBucket.shift_key || '');
+      };
+
+      const candidates = (state.productions || []).filter(r=>{
+        if(!r || r.deleted_at) return false;
+        return sameEquipment(r) && inNextBucket(r);
       }).sort((a,b)=>new Date(a.start_at || a.start_time || a.created_at || 0) - new Date(b.start_at || b.start_time || b.created_at || 0));
+
       let updated = 0;
+      const touchedProductionIds = [];
       for(const row of candidates){
         const currentStart = Number(row.start_meter_value);
-        const shouldUpdate = !Number.isFinite(currentStart)
+        const shouldUpdate = !!forceChain
+          || !Number.isFinite(currentStart)
           || currentStart === Number(previousLatestValue)
           || (currentStart === 0 && (previousLatestValue === null || previousLatestValue === undefined));
         if(!shouldUpdate) continue;
+        const oldStart = row.start_meter_value;
         const payload = { start_meter_value: closingValue, updated_at: nowIso() };
-        const res = await updateWithOptionalColumns(TABLES.PRODUCTIONS, payload, [], row.id);
+        const res = await updateWithOptionalColumns(TABLES.PRODUCTIONS, payload, ['start_meter_value','updated_at'], row.id);
         if(res.error) throw res.error;
         row.start_meter_value = closingValue;
         row.updated_at = payload.updated_at;
+        touchedProductionIds.push(String(row.id || ''));
         updated += 1;
+        try{
+          await addRecordAuditLog('meter_chain_update', TABLES.PRODUCTIONS, row.id, { start_meter_value: oldStart }, {
+            reason:'Önceki vardiya bitiş sayacı sonraki vardiya başlangıcına devredildi',
+            old_data:{ start_meter_value: oldStart },
+            new_data:{ start_meter_value: closingValue, source_shift_name: sourceShiftName, source_shift_date: sourceShiftDate }
+          });
+        }catch(e){}
       }
-      return { updated, nextBucket };
+
+      let meterLogsUpdated = 0;
+      const nextMeterLogs = (state.meter_logs || []).filter(r=>{
+        if(!r || r.deleted_at) return false;
+        if(!sameEquipment(r) || !inNextBucket(r)) return false;
+        if(touchedProductionIds.length && r.production_id && !touchedProductionIds.includes(String(r.production_id))) return false;
+        return !!forceChain || r.start_meter_value === null || r.start_meter_value === undefined || r.start_meter_value === '' || Number(r.start_meter_value) === Number(previousLatestValue);
+      });
+      for(const m of nextMeterLogs){
+        const oldStart = m.start_meter_value;
+        const payload = { start_meter_value: closingValue, updated_at: nowIso() };
+        const res = await updateWithOptionalColumns(TABLES.METER_LOGS, payload, ['start_meter_value','updated_at'], m.id);
+        if(res.error) throw res.error;
+        m.start_meter_value = closingValue;
+        m.updated_at = payload.updated_at;
+        meterLogsUpdated += 1;
+        try{
+          await addRecordAuditLog('meter_chain_update', TABLES.METER_LOGS, m.id, { start_meter_value: oldStart }, {
+            reason:'Sayaç zinciri nedeniyle sonraki vardiya sayaç başlangıcı güncellendi',
+            old_data:{ start_meter_value: oldStart },
+            new_data:{ start_meter_value: closingValue, source_shift_name: sourceShiftName, source_shift_date: sourceShiftDate }
+          });
+        }catch(e){}
+      }
+
+      return { updated, meter_logs_updated: meterLogsUpdated, nextBucket };
     }catch(err){
       throw err;
     }
@@ -5104,6 +5391,7 @@
       el.innerHTML = modalShell('Kaydı Sil', `
         <div class="notice">Bu kayıt kalıcı silinmez. Silinenler sekmesine taşınır ve daha sonra geri getirilebilir.</div>
         <div class="subtle" style="margin-top:12px"><b>${escapeHtml(data.title || 'Kayıt')}</b><br>${escapeHtml(data.subtitle || '')}</div>
+        <div class="form-field" style="margin-top:12px"><label>Silme Nedeni</label><textarea id="m_delete_reason" placeholder="Örn: yanlış vardiya / yanlış ekipman / mükerrer kayıt">Kullanıcı tarafından silinenlere taşındı</textarea></div>
         <div class="actions"><button class="secondary" data-close-modal="1">İptal</button><button type="button" class="danger" data-action="confirmSoftDelete">Sil</button></div>
       `);
       return;
@@ -5368,6 +5656,9 @@
       const linkedProd = linkedProductionId ? activeLoaderProductions().find(r=>String(r.id)===String(linkedProductionId)) : null;
       if(!linkedProd) throw new Error('Seçilen yükleyici aktif üretimde bulunamadı');
       const linkedEq = findEquipmentById(linkedProd.equipment_id);
+      const linkedLoaderId = linkedProd?.equipment_id || null;
+      const linkedLoaderName = linkedProd?.equipment_name || linkedProd?.equipment_name_snapshot || linkedEq?.name || null;
+      const linkedLoaderType = loadingEquipmentKind(linkedEq);
       const package_id = document.getElementById('m_package_id').value || linkedProd?.package_id || null;
       const payload = {
         equipment_id,
@@ -5381,13 +5672,13 @@
         shift_date: todayStr(),
         start_meter_type: 'km',
         start_meter_value: document.getElementById('m_start_meter').value === '' ? (preferredStartMeterForProduction(equipment_id, nowIso()).value ?? 0) : num(document.getElementById('m_start_meter').value),
-        linked_excavator_id: isExcavatorEquipment(linkedEq) ? (linkedProd?.equipment_id || null) : null,
-        linked_excavator_name: isExcavatorEquipment(linkedEq) ? (linkedProd?.equipment_name || linkedEq?.name || null) : null,
-        linked_excavator_name_snapshot: isExcavatorEquipment(linkedEq) ? (linkedProd?.equipment_name || linkedEq?.name || null) : null,
-        loader_type: loadingEquipmentKind(linkedEq),
-        loader_id: linkedProd?.equipment_id || null,
-        loader_name: linkedProd?.equipment_name || linkedEq?.name || null,
-        loader_name_snapshot: linkedProd?.equipment_name || linkedEq?.name || null,
+        linked_excavator_id: isExcavatorEquipment(linkedEq) ? linkedLoaderId : null,
+        linked_excavator_name: isExcavatorEquipment(linkedEq) ? linkedLoaderName : null,
+        linked_excavator_name_snapshot: isExcavatorEquipment(linkedEq) ? linkedLoaderName : null,
+        loader_type: linkedLoaderType,
+        loader_id: linkedLoaderId,
+        loader_name: linkedLoaderName,
+        loader_name_snapshot: linkedLoaderName,
         production_mode: 'loading',
         work_mode: 'loading',
       };
@@ -5464,7 +5755,7 @@
             from_location: prod.from_location || '',
             to_location: prod.to_location || '',
             linked_excavator_id: prod.linked_excavator_id || null,
-            loader_type: prod.loader_type || (prod.linked_excavator_id ? 'excavator' : null),
+            loader_type: getProductionLoaderType(prod) || null,
             loader_id: getProductionLoaderId(prod) || null,
             production_id: prod.id,
             shift_name: getShiftNameForRow(prod) || resolveShiftNameForDateTime(nowIso()) || '',
@@ -5482,7 +5773,7 @@
       }
       const prodShift = resolveShiftBucketForRow({ ...prod, end_at: endAtIso, end_time: endAtIso, updated_at: endAtIso }) || resolveShiftBucketForRow(prod);
       if(prodShift && Number.isFinite(Number(payload.end_meter_value))){
-        await syncNextShiftProductionStartMeters(prod.equipment_id, prodShift.shift_name, prodShift.shift_date, payload.end_meter_value, beforeLatest);
+        await syncNextShiftProductionStartMeters(prod.equipment_id, prodShift.shift_name, prodShift.shift_date, payload.end_meter_value, beforeLatest, true);
       }
       closeModal();
       await refreshData();
@@ -5644,6 +5935,7 @@
       if(res.error) throw res.error;
       const insertedRow = (res.data && res.data[0]) ? res.data[0] : { ...payload, id:`temp_trip_${Date.now()}` };
       state.truck_trips = [insertedRow, ...state.truck_trips.filter(r=>String(r.id)!==String(insertedRow.id))];
+      await addRecordAuditLog('insert', TABLES.TRUCK_TRIPS, insertedRow.id, insertedRow, { reason:'Sefer kaydı eklendi', new_data: insertedRow });
       if(matchedProduction?.id){
         const nextTripTotal = productionTripTotal(matchedProduction) + (Number(payload.trip_count || 0) || 0);
         await updateWithOptionalColumns(TABLES.PRODUCTIONS, { trip_count: nextTripTotal }, ['trip_count'], matchedProduction.id);
@@ -5666,8 +5958,15 @@
       const shiftSeed = combineDateTimeInputs(fuelDate, manualTime || '12:00') || nowIso();
       const production_id = document.getElementById('m_fuel_production_id')?.value || null;
       const selectedShiftInput = inferShiftNameForInput('m_fuel_shift_name', shiftSeed);
-      const matchedProduction = getProductionRowById(production_id) || findProductionByShiftBucket(equipment_id, fuelDate, selectedShiftInput) || productionForEquipmentAt(equipment_id, shiftSeed) || null;
-      const selectedShift = matchedProduction ? (getShiftNameForRow(matchedProduction) || selectedShiftInput) : selectedShiftInput;
+      const matchedProduction = getProductionRowById(production_id)
+        || findProductionByShiftBucket(equipment_id, fuelDate, selectedShiftInput)
+        || productionForEquipmentAt(equipment_id, shiftSeed)
+        || currentOpenProductionForEquipment(equipment_id)
+        || null;
+      if(!matchedProduction?.id){
+        throw new Error('Bu yakıt kaydı için seçilen tarih/vardiyada üretim kaydı bulunamadı. Kayıtların analizde doğru işlenmesi için önce ilgili üretim kaydı olmalı.');
+      }
+      const selectedShift = getShiftNameForRow(matchedProduction) || selectedShiftInput;
       const eventAt = buildLogisticsEventIso(fuelDate, selectedShift, manualTime, '12:00') || nowIso();
       const liters = num(document.getElementById('m_fuel_liters').value);
       if(liters <= 0) throw new Error('Litre 0’dan büyük olmalı');
@@ -5689,6 +5988,7 @@
       if(res.error) throw res.error;
       const insertedRow = (res.data && res.data[0]) ? res.data[0] : { ...payload, id:`temp_fuel_${Date.now()}` };
       state.fuel_logs = [insertedRow, ...state.fuel_logs.filter(r=>String(r.id)!==String(insertedRow.id))];
+      await addRecordAuditLog('insert', TABLES.FUEL_LOGS, insertedRow.id, insertedRow, { reason:'Yakıt kaydı eklendi', new_data: insertedRow });
       closeModal();
       await refreshLogisticsAfterSave('fuel');
       showToast(payload.production_id ? 'Yakıt kaydı üretim bağlantısıyla eklendi' : 'Yakıt kaydı eklendi');
@@ -5734,7 +6034,12 @@
         target = findProductionByShiftBucket(row.equipment_id, shiftDate, shiftName);
       }
       if(!target) return { updated:false };
-      return await syncProductionMetersFromCorrection(target.id, startVal, endVal, force);
+      const syncRes = await syncProductionMetersFromCorrection(target.id, startVal, endVal, force);
+      const bucket = resolveShiftBucketForRow(target) || resolveShiftBucketForRow(row);
+      if(bucket && Number.isFinite(Number(endVal))){
+        await syncNextShiftProductionStartMeters(target.equipment_id || row.equipment_id, bucket.shift_name || bucket.name, bucket.shift_date, endVal, startVal, true);
+      }
+      return syncRes;
     }catch(err){ throw err; }
   }
 
@@ -5755,8 +6060,15 @@
       ensureNonNegativeMeterWindow(startVal ?? 0, endVal ?? 0, autoMeterTypeForEquipment(equipment_id), 'Sayaç');
       const production_id = document.getElementById('m_meter_production_id')?.value || null;
       const selectedShiftInput = inferShiftNameForInput('m_meter_shift_name', inferredSeed);
-      const matchedProduction = getProductionRowById(production_id) || findProductionByShiftBucket(equipment_id, meterDate, selectedShiftInput) || null;
-      const selectedShift = matchedProduction ? (getShiftNameForRow(matchedProduction) || selectedShiftInput) : selectedShiftInput;
+      const matchedProduction = getProductionRowById(production_id)
+        || findProductionByShiftBucket(equipment_id, meterDate, selectedShiftInput)
+        || productionForEquipmentAt(equipment_id, inferredSeed)
+        || currentOpenProductionForEquipment(equipment_id)
+        || null;
+      if(!matchedProduction?.id){
+        throw new Error('Bu sayaç kaydı için seçilen tarih/vardiyada üretim kaydı bulunamadı. Kayıtların analizde doğru işlenmesi için önce ilgili üretim kaydı olmalı.');
+      }
+      const selectedShift = getShiftNameForRow(matchedProduction) || selectedShiftInput;
       const eventAt = buildLogisticsEventIso(meterDate, selectedShift, '', '12:00') || inferredSeed;
       if(!Number.isFinite(Number(endVal))) throw new Error('Sayaç değeri giriniz');
       const payload = {
@@ -5778,11 +6090,12 @@
       if(res.error) throw res.error;
       const insertedRow = (res.data && res.data[0]) ? res.data[0] : { ...payload, id:`temp_meter_${Date.now()}` };
       state.meter_logs = [insertedRow, ...state.meter_logs.filter(r=>String(r.id)!==String(insertedRow.id))];
+      await addRecordAuditLog('insert', TABLES.METER_LOGS, insertedRow.id, insertedRow, { reason:'Sayaç kaydı eklendi', new_data: insertedRow });
       if(payload.production_id){
         await syncProductionMetersFromCorrection(payload.production_id, startVal, endVal);
       }
       if(payload.shift_name && payload.shift_date && Number.isFinite(Number(endVal))){
-        await syncNextShiftProductionStartMeters(equipment_id, payload.shift_name, payload.shift_date, endVal, beforeLatest);
+        await syncNextShiftProductionStartMeters(equipment_id, payload.shift_name, payload.shift_date, endVal, beforeLatest, true);
       }
       closeModal();
       await refreshLogisticsAfterSave('meter');
@@ -5794,9 +6107,15 @@
     if('confirmSoftDelete' === 'saveDefinition' ? !canManageDefinitions() : !canEditOperations()){ alert('Bu işlem için yetkin yok.'); return; }
     try{
       const d = state.modal.data;
-      const payload = { deleted_at: nowIso(), deleted_by: state.user?.id || null };
-      const { error } = await state.sb.from(resolveDbTableName(d.table)).update(payload).eq('id', d.id);
-      if(error) throw error;
+      const reason = (document.getElementById('m_delete_reason')?.value || '').trim() || 'Kullanıcı tarafından silinenlere taşındı';
+      const payload = { deleted_at: nowIso(), deleted_by: state.user?.id || null, delete_reason: reason };
+      let res = await state.sb.from(resolveDbTableName(d.table)).update(payload).eq('id', d.id);
+      if(res.error && optionalColumnError(res.error, ['delete_reason'])){
+        const fallbackPayload = { deleted_at: payload.deleted_at, deleted_by: payload.deleted_by };
+        res = await state.sb.from(resolveDbTableName(d.table)).update(fallbackPayload).eq('id', d.id);
+      }
+      if(res.error) throw res.error;
+      await addRecordAuditLog('soft_delete', d.table, d.id, payload, { reason });
       closeModal();
       await refreshAfterRecordDelete(d.table, d.id, 'soft');
       showToast('Kayıt silinenlere taşındı');
@@ -5805,8 +6124,12 @@
 
   async function restoreDeleted(table, id){
     try{
-      const { error } = await state.sb.from(resolveDbTableName(table)).update({ deleted_at:null, deleted_by:null }).eq('id', id);
-      if(error) throw error;
+      const { error } = await state.sb.from(resolveDbTableName(table)).update({ deleted_at:null, deleted_by:null, delete_reason:null }).eq('id', id);
+      if(error && optionalColumnError(error, ['delete_reason'])){
+        const retry = await state.sb.from(resolveDbTableName(table)).update({ deleted_at:null, deleted_by:null }).eq('id', id);
+        if(retry.error) throw retry.error;
+      }else if(error) throw error;
+      await addRecordAuditLog('restore', table, id, { deleted_at:null, deleted_by:null, delete_reason:null }, { reason:'Silinenlerden geri getirildi' });
       await refreshData();
       showToast('Kayıt geri getirildi');
     }catch(err){ alert(err.message || err); }
@@ -5916,43 +6239,64 @@
       } else if(table === 'truck_trips'){
         const equipment_id = document.getElementById('m_edit_equipment_id').value;
         const eq = findEquipmentById(equipment_id);
+        if(!isTruckEquipment(eq)) throw new Error('Sefer kaydı sadece kamyon ekipmanına bağlanabilir');
         const package_id = document.getElementById('m_edit_package_id').value || null;
-        const linked_excavator_id = document.getElementById('m_edit_linked_excavator_id').value || null;
+        const editCreatedAt = document.getElementById('m_edit_created_at').value ? asLocalIsoString(document.getElementById('m_edit_created_at').value) : row.created_at;
+        const editShiftName = document.getElementById('m_edit_shift_name')?.value || getShiftNameForRow(row) || inferShiftNameForInput('m_edit_shift_name', editCreatedAt);
+        const editShiftDate = document.getElementById('m_edit_shift_date')?.value || logisticsExplicitShiftDate(row) || String(editCreatedAt || '').slice(0,10) || todayStr();
+        const selectedProductionId = document.getElementById('m_edit_production_id')?.value || null;
+        const matchedProduction = getProductionRowById(selectedProductionId)
+          || findProductionByShiftBucket(equipment_id, editShiftDate, editShiftName)
+          || productionForEquipmentAt(equipment_id, editCreatedAt)
+          || null;
+        if(!matchedProduction?.id){
+          throw new Error('Sefer kaydı production_id olmadan kaydedilemez. Doğru tarih/vardiya için önce ilgili kamyon üretim kaydı olmalı.');
+        }
+        const linked_excavator_id = document.getElementById('m_edit_linked_excavator_id').value || matchedProduction.loader_id || matchedProduction.linked_excavator_id || null;
         const linkedEq = findEquipmentById(linked_excavator_id);
         payload = {
           equipment_id,
-          package_id,
-          production_id: document.getElementById('m_edit_production_id')?.value || null,
-          shift_name: document.getElementById('m_edit_shift_name')?.value || null,
-          shift_date: document.getElementById('m_edit_shift_date')?.value || null,
-          linked_excavator_id: isExcavatorEquipment(linkedEq) ? linked_excavator_id : null,
-          linked_excavator_name: isExcavatorEquipment(linkedEq) ? (linkedEq?.name || null) : null,
-          loader_type: linked_excavator_id ? loadingEquipmentKind(linkedEq) : null,
-          loader_id: linked_excavator_id || null,
-          loader_name: linkedEq?.name || null,
-          loader_name_snapshot: linkedEq?.name || null,
+          package_id: package_id || matchedProduction.package_id || null,
+          production_id: matchedProduction.id,
+          shift_name: getShiftNameForRow(matchedProduction) || editShiftName,
+          shift_date: logisticsExplicitShiftDate({ production_id: matchedProduction.id, shift_name: getShiftNameForRow(matchedProduction) || editShiftName, created_at: editCreatedAt, logistics_shift_date: editShiftDate }),
+          linked_excavator_id: isExcavatorEquipment(linkedEq) ? linked_excavator_id : (matchedProduction.linked_excavator_id || null),
+          linked_excavator_name: isExcavatorEquipment(linkedEq) ? (linkedEq?.name || null) : (matchedProduction.linked_excavator_name || null),
+          loader_type: linked_excavator_id ? loadingEquipmentKind(linkedEq) : (matchedProduction.loader_type || null),
+          loader_id: linked_excavator_id || matchedProduction.loader_id || matchedProduction.linked_excavator_id || null,
+          loader_name: linkedEq?.name || matchedProduction.loader_name || matchedProduction.linked_excavator_name || null,
+          loader_name_snapshot: linkedEq?.name || matchedProduction.loader_name_snapshot || matchedProduction.loader_name || null,
           trip_count: num(document.getElementById('m_edit_trip_count').value),
-          from_location: document.getElementById('m_edit_from_location').value.trim(),
-          to_location: document.getElementById('m_edit_to_location').value.trim(),
-          created_at: document.getElementById('m_edit_created_at').value ? asLocalIsoString(document.getElementById('m_edit_created_at').value) : row.created_at
+          from_location: document.getElementById('m_edit_from_location').value.trim() || matchedProduction.from_location || '',
+          to_location: document.getElementById('m_edit_to_location').value.trim() || matchedProduction.to_location || '',
+          created_at: editCreatedAt
         };
       } else if(table === 'fuel_logs'){
         const equipment_id = document.getElementById('m_edit_equipment_id').value;
         const eq = findEquipmentById(equipment_id);
         const meter_value = num(document.getElementById('m_edit_meter_value').value);
-        // Yakıt kaydı düzenlemede sayaç değeri serbest bırakıldı.
-        // Yeni yakıt girişi ve diğer modüllerdeki son sayaç kontrolü korunur.
+        const editCreatedAt = document.getElementById('m_edit_created_at').value ? asLocalIsoString(document.getElementById('m_edit_created_at').value) : row.created_at;
+        const editShiftName = document.getElementById('m_edit_shift_name')?.value || getShiftNameForRow(row) || inferShiftNameForInput('m_edit_shift_name', editCreatedAt);
+        const editShiftDate = document.getElementById('m_edit_shift_date')?.value || logisticsExplicitShiftDate(row) || String(editCreatedAt || '').slice(0,10) || todayStr();
+        const selectedProductionId = document.getElementById('m_edit_production_id')?.value || null;
+        const matchedProduction = getProductionRowById(selectedProductionId)
+          || findProductionByShiftBucket(equipment_id, editShiftDate, editShiftName)
+          || productionForEquipmentAt(equipment_id, editCreatedAt)
+          || null;
+        if(!matchedProduction?.id){
+          throw new Error('Yakıt kaydı production_id olmadan kaydedilemez. Doğru tarih/vardiya için önce ilgili üretim kaydı olmalı.');
+        }
         payload = {
           equipment_id,
           equipment_name_snapshot: eq?.name || '',
-          production_id: document.getElementById('m_edit_production_id')?.value || null,
-          shift_name: document.getElementById('m_edit_shift_name')?.value || null,
-          shift_date: document.getElementById('m_edit_shift_date')?.value || null,
+          production_id: matchedProduction.id,
+          shift_name: getShiftNameForRow(matchedProduction) || editShiftName,
+          shift_date: logisticsExplicitShiftDate({ production_id: matchedProduction.id, shift_name: getShiftNameForRow(matchedProduction) || editShiftName, created_at: editCreatedAt, logistics_shift_date: editShiftDate }),
           source: document.getElementById('m_edit_source')?.value?.trim() || null,
           meter_type: autoMeterTypeForEquipment(equipment_id),
           liters: num(document.getElementById('m_edit_liters').value),
           meter_value,
-          created_at: document.getElementById('m_edit_created_at').value ? asLocalIsoString(document.getElementById('m_edit_created_at').value) : row.created_at
+          created_at: editCreatedAt
         };
       } else if(table === 'meter_logs'){
         const equipment_id = document.getElementById('m_edit_equipment_id').value;
@@ -5964,6 +6308,17 @@
         const latestEnd = Number.isFinite(Number(end_meter_value)) ? Number(end_meter_value) : Number(start_meter_value);
         ensureNonNegativeMeterWindow(start_meter_value ?? 0, end_meter_value ?? start_meter_value ?? 0, autoMeterTypeForEquipment(equipment_id), 'Sayaç');
         if(Number.isFinite(Number(latestEnd))) ensureMeterNotBelowLatest(equipment_id, latestEnd, { key:`meter_logs:${row.id}` });
+        const editCreatedAt = document.getElementById('m_edit_created_at').value ? asLocalIsoString(document.getElementById('m_edit_created_at').value) : row.created_at;
+        const editShiftName = document.getElementById('m_edit_shift_name').value || getShiftNameForRow(row) || inferShiftNameForInput('m_edit_shift_name', editCreatedAt);
+        const editShiftDate = document.getElementById('m_edit_shift_date').value || logisticsExplicitShiftDate(row) || String(editCreatedAt || '').slice(0,10) || todayStr();
+        const selectedProductionId = document.getElementById('m_edit_production_id').value || null;
+        const matchedProduction = getProductionRowById(selectedProductionId)
+          || findProductionByShiftBucket(equipment_id, editShiftDate, editShiftName)
+          || productionForEquipmentAt(equipment_id, editCreatedAt)
+          || null;
+        if(!matchedProduction?.id){
+          throw new Error('Sayaç kaydı production_id olmadan kaydedilemez. Doğru tarih/vardiya için önce ilgili üretim kaydı olmalı.');
+        }
         payload = {
           equipment_id,
           equipment_name_snapshot: eq?.name || '',
@@ -5971,11 +6326,11 @@
           start_meter_value,
           end_meter_value,
           meter_value: Number.isFinite(Number(end_meter_value)) ? end_meter_value : start_meter_value,
-          production_id: document.getElementById('m_edit_production_id').value || null,
-          shift_name: document.getElementById('m_edit_shift_name').value || null,
-          shift_date: document.getElementById('m_edit_shift_date').value || null,
-          logistics_shift_date: document.getElementById('m_edit_shift_date').value || null,
-          created_at: document.getElementById('m_edit_created_at').value ? asLocalIsoString(document.getElementById('m_edit_created_at').value) : row.created_at
+          production_id: matchedProduction.id,
+          shift_name: getShiftNameForRow(matchedProduction) || editShiftName,
+          shift_date: logisticsExplicitShiftDate({ production_id: matchedProduction.id, shift_name: getShiftNameForRow(matchedProduction) || editShiftName, created_at: editCreatedAt, logistics_shift_date: editShiftDate }),
+          logistics_shift_date: editShiftDate,
+          created_at: editCreatedAt
         };
       } else if(table === 'rentals'){
         const equipment_id = document.getElementById('m_edit_equipment_id').value;
@@ -6065,7 +6420,7 @@
         if(isExcavator){
           const metadataChanged = String(row.package_id || '') !== String(payload.package_id || '') || String(row.package_name || '') !== String(payload.package_name || '') || String(row.material_type || '') !== String(payload.material_type || '') || String(row.from_location || '') !== String(payload.from_location || '') || String(row.to_location || '') !== String(payload.to_location || '');
           if(metadataChanged){
-            const linkedActiveTruckIds = state.productions.filter(p => !p.deleted_at && !p.end_at && String(p.linked_excavator_id || '') === String(payload.equipment_id || '') && autoMeterTypeForEquipment(p.equipment_id) === 'km').map(p => p.id);
+            const linkedActiveTruckIds = state.productions.filter(p => !p.deleted_at && !p.end_at && String(getProductionLoaderId(p) || '') === String(payload.equipment_id || '') && autoMeterTypeForEquipment(p.equipment_id) === 'km').map(p => p.id);
             for(const linkedId of linkedActiveTruckIds){
               const truckPayload = {
                 package_id: payload.package_id,
@@ -6651,7 +7006,7 @@
       linked_excavator_id:r.linked_excavator_id || r.loader_id || '',
       linked_excavator_name:r.linked_excavator_name || dashboardProLoaderNameFromRow(r) || '',
       loader_type:r.loader_type || (r.linked_excavator_id ? 'excavator' : ''),
-      loader_id:r.loader_id || r.linked_excavator_id || '',
+      loader_id:getTripLoaderId(r) || '',
       loader_name:dashboardProLoaderNameFromRow(r) || '',
       _dashboard_tonnage:Number(r.total_tonnage || 0) || 0
     }));
@@ -6701,7 +7056,7 @@
     });
     const loaderTruckSets = new Map();
     tripFinalRows.forEach(r=>{
-      const loaderId = String(r.loader_id || r.linked_excavator_id || '');
+      const loaderId = getTripLoaderId(r);
       if(!loaderId) return;
       const loaderEq = findEquipmentById(loaderId) || {};
       const loaderName = dashboardProLoaderNameFromRow(r) || loaderEq.name || '-';
@@ -7423,7 +7778,7 @@
     excItems.forEach(e=>{
       const fuelItem = fuelConsumptionByEquipmentId.get(String(e.id || ''));
       const fuelRate = Number(fuelItem?.shift?.rate);
-      if((e.tripCount || 0) > 0 && (e.tonnage || 0) <= 0) alerts.push({level:'red', title:'Ekskavatör tonajı hesaplanamadı', text:`${e.name}: bağlı sefer var ama tonaj 0. Kamyon model tonajı, paket faktörü veya linked_excavator_id kontrol edilmeli.`});
+      if((e.tripCount || 0) > 0 && (e.tonnage || 0) <= 0) alerts.push({level:'red', title:'Ekskavatör tonajı hesaplanamadı', text:`${e.name}: bağlı sefer var ama tonaj 0. Kamyon model tonajı, paket faktörü veya loader_id bağlantısı kontrol edilmeli.`});
       if(fleetExcEff > 0 && (e.efficiency || 0) < fleetExcEff * alertRules.lowExcEfficiencyRatio) alerts.push({level:'orange', title:'Düşük ekskavatör sefer verimi', text:`${e.name}: ${e.efficiency.toFixed(2)} sefer/saat.`});
       if(fleetExcTonPerHour > 0 && (e.tonPerHour || 0) < fleetExcTonPerHour * alertRules.lowExcEfficiencyRatio) alerts.push({level:'orange', title:'Düşük ekskavatör ton/saat', text:`${e.name}: ${e.tonPerHour.toFixed(1)} ton/saat, ortalama ${fleetExcTonPerHour.toFixed(1)} ton/saat.`});
       if(Number.isFinite(fuelRate) && fuelRate > 0){
@@ -8145,7 +8500,7 @@
     state.recordsLoading = true;
     const body = document.getElementById('recordsBody');
     if(body) body.innerHTML = `<div class="card"><div class="muted">Kayıtlar yükleniyor...</div></div>`;
-    const tables = ['productions','breakdowns','rentals','fuel_logs'];
+    const tables = ['productions','breakdowns','rentals','truck_trips','fuel_logs','meter_logs'];
     try{
       await Promise.all(tables.map(t=>fetchRecordPageData(t)));
     }catch(err){
@@ -8343,10 +8698,17 @@ function applyRecordFilters(rows){
     }
     const confirmed = confirm('Bu listedeki görünür kayıtların tamamı silinenlere taşınsın mı?');
     if(!confirmed) return;
+    const bulkReason = (prompt('Toplu silme nedeni:', 'Toplu silinenlere taşıma') || '').trim() || 'Toplu silinenlere taşıma';
     const ids = rows.map(r=>r.id).filter(Boolean);
     if(!ids.length) return;
-    const { error } = await state.sb.from(resolveDbTableName(tableName)).update({ deleted_at:new Date().toISOString(), deleted_by: state.user?.id || null }).in('id', ids);
-    if(error) throw error;
+    const deletedAt = new Date().toISOString();
+    const payload = { deleted_at:deletedAt, deleted_by: state.user?.id || null, delete_reason: bulkReason };
+    let res = await state.sb.from(resolveDbTableName(tableName)).update(payload).in('id', ids);
+    if(res.error && optionalColumnError(res.error, ['delete_reason'])){
+      res = await state.sb.from(resolveDbTableName(tableName)).update({ deleted_at:deletedAt, deleted_by: state.user?.id || null }).in('id', ids);
+    }
+    if(res.error) throw res.error;
+    await addRecordAuditLog('bulk_soft_delete', tableName, ids.join(','), payload, { reason: bulkReason });
     await refreshAfterRecordDelete(tableName, ids, 'soft');
     renderRecords();
   }
@@ -8356,25 +8718,50 @@ function applyRecordFilters(rows){
     try{
       const current = getCurrentShiftBucketInfo();
       if(!current?.name) throw new Error('Aktif vardiya bulunamadı');
-      const continuedAt = nowIso();
-      const row = state.breakdowns.find(r=>String(r.id || '') === String(id || '')) || null;
-      const essentialPayload = {
-        updated_at: continuedAt,
-        start_at: continuedAt,
-        shift_name: current.name
-      };
-      let res = await updateWithOptionalColumns('breakdowns', essentialPayload, ['shift_name'], id);
-      if(res.error) throw res.error;
-      await updateWithOptionalColumns('breakdowns', { continued_at: continuedAt }, ['continued_at'], id);
-      if(row){
-        row.continued_at = continuedAt;
-        row.updated_at = continuedAt;
-        row.start_at = continuedAt;
-        row.shift_name = current.name;
+      const source = state.breakdowns.find(r=>String(r.id || '') === String(id || '')) || null;
+      if(!source) throw new Error('Arıza kaydı bulunamadı');
+
+      const currentKey = String(current.shift_key || '');
+      const alreadyOpen = (state.breakdowns || []).find(r=>{
+        if(!isOpenRow(r) || r.deleted_at) return false;
+        if(String(r.equipment_id || '') !== String(source.equipment_id || '')) return false;
+        return String(getRowShiftBucketKey(r) || '') === currentKey;
+      });
+      if(alreadyOpen){
+        showToast('Bu ekipman aktif vardiyada zaten arızalı görünüyor');
+        return;
       }
+
+      const sourceBucket = resolveShiftBucketForRow(source);
+      if(sourceBucket?.shift_name && sourceBucket?.shift_date && !(source.end_at || source.end_time)){
+        const endedAt = getShiftEndIsoByBucket(sourceBucket) || nowIso();
+        await updateWithOptionalColumns(TABLES.BREAKDOWNS || 'breakdowns', {
+          end_at: endedAt,
+          end_time: endedAt,
+          updated_at: nowIso()
+        }, ['end_at','end_time','updated_at'], source.id);
+      }
+
+      const startAt = getShiftStartIsoByBucket ? getShiftStartIsoByBucket(current) : nowIso();
+      const eq = findEquipmentById(source.equipment_id);
+      const payload = {
+        equipment_id: source.equipment_id,
+        equipment_name_snapshot: source.equipment_name || source.equipment_name_snapshot || eq?.name || '',
+        reason: source.reason || 'Önceki vardiyadan devam eden arıza',
+        start_at: startAt || nowIso(),
+        shift_name: current.name,
+        shift_date: current.shift_date || todayStr(),
+        start_meter_type: source.end_meter_type || source.start_meter_type || autoMeterTypeForEquipment(source.equipment_id),
+        start_meter_value: source.end_meter_value ?? source.start_meter_value ?? latestKnownMeterValueForEquipment(source.equipment_id),
+        continued_from_id: source.id,
+        continued_at: nowIso()
+      };
+      const res = await insertWithOptionalColumns(TABLES.BREAKDOWNS || 'breakdowns', payload, ['equipment_name_snapshot','shift_name','shift_date','reason','start_meter_type','start_meter_value','continued_from_id','continued_at']);
+      if(res.error) throw res.error;
+
       await refreshData();
       renderAll();
-      showToast('Arıza aktif vardiyada devam ediyor');
+      showToast('Arıza yeni vardiya için yeni kayıt olarak devam ettirildi');
     }catch(err){ alert(err.message || err); }
   }
 
@@ -8753,6 +9140,168 @@ function applyRecordFilters(rows){
     }
   }
 
+
+  function getRecordQualityFilteredRows(rows){
+    try{ return applyRecordFilters(rows || []); }catch(e){ return (rows || []).filter(r=>!r?.deleted_at); }
+  }
+
+  function getProductionLoaderId(row){
+    return String(row?.loader_id || row?.linked_loader_id || row?.linked_excavator_id || '');
+  }
+
+  function recordQualityRowLabel(row){
+    const eq = row?.equipment_name || findEquipmentById(row?.equipment_id)?.name || '-';
+    const shift = getShiftNameForRow(row) || row?.shift_name || '-';
+    const day = row?.shift_date || resolveShiftBucketForRow(row)?.shift_date || recordRowDateKey(row) || '-';
+    return `${eq} • ${shift} • ${day}`;
+  }
+
+  function recordQualityAdd(issues, severity, topic, detail, action, row){
+    issues.push({ severity, topic, detail, action, row });
+  }
+
+  function getRecordQualityIssues(){
+    const issues = [];
+    const productions = getRecordQualityFilteredRows(state.productions || []).filter(r=>!r?.deleted_at);
+    const breakdowns = getRecordQualityFilteredRows(state.breakdowns || []).filter(r=>!r?.deleted_at);
+    const rentals = getRecordQualityFilteredRows(state.rentals || []).filter(r=>!r?.deleted_at);
+    const trips = getRecordQualityFilteredRows(state.truck_trips || []).filter(r=>!r?.deleted_at);
+    const fuels = getRecordQualityFilteredRows(state.fuel_logs || []).filter(r=>!r?.deleted_at);
+    const meters = getRecordQualityFilteredRows(state.meter_logs || []).filter(r=>!r?.deleted_at);
+
+    const activeByEquipment = new Map();
+    productions.forEach(r=>{
+      if(!r.equipment_id) recordQualityAdd(issues, 'Kritik', 'Üretim kaydı', 'Ekipman ID boş. Analiz ekipmanı eşleştiremez.', 'Kaydı düzenle', r);
+      if(!getShiftNameForRow(r)) recordQualityAdd(issues, 'Kritik', 'Vardiya bilgisi', `${recordQualityRowLabel(r)} kaydında vardiya adı bulunamadı.`, 'Vardiya bilgisini düzelt', r);
+      if(!(r.shift_date || resolveShiftBucketForRow(r)?.shift_date)) recordQualityAdd(issues, 'Kritik', 'Vardiya tarihi', `${recordQualityRowLabel(r)} kaydında vardiya tarihi bulunamadı.`, 'shift_date güncelle', r);
+      if(isOpenRow(r)){
+        const arr = activeByEquipment.get(String(r.equipment_id || '')) || [];
+        arr.push(r); activeByEquipment.set(String(r.equipment_id || ''), arr);
+        recordQualityAdd(issues, 'Uyarı', 'Açık üretim', `${recordQualityRowLabel(r)} hâlâ açık görünüyor. Vardiya bittiyse otomatik kapatma kontrol edilmeli.`, 'Üretimi kapat', r);
+      }
+      const eq = findEquipmentById(r.equipment_id);
+      const isTruck = isTruckEquipment(eq);
+      const startMeter = getEffectiveProductionStartMeter(r);
+      const endMeter = getEffectiveProductionEndMeter(r);
+      if(startMeter === '' || startMeter === null || startMeter === undefined) recordQualityAdd(issues, 'Kritik', 'Sayaç başlangıcı', `${recordQualityRowLabel(r)} için başlangıç sayaç boş.`, 'Sayaç gir', r);
+      if(!isOpenRow(r) && (endMeter === '' || endMeter === null || endMeter === undefined)) recordQualityAdd(issues, 'Kritik', 'Sayaç bitişi', `${recordQualityRowLabel(r)} kapalı ama bitiş sayacı boş.`, 'Sayaç gir', r);
+      if(endMeter !== '' && endMeter !== null && endMeter !== undefined && startMeter !== '' && startMeter !== null && startMeter !== undefined){
+        const diff = Number(endMeter) - Number(startMeter);
+        if(Number.isFinite(diff) && diff < 0) recordQualityAdd(issues, 'Kritik', 'Sayaç farkı', `${recordQualityRowLabel(r)} için sayaç farkı negatif (${diff}).`, 'Sayaçları kontrol et', r);
+      }
+      if(isTruck && !getProductionLoaderId(r)) recordQualityAdd(issues, 'Kritik', 'Kamyon-yükleyici bağı', `${recordQualityRowLabel(r)} kamyon üretiminde bağlı yükleyici yok.`, 'Yükleyici seç', r);
+      if(isTruck && !isOpenRow(r) && productionTripTotal(r) <= 0) recordQualityAdd(issues, 'Uyarı', 'Sefer kaydı', `${recordQualityRowLabel(r)} kamyon üretimi kapalı ama sefer kaydı yok.`, 'Sefer gir', r);
+      if(!isOpenRow(r) && productionFuelTotal(r) <= 0) recordQualityAdd(issues, 'Bilgi', 'Yakıt kaydı', `${recordQualityRowLabel(r)} için bu üretime bağlı yakıt kaydı görünmüyor.`, 'Yakıt kontrol et', r);
+    });
+    activeByEquipment.forEach((arr, equipmentId)=>{
+      if(equipmentId && arr.length > 1){
+        recordQualityAdd(issues, 'Kritik', 'Çakışan aktif üretim', `${findEquipmentById(equipmentId)?.name || equipmentId} için aynı anda ${arr.length} açık üretim kaydı var.`, 'Fazla kaydı kapat', arr[0]);
+      }
+    });
+
+    breakdowns.forEach(r=>{
+      if(isOpenRow(r)) recordQualityAdd(issues, 'Uyarı', 'Açık arıza', `${recordQualityRowLabel(r)} arızası açık görünüyor. Vardiya bittiyse kapanıp sonraki vardiyada yeni kayıt açılmalı.`, 'Arızayı kapat/devam ettir', r);
+      if(!getShiftNameForRow(r)) recordQualityAdd(issues, 'Uyarı', 'Arıza vardiyası', `${recordQualityRowLabel(r)} arıza kaydında vardiya bilgisi eksik.`, 'Vardiya kontrol', r);
+    });
+
+    rentals.forEach(r=>{
+      if(isOpenRow(r)) recordQualityAdd(issues, 'Uyarı', 'Açık kiralık', `${recordQualityRowLabel(r)} kiralık kaydı açık görünüyor.`, 'Kaydı kapat', r);
+    });
+
+    trips.forEach(r=>{
+      const eq = findEquipmentById(r.equipment_id);
+      if(!isTruckEquipment(eq)) recordQualityAdd(issues, 'Kritik', 'Sefer ekipmanı', `${recordQualityRowLabel(r)} sefer kaydı kamyon olmayan ekipmana girilmiş.`, 'Sefer kaydını düzelt', r);
+      if(!r.production_id) recordQualityAdd(issues, 'Kritik', 'Sefer bağlantısı', `${recordQualityRowLabel(r)} sefer kaydında production_id yok. Analiz kamyon-yükleyici bağını kaçırabilir.`, 'Üretim kaydına bağla', r);
+      if(!r.equipment_id) recordQualityAdd(issues, 'Kritik', 'Sefer ekipmanı', 'Sefer kaydında equipment_id yok.', 'Kamyon seç', r);
+      if(!getShiftNameForRow(r)) recordQualityAdd(issues, 'Uyarı', 'Sefer vardiyası', `${recordQualityRowLabel(r)} sefer kaydında vardiya bilgisi eksik.`, 'Vardiya bağını düzelt', r);
+      if(!(Number(r.trip_count ?? r.trips ?? 0) > 0)) recordQualityAdd(issues, 'Uyarı', 'Sefer miktarı', `${recordQualityRowLabel(r)} sefer adedi boş veya 0.`, 'Sefer adedi gir', r);
+    });
+
+    fuels.forEach(r=>{
+      if(!r.production_id) recordQualityAdd(issues, 'Kritik', 'Yakıt bağlantısı', `${recordQualityRowLabel(r)} yakıt kaydında production_id yok. Yakıt analizi üretimle zayıf eşleşir.`, 'Üretim kaydına bağla', r);
+      if(!r.equipment_id) recordQualityAdd(issues, 'Kritik', 'Yakıt ekipmanı', 'Yakıt kaydında equipment_id yok.', 'Ekipman seç', r);
+      if(!getShiftNameForRow(r)) recordQualityAdd(issues, 'Uyarı', 'Yakıt vardiyası', `${recordQualityRowLabel(r)} yakıt kaydında vardiya bilgisi eksik.`, 'Vardiya bağını düzelt', r);
+      if(!(Number(r.liters ?? r.fuel_liters ?? 0) > 0)) recordQualityAdd(issues, 'Kritik', 'Yakıt miktarı', `${recordQualityRowLabel(r)} yakıt miktarı boş veya 0.`, 'Litre gir', r);
+      if(r.meter_value === '' || r.meter_value === null || r.meter_value === undefined) recordQualityAdd(issues, 'Uyarı', 'Yakıt sayacı', `${recordQualityRowLabel(r)} yakıt aldığı andaki sayaç/km değeri boş.`, 'Yakıt sayacı gir', r);
+    });
+
+    meters.forEach(r=>{
+      if(!r.production_id) recordQualityAdd(issues, 'Kritik', 'Sayaç bağlantısı', `${recordQualityRowLabel(r)} sayaç kaydında production_id yok. Sayaç devri ve çalışma hesabı bozulabilir.`, 'Üretim kaydına bağla', r);
+      if(!r.equipment_id) recordQualityAdd(issues, 'Kritik', 'Sayaç ekipmanı', 'Sayaç kaydında equipment_id yok.', 'Ekipman seç', r);
+      if(!getShiftNameForRow(r)) recordQualityAdd(issues, 'Uyarı', 'Sayaç vardiyası', `${recordQualityRowLabel(r)} sayaç kaydında vardiya bilgisi eksik.`, 'Vardiya bağını düzelt', r);
+      if(r.meter_value === '' || r.meter_value === null || r.meter_value === undefined) recordQualityAdd(issues, 'Kritik', 'Sayaç değeri', `${recordQualityRowLabel(r)} sayaç değeri boş.`, 'Sayaç gir', r);
+    });
+
+    return issues;
+  }
+
+  function renderRecordQualityControlPanel(){
+    const issues = getRecordQualityIssues();
+    const critical = issues.filter(i=>i.severity === 'Kritik').length;
+    const warning = issues.filter(i=>i.severity === 'Uyarı').length;
+    const info = issues.filter(i=>i.severity === 'Bilgi').length;
+    const totalRecords = ['productions','breakdowns','rentals','truck_trips','fuel_logs','meter_logs'].reduce((sum,key)=>sum + ((state[key] || []).filter(r=>!r?.deleted_at).length), 0);
+    const score = Math.max(0, Math.round(100 - (critical * 8) - (warning * 3) - (info * 1)));
+    const ok = critical === 0 && warning === 0;
+    const topIssues = issues.slice(0, 30);
+    const auditRows = latestAuditLogs(8);
+    return `
+      <div class="record-quality-panel">
+        <div class="record-quality-head">
+          <div>
+            <h3 class="record-quality-title">Kayıt Kalite Kontrol Paneli</h3>
+            <div class="record-quality-sub">Analizlerin güvenilir olması için üretim, arıza, kiralık, sayaç, sefer ve yakıt kayıtları arasındaki eksik/uyumsuz bağlantıları kontrol eder. Bu panel kayıt silmez; yalnızca hataları görünür yapar.</div>
+          </div>
+          <div class="badge-col">
+            <span class="pill ${ok ? 'green' : critical ? 'red' : 'orange'}">${ok ? 'Analize hazır' : 'Kontrol gerekli'}</span>
+            <button class="secondary" type="button" onclick="refreshData()">Kontrolü Yenile</button>
+          </div>
+        </div>
+        <div class="record-quality-grid">
+          <div class="record-quality-card ${critical ? 'bad' : 'good'}"><div class="record-quality-label">Kritik Hata</div><div class="record-quality-value">${critical}</div></div>
+          <div class="record-quality-card ${warning ? 'warn' : 'good'}"><div class="record-quality-label">Uyarı</div><div class="record-quality-value">${warning}</div></div>
+          <div class="record-quality-card"><div class="record-quality-label">Bilgi</div><div class="record-quality-value">${info}</div></div>
+          <div class="record-quality-card ${score >= 90 ? 'good' : score >= 70 ? 'warn' : 'bad'}"><div class="record-quality-label">Veri Kalite Puanı</div><div class="record-quality-value">%${score}</div></div>
+          <div class="record-quality-card"><div class="record-quality-label">Toplam Kayıt</div><div class="record-quality-value">${totalRecords}</div></div>
+        </div>
+        <div class="record-quality-score-wrap">
+          <div style="font-size:12px;font-weight:900;color:#334155">Analiz Güveni</div>
+          <div class="record-quality-score-track"><div class="record-quality-score-fill" style="width:${score}%"></div></div>
+          <div style="font-size:12px;font-weight:900;color:#334155">%${score}</div>
+        </div>
+        ${issues.length ? `
+          <div class="subtle" style="margin-bottom:8px">İlk ${topIssues.length} sorun gösteriliyor. Kritik hatalar giderilmeden Dashboard Pro / rapor analizlerine tam güvenilmemeli.</div>
+          ${topIssues.map(i=>`
+            <div class="record-quality-issue">
+              <div><span class="record-quality-sev ${String(i.severity).toLowerCase()}">${escapeHtml(i.severity)}</span></div>
+              <div class="record-quality-topic">${escapeHtml(i.topic)}</div>
+              <div class="record-quality-detail">${escapeHtml(i.detail)}</div>
+              <div class="record-quality-action">${escapeHtml(i.action || '')}</div>
+            </div>
+          `).join('')}
+        ` : `<div class="notice" style="background:#f0fdf4;border-color:#bbf7d0;color:#166534">Görünen kayıt aralığında kritik kayıt problemi bulunmadı.</div>`}
+        <div class="record-audit-card">
+          <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap">
+            <div>
+              <div style="font-size:16px;font-weight:900;color:#0f172a">Son Kayıt Değişiklikleri</div>
+              <div class="muted">Kim, neyi, ne zaman değiştirdi bilgisini izler. Supabase'de record_audit_logs tablosu yoksa bu cihazda yerel olarak saklanır.</div>
+            </div>
+            <span class="pill">${auditRows.length} işlem</span>
+          </div>
+          <div class="record-audit-list">
+            ${auditRows.length ? auditRows.map(a=>`
+              <div class="record-audit-row">
+                <div>${escapeHtml(fmtDate(a.created_at || ''))}</div>
+                <div><span class="record-audit-action">${escapeHtml(a.action || '-')}</span> • ${escapeHtml(a.table_name || '-')}</div>
+                <div>${escapeHtml(a.user_email || a.user_id || '-')}</div>
+              </div>
+            `).join('') : '<div class="muted">Henüz değişiklik kaydı yok.</div>'}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   function renderRecordsBody(){
     const body = document.getElementById('recordsBody');
     if(!body) return;
@@ -8761,6 +9310,7 @@ function applyRecordFilters(rows){
     const rentRows = (state.recordsServer?.rentals?.rows || []);
     const fuelRows = (state.recordsServer?.fuel_logs?.rows || []);
     body.innerHTML = `
+      ${renderRecordQualityControlPanel()}
       <div class="grid g1">
         ${renderGroupedRecordSection('Üretim', 'productions', prodRows, [
           {label:'Ekipman', render:r=>escapeHtml(r.equipment_name)},
@@ -9867,7 +10417,7 @@ function renderUsers(){
     }catch(err){ renderPageError('rental', 'Kiralık', err); }
     try{
       renderTablePage({
-        id:'trip', title:'Sefer Düzenleme', toolbarHtml:`<div class="toolbar">${canEditOperations() ? `<button data-open-modal="newTrip">Yeni Sefer</button>` : ''}<span class="subtle">Çoklu giriş desteklenir, aktif üretime bağlanır.</span></div>`, warningsHtml: renderPreviousShiftLogisticsWarning('trip', 'Sefer'), rows: filterRowsForActiveAndPreviousShiftOrRecent(state.truck_trips).sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0)),
+        id:'trip', title:'Sefer Düzenleme', toolbarHtml:`<div class="toolbar">${canEditOperations() ? `<button data-open-modal="newTrip">Yeni Sefer</button>` : ''}<span class="subtle">Eksik görevden girilen sefer ilgili production_id’ye bağlanır. Sefer sadece kamyon içindir.</span></div>`, warningsHtml: renderPreviousShiftLogisticsWarning('trip', 'Sefer'), rows: filterRowsForActiveAndPreviousShiftOrRecent(state.truck_trips).sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0)),
         cols:[
           {label:'Kamyon', render:r=>r.equipment_name || ''},
           {label:'Paket', render:r=>r.package_name || ''},
@@ -9880,7 +10430,7 @@ function renderUsers(){
     }catch(err){ renderPageError('trip', 'Sefer', err); }
     try{
       renderTablePage({
-        id:'fuel', title:'Yakıt Düzenleme', toolbarHtml:`<div class="toolbar">${canEditOperations() ? `<button data-open-modal="newFuel">Yeni Yakıt Girişi</button>` : ''}<span class="subtle">Aktif üretim yoksa da kayıt yapılır, uyarı gösterilir.</span></div>`, warningsHtml: renderPreviousShiftLogisticsWarning('fuel', 'Yakıt'), rows: filterRowsForActiveAndPreviousShiftOrRecent(state.fuel_logs).sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0)),
+        id:'fuel', title:'Yakıt Düzenleme', toolbarHtml:`<div class="toolbar">${canEditOperations() ? `<button data-open-modal="newFuel">Yeni Yakıt Girişi</button>` : ''}<span class="subtle">Yakıt girişi üretim kaydına production_id ile bağlanır; yakıt sayacı ayrı takip edilir.</span></div>`, warningsHtml: renderPreviousShiftLogisticsWarning('fuel', 'Yakıt'), rows: filterRowsForActiveAndPreviousShiftOrRecent(state.fuel_logs).sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0)),
         cols:[
           {label:'Ekipman', render:r=>r.equipment_name || ''},
           {label:'Litre', render:r=>r.liters || 0},
@@ -9892,7 +10442,7 @@ function renderUsers(){
     }catch(err){ renderPageError('fuel', 'Yakıt', err); }
     try{
       renderTablePage({
-        id:'meter', title:'Sayaç Düzenleme', toolbarHtml:`<div class="toolbar">${canEditOperations() ? `<button data-open-modal="newMeter">Yeni Düzeltme Kaydı</button>` : ''}<span class="subtle">Sadece kontrol/düzeltme amaçlı kullanılır.</span></div>`, warningsHtml: renderPreviousShiftLogisticsWarning('meter', 'Sayaç'), rows: filterRowsForActiveAndPreviousShiftOrRecent(state.meter_logs).sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0)),
+        id:'meter', title:'Sayaç Düzenleme', toolbarHtml:`<div class="toolbar">${canEditOperations() ? `<button data-open-modal="newMeter">Yeni Düzeltme Kaydı</button>` : ''}<span class="subtle">Sayaç girişi vardiya bitişidir ve sonraki vardiya başlangıcına devreder.</span></div>`, warningsHtml: renderPreviousShiftLogisticsWarning('meter', 'Sayaç'), rows: filterRowsForActiveAndPreviousShiftOrRecent(state.meter_logs).sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0)),
         cols:[
           {label:'Ekipman', render:r=>r.equipment_name || ''},
           {label:'Sayaç', render:r=>formatMeterValueWithUnit(r.meter_value || r.value || '', r.meter_type || '')},
