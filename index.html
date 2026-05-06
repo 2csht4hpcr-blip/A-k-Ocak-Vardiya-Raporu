@@ -347,6 +347,20 @@
     .user-passive-card{opacity:.72;background:linear-gradient(180deg,#ffffff 0%,#f8fafc 100%);border-color:#fecaca}
     button:disabled,select:disabled,input:disabled{opacity:.55;cursor:not-allowed}
 
+    .saas-admin-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:14px}
+    .saas-card{border:1px solid #dbeafe;border-radius:20px;padding:15px;background:linear-gradient(180deg,#ffffff 0%,#f8fbff 100%);box-shadow:0 12px 28px rgba(15,23,42,.07)}
+    .saas-card h3{margin:0 0 10px;font-size:18px;color:#0f172a}
+    .saas-row{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid #e5e7eb}
+    .saas-row:last-child{border-bottom:none}
+    .saas-name{font-weight:900;color:#0f172a}
+    .saas-sub{font-size:12px;color:#64748b;margin-top:3px;line-height:1.35}
+    .saas-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+    .saas-actions button{width:auto;padding:7px 10px;border-radius:10px;font-size:12px}
+    .saas-kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-bottom:14px}
+    .saas-kpi{padding:13px 14px;border-radius:16px;background:#fff;border:1px solid #e2e8f0;box-shadow:0 8px 18px rgba(15,23,42,.05)}
+    .saas-kpi-label{font-size:11px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.35px}
+    .saas-kpi-value{font-size:26px;font-weight:900;color:#0f172a;margin-top:5px}
+
   </style>
 </head>
 <body>
@@ -455,6 +469,7 @@
       <section id="definitions" class="page"></section>
       <section id="users" class="page"></section>
       <section id="reports" class="page"></section>
+      <section id="saasAdmin" class="page"></section>
     </main>
   </div>
 
@@ -1797,7 +1812,7 @@
   function canAccessPage(pageId){
     const role = currentUserRole();
     const allowedPages = {
-      super_admin: ['dashboard','dashboardPro','production','breakdown','rental','logisticsControl','meter','trip','fuel','drillMeterage','records','deleted','definitions','users','reports'],
+      super_admin: ['dashboard','dashboardPro','production','breakdown','rental','logisticsControl','meter','trip','fuel','drillMeterage','records','deleted','definitions','users','reports','saasAdmin'],
       admin: ['dashboard','dashboardPro','production','breakdown','rental','logisticsControl','meter','trip','fuel','drillMeterage','records','deleted','definitions','users','reports'],
       boss: ['dashboard','dashboardPro','reports'],
       site_manager: ['dashboard','production','breakdown','rental','logisticsControl','meter','trip','fuel','drillMeterage','records'],
@@ -11979,6 +11994,194 @@ async function exportWeeklyExcel(){
     `;
   }
 
+
+  function canManageSaas(){
+    return isSuperAdmin();
+  }
+  function companyNameById(companyId){
+    const c = (state.companies || []).find(x=>String(x.id || '') === String(companyId || ''));
+    return c ? (c.name || c.code || c.id) : '';
+  }
+  function sitesForCompany(companyId){
+    return (state.sites || []).filter(s=>String(s.company_id || '') === String(companyId || ''));
+  }
+  function activePill(v){
+    return `<span class="pill ${v === false ? 'red' : 'green'}">${v === false ? 'Pasif' : 'Aktif'}</span>`;
+  }
+  function renderSaasAdmin(){
+    const el = document.getElementById('saasAdmin');
+    if(!el) return;
+    if(!canManageSaas()){
+      el.innerHTML = `<div class="card"><h2 class="section-title">SaaS Yönetimi</h2><div class="notice">Bu alan yalnızca Super Admin için açıktır.</div></div>`;
+      return;
+    }
+    const companies = state.companies || [];
+    const sites = state.sites || [];
+    const users = state.userProfiles || [];
+    const companyOptions = companies.map(c=>`<option value="${escapeHtml(c.id)}">${escapeHtml(c.name || c.code || c.id)}</option>`).join('');
+    const activeCompanies = companies.filter(c=>c.is_active !== false).length;
+    const activeSites = sites.filter(s=>s.is_active !== false).length;
+    const activeUsers = users.filter(u=>u.is_active !== false).length;
+    el.innerHTML = `
+      <div class="card pro-hero" style="margin-bottom:14px">
+        <h2 class="section-title" style="color:#fff">SaaS Yönetimi</h2>
+        <div class="muted">Super Admin paneli: firma, saha ve firma yöneticisi davet işlemleri buradan yapılır. Müşteri firma adminleri bu alanı göremez.</div>
+      </div>
+      <div class="saas-kpi-grid">
+        <div class="saas-kpi"><div class="saas-kpi-label">Firma</div><div class="saas-kpi-value">${companies.length}</div><div class="muted">Aktif: ${activeCompanies}</div></div>
+        <div class="saas-kpi"><div class="saas-kpi-label">Saha</div><div class="saas-kpi-value">${sites.length}</div><div class="muted">Aktif: ${activeSites}</div></div>
+        <div class="saas-kpi"><div class="saas-kpi-label">Kullanıcı</div><div class="saas-kpi-value">${users.length}</div><div class="muted">Aktif: ${activeUsers}</div></div>
+      </div>
+      <div class="saas-admin-grid">
+        <div class="saas-card">
+          <h3>Yeni Firma Oluştur</h3>
+          <div class="form-grid">
+            <div class="form-field"><label>Firma Adı</label><input id="saas_company_name" placeholder="Örn. ABC Mining" /></div>
+            <div class="form-field"><label>Firma Kodu</label><input id="saas_company_code" placeholder="Örn. ABC_MINING" /></div>
+          </div>
+          <div class="actions"><button onclick="createSaasCompany()">Firma Oluştur</button></div>
+        </div>
+        <div class="saas-card">
+          <h3>Yeni Saha Oluştur</h3>
+          <div class="form-grid">
+            <div class="form-field"><label>Firma</label><select id="saas_site_company_id">${companyOptions}</select></div>
+            <div class="form-field"><label>Saha Adı</label><input id="saas_site_name" placeholder="Örn. Ana Ocak" /></div>
+            <div class="form-field"><label>Saha Kodu</label><input id="saas_site_code" placeholder="Örn. SITE_01" /></div>
+          </div>
+          <div class="actions"><button onclick="createSaasSite()">Saha Oluştur</button></div>
+        </div>
+        <div class="saas-card">
+          <h3>Firma Admini Davet Et</h3>
+          <div class="form-grid">
+            <div class="form-field"><label>Ad Soyad</label><input id="saas_admin_full_name" placeholder="Ad Soyad" /></div>
+            <div class="form-field"><label>Email</label><input id="saas_admin_email" placeholder="admin@firma.com" /></div>
+            <div class="form-field"><label>Firma</label><select id="saas_admin_company_id" onchange="syncSaasAdminSiteOptions()">${companyOptions}</select></div>
+            <div class="form-field"><label>Saha</label><select id="saas_admin_site_id"></select></div>
+          </div>
+          <div class="actions"><button onclick="inviteCompanyAdminFromSaasPanel()">Firma Admini Davet Et</button></div>
+          <div id="saas_admin_invite_status" class="muted" style="margin-top:8px"></div>
+        </div>
+      </div>
+      <div class="saas-admin-grid" style="margin-top:14px">
+        <div class="saas-card">
+          <h3>Firmalar</h3>
+          ${companies.length ? companies.map(c=>`
+            <div class="saas-row">
+              <div><div class="saas-name">${escapeHtml(c.name || '-')} ${activePill(c.is_active)}</div><div class="saas-sub">Kod: ${escapeHtml(c.code || '-')} • Sahalar: ${sitesForCompany(c.id).length}</div></div>
+              <div class="saas-actions"><button class="${c.is_active === false ? 'success' : 'warning'}" onclick="toggleSaasCompany('${c.id}', ${c.is_active === false ? 'true' : 'false'})">${c.is_active === false ? 'Aktif Yap' : 'Pasif Yap'}</button></div>
+            </div>`).join('') : '<div class="empty">Firma bulunamadı.</div>'}
+        </div>
+        <div class="saas-card">
+          <h3>Sahalar</h3>
+          ${sites.length ? sites.map(site=>`
+            <div class="saas-row">
+              <div><div class="saas-name">${escapeHtml(site.name || '-')} ${activePill(site.is_active)}</div><div class="saas-sub">Firma: ${escapeHtml(companyNameById(site.company_id) || '-')} • Kod: ${escapeHtml(site.code || '-')}</div></div>
+              <div class="saas-actions"><button class="${site.is_active === false ? 'success' : 'warning'}" onclick="toggleSaasSite('${site.id}', ${site.is_active === false ? 'true' : 'false'})">${site.is_active === false ? 'Aktif Yap' : 'Pasif Yap'}</button></div>
+            </div>`).join('') : '<div class="empty">Saha bulunamadı.</div>'}
+        </div>
+      </div>
+    `;
+    setTimeout(syncSaasAdminSiteOptions, 0);
+  }
+  function syncSaasAdminSiteOptions(){
+    try{
+      const companyId = document.getElementById('saas_admin_company_id')?.value || '';
+      const siteSelect = document.getElementById('saas_admin_site_id');
+      if(!siteSelect) return;
+      const opts = sitesForCompany(companyId).map(site=>`<option value="${escapeHtml(site.id)}">${escapeHtml(site.name || site.code || site.id)}</option>`).join('');
+      siteSelect.innerHTML = `<option value="">Varsayılan saha</option>${opts}`;
+    }catch(e){}
+  }
+  function normalizeCompanyCode(v){
+    return String(v || '').trim().toUpperCase().replace(/[^A-Z0-9_]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+  }
+  async function createSaasCompany(){
+    if(!canManageSaas()){ alert('Bu işlem yalnızca Super Admin tarafından yapılabilir.'); return; }
+    try{
+      const name = String(document.getElementById('saas_company_name')?.value || '').trim();
+      const code = normalizeCompanyCode(document.getElementById('saas_company_code')?.value || name);
+      if(!name) throw new Error('Firma adı gerekli');
+      if(!code) throw new Error('Firma kodu gerekli');
+      const sb = await initClient();
+      const res = await sb.from('companies').insert({ name, code, is_active:true }).select('*').single();
+      if(res.error) throw res.error;
+      showToast('Firma oluşturuldu');
+      await refreshData();
+      showPage('saasAdmin');
+    }catch(err){ alert('Firma oluşturulamadı: ' + (err.message || err)); }
+  }
+  async function createSaasSite(){
+    if(!canManageSaas()){ alert('Bu işlem yalnızca Super Admin tarafından yapılabilir.'); return; }
+    try{
+      const company_id = String(document.getElementById('saas_site_company_id')?.value || '').trim();
+      const name = String(document.getElementById('saas_site_name')?.value || '').trim();
+      const code = normalizeCompanyCode(document.getElementById('saas_site_code')?.value || name);
+      if(!company_id) throw new Error('Firma seçimi gerekli');
+      if(!name) throw new Error('Saha adı gerekli');
+      const sb = await initClient();
+      const res = await sb.from('sites').insert({ company_id, name, code, is_active:true }).select('*').single();
+      if(res.error) throw res.error;
+      showToast('Saha oluşturuldu');
+      await refreshData();
+      showPage('saasAdmin');
+    }catch(err){ alert('Saha oluşturulamadı: ' + (err.message || err)); }
+  }
+  async function toggleSaasCompany(companyId, makeActive){
+    if(!canManageSaas()){ alert('Bu işlem yalnızca Super Admin tarafından yapılabilir.'); return; }
+    try{
+      const company = (state.companies || []).find(c=>String(c.id)===String(companyId));
+      if(!company) throw new Error('Firma bulunamadı');
+      if(!confirm(`${company.name || 'Firma'} ${makeActive ? 'aktif' : 'pasif'} yapılsın mı?`)) return;
+      const sb = await initClient();
+      const res = await sb.from('companies').update({ is_active: !!makeActive }).eq('id', companyId);
+      if(res.error) throw res.error;
+      showToast(makeActive ? 'Firma aktif yapıldı' : 'Firma pasif yapıldı');
+      await refreshData();
+      showPage('saasAdmin');
+    }catch(err){ alert('Firma durumu güncellenemedi: ' + (err.message || err)); }
+  }
+  async function toggleSaasSite(siteId, makeActive){
+    if(!canManageSaas()){ alert('Bu işlem yalnızca Super Admin tarafından yapılabilir.'); return; }
+    try{
+      const site = (state.sites || []).find(s=>String(s.id)===String(siteId));
+      if(!site) throw new Error('Saha bulunamadı');
+      if(!confirm(`${site.name || 'Saha'} ${makeActive ? 'aktif' : 'pasif'} yapılsın mı?`)) return;
+      const sb = await initClient();
+      const res = await sb.from('sites').update({ is_active: !!makeActive }).eq('id', siteId);
+      if(res.error) throw res.error;
+      showToast(makeActive ? 'Saha aktif yapıldı' : 'Saha pasif yapıldı');
+      await refreshData();
+      showPage('saasAdmin');
+    }catch(err){ alert('Saha durumu güncellenemedi: ' + (err.message || err)); }
+  }
+  async function inviteCompanyAdminFromSaasPanel(){
+    if(!canManageSaas()){ alert('Bu işlem yalnızca Super Admin tarafından yapılabilir.'); return; }
+    const statusEl = document.getElementById('saas_admin_invite_status');
+    try{
+      const fullName = String(document.getElementById('saas_admin_full_name')?.value || '').trim();
+      const email = String(document.getElementById('saas_admin_email')?.value || '').trim().toLowerCase();
+      const companyId = String(document.getElementById('saas_admin_company_id')?.value || '').trim();
+      const siteId = String(document.getElementById('saas_admin_site_id')?.value || '').trim();
+      if(!fullName) throw new Error('Ad Soyad gerekli');
+      if(!email || !email.includes('@')) throw new Error('Geçerli email gerekli');
+      if(!companyId) throw new Error('Firma seçimi gerekli');
+      if(statusEl) statusEl.textContent = 'Firma admini davet ediliyor...';
+      const sb = await initClient();
+      const res = await sb.functions.invoke('invite-user', { body:{ email, full_name: fullName, role:'admin', company_id: companyId, site_id: siteId || null } });
+      if(res.error) throw new Error(res.error.message || 'Edge Function hatası');
+      if(res.data && res.data.error) throw new Error(res.data.error);
+      if(statusEl) statusEl.textContent = 'Firma admini davet edildi. Kullanıcı e-postasındaki link ile şifre oluşturacak.';
+      showToast('Firma admini davet edildi');
+      document.getElementById('saas_admin_full_name').value = '';
+      document.getElementById('saas_admin_email').value = '';
+      await refreshData();
+      showPage('saasAdmin');
+    }catch(err){
+      if(statusEl) statusEl.textContent = 'Hata: ' + (err.message || err);
+      alert('Firma admini davet edilemedi: ' + (err.message || err));
+    }
+  }
+
 function renderUsers(){
     const el = document.getElementById('users');
     if(!el) return;
@@ -12086,6 +12289,7 @@ function renderUsers(){
     try{ renderDashboardPro(); }catch(err){ renderPageError('dashboardPro', 'Dashboard Pro', err); }
     try{ if(canAccessPage('definitions')) renderDefinitions(); else document.getElementById('definitions').innerHTML = `<div class="card"><h2 class="section-title">Tanımlar</h2><div class="notice">Bu alan yalnızca yöneticiye açıktır.</div></div>`; }catch(err){ renderPageError('definitions', 'Tanımlar', err); }
     try{ if(canManageUsers()) renderUsers(); else { const u=document.getElementById('users'); if(u) u.innerHTML = `<div class="card"><h2 class="section-title">Kullanıcılar</h2><div class="notice">Bu alan yalnızca yöneticiye açıktır.</div></div>`; } }catch(err){ renderPageError('users', 'Kullanıcılar', err); }
+    try{ if(canManageSaas()) renderSaasAdmin(); else { const s=document.getElementById('saasAdmin'); if(s) s.innerHTML = `<div class="card"><h2 class="section-title">SaaS Yönetimi</h2><div class="notice">Bu alan yalnızca Super Admin için açıktır.</div></div>`; } }catch(err){ renderPageError('saasAdmin', 'SaaS Yönetimi', err); }
     try{ if(currentUserRole()==='manager') renderReports(); else { const r=document.getElementById('reports'); if(r) r.innerHTML = `<div class="card"><h2 class="section-title">Raporlar</h2><div class="notice">Bu alan yalnızca yöneticiye açıktır.</div></div>`; } }catch(err){ renderPageError('reports', 'Raporlar', err); }
     try{ if(canAccessPage('logisticsControl')) renderLogisticsControl(); else { const lc=document.getElementById('logisticsControl'); if(lc) lc.innerHTML = `<div class="card"><h2 class="section-title">Lojistik Kontrol Paneli</h2><div class="notice">Bu alan için yetkin yok.</div></div>`; } }catch(err){ renderPageError('logisticsControl', 'Lojistik Kontrol Paneli', err); }
     try{
@@ -12458,7 +12662,7 @@ function renderUsers(){
   document.getElementById('newPassword')?.addEventListener('keydown', e=>{ if(e.key==='Enter') saveNewPasswordFromLink(); });
   document.getElementById('newPasswordConfirm')?.addEventListener('keydown', e=>{ if(e.key==='Enter') saveNewPasswordFromLink(); });
 
-  Object.assign(window, { openModal, closeModal, existingLogisticsRowForProduction, assertNoDuplicateProductionLog, assertProductionStartAllowedFinal, markQualityPanelStabilizedDone, fillTruckRouteFromExcavator, updateAutoMeterLabels, updateProductionStartMeterHints, updateTripProductionContext, updateFuelProductionContext, updateMeterCorrectionContext, toggleProductionEditLinkedField, refreshLogisticsEquipmentSelect, markShiftSelectManual, continueBreakdownToCurrentShift, finishBreakdownFromWarning, saveStartProductionExcavator, saveStartProductionTruck, saveStartProductionDrill, saveStartProductionOther, saveEndProduction, saveStartBreakdown, saveEndBreakdown, saveStartRental, saveEndRental, saveNewTrip, saveNewFuel, saveNewMeter, saveNewDrillMeterage, updateDrillMeterageProductionContext, confirmSoftDelete, restoreDeleted, deleteAllDeletedRecordsNow, deleteDeletedOlderThan30Days, saveEditRecord, saveDefinition, deleteTruckModel, toggleDefinitionTruckModelField, renderShiftConfigInputs, saveShiftConfigFromForm, renderShiftConfigCardRefresh, applyRecordFiltersFromUI, resetRecordFilters, bulkDeleteRecordTable, exportRecordsToExcel, saveUserRoleSettings, toggleUserActive, inviteUserFromPanel, sendPasswordResetEmail, saveNewPasswordFromLink, refreshData, exportDailyPdf, exportWeeklyExcel, exportShiftReport });
+  Object.assign(window, { openModal, closeModal, existingLogisticsRowForProduction, assertNoDuplicateProductionLog, assertProductionStartAllowedFinal, markQualityPanelStabilizedDone, fillTruckRouteFromExcavator, updateAutoMeterLabels, updateProductionStartMeterHints, updateTripProductionContext, updateFuelProductionContext, updateMeterCorrectionContext, toggleProductionEditLinkedField, refreshLogisticsEquipmentSelect, markShiftSelectManual, continueBreakdownToCurrentShift, finishBreakdownFromWarning, saveStartProductionExcavator, saveStartProductionTruck, saveStartProductionDrill, saveStartProductionOther, saveEndProduction, saveStartBreakdown, saveEndBreakdown, saveStartRental, saveEndRental, saveNewTrip, saveNewFuel, saveNewMeter, saveNewDrillMeterage, updateDrillMeterageProductionContext, confirmSoftDelete, restoreDeleted, deleteAllDeletedRecordsNow, deleteDeletedOlderThan30Days, saveEditRecord, saveDefinition, deleteTruckModel, toggleDefinitionTruckModelField, renderShiftConfigInputs, saveShiftConfigFromForm, renderShiftConfigCardRefresh, applyRecordFiltersFromUI, resetRecordFilters, bulkDeleteRecordTable, exportRecordsToExcel, saveUserRoleSettings, toggleUserActive, inviteUserFromPanel, renderSaasAdmin, syncSaasAdminSiteOptions, createSaasCompany, createSaasSite, toggleSaasCompany, toggleSaasSite, inviteCompanyAdminFromSaasPanel, sendPasswordResetEmail, saveNewPasswordFromLink, refreshData, exportDailyPdf, exportWeeklyExcel, exportShiftReport });
 
   (async function autoSession(){
     try{
