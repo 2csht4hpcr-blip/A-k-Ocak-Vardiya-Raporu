@@ -366,7 +366,16 @@
     .super-scope-label{font-size:12px;font-weight:900;color:#3730a3;text-transform:uppercase;letter-spacing:.35px}
     .super-scope-bar select{width:auto;min-width:210px;padding:9px 10px}
     .super-scope-bar button{width:auto;padding:9px 12px;border-radius:10px}
-    .super-scope-note{font-size:12px;color:#475569;font-weight:700}
+     .super-scope-note{font-size:12px;color:#475569;font-weight:700}
+    .super-scope-card{display:flex;align-items:center;gap:10px;flex-wrap:wrap;width:100%;margin-top:8px;padding:12px 14px;border-radius:18px;background:linear-gradient(135deg,#0f172a 0%,#1d4ed8 100%);color:#fff;box-shadow:0 14px 30px rgba(29,78,216,.20)}
+    .super-scope-card .scope-kicker{font-size:11px;font-weight:900;letter-spacing:.6px;text-transform:uppercase;opacity:.82}
+    .super-scope-card .scope-main{font-size:16px;font-weight:900}
+    .super-scope-card .scope-sub{font-size:12px;opacity:.86}
+    .super-scope-sidebar-badge{display:none;margin:0 0 14px;padding:10px 12px;border-radius:16px;background:linear-gradient(135deg,#1e1b4b 0%,#312e81 100%);color:#fff;border:1px solid rgba(255,255,255,.18);box-shadow:0 10px 22px rgba(15,23,42,.20)}
+    .super-scope-sidebar-badge.active{display:block}
+    .super-scope-sidebar-badge .badge-top{font-size:10px;font-weight:900;letter-spacing:.6px;text-transform:uppercase;color:#c7d2fe}
+    .super-scope-sidebar-badge .badge-main{font-size:13px;font-weight:900;margin-top:5px;line-height:1.25}
+    .super-scope-sidebar-badge .badge-sub{font-size:11px;color:#e0e7ff;margin-top:4px;line-height:1.3}
 
   </style>
 </head>
@@ -464,6 +473,7 @@
           <button id="refreshBtn" class="secondary" data-i18n-key="Yenile">Yenile</button>
           <button id="logoutBtn" class="secondary" data-i18n-key="Çıkış">Çıkış</button>
         </div>
+        <div id="superScopeBar" class="super-scope-bar"></div>
       </div>
 
       <section id="dashboard" class="page active"></section>
@@ -1921,7 +1931,7 @@
   function renderSuperScopeBar(){
     const bar = document.getElementById('superScopeBar');
     if(!bar) return;
-    if(!isSuperAdmin()){ bar.classList.remove('active'); bar.innerHTML = ''; return; }
+    if(!isSuperAdmin()){ bar.classList.remove('active'); bar.innerHTML = ''; const side=document.getElementById('superScopeSidebarBadge'); if(side){side.classList.remove('active'); side.innerHTML='';} return; }
     const companies = state.companies || [];
     const selectedCompany = String(state.saasSelectedCompanyId || '');
     const selectedSite = String(state.saasSelectedSiteId || '');
@@ -1929,14 +1939,26 @@
     const siteOptions = `<option value="">Tüm sahalar</option>` + allSitesForCompanyOptions(selectedCompany).map(site=>`<option value="${escapeHtml(site.id)}" ${String(site.id)===selectedSite?'selected':''}>${escapeHtml(site.name || site.code || site.id)}</option>`).join('');
     const companyName = companyNameById(selectedCompany) || 'Tüm firmalar';
     const siteName = (state.sites || []).find(s=>String(s.id)===selectedSite)?.name || (selectedSite ? 'Seçili saha' : 'Tüm sahalar');
+    const scopeMain = `${companyName} / ${siteName}`;
     bar.classList.add('active');
     bar.innerHTML = `
       <span class="super-scope-label">Super Admin Görünüm Modu</span>
       <select id="super_scope_company" onchange="changeSuperScopeCompany(this.value)">${companyOptions}</select>
       <select id="super_scope_site" onchange="changeSuperScopeSite(this.value)">${siteOptions}</select>
       <button class="secondary" onclick="clearSuperScope()">Tümünü Göster</button>
-      <span class="super-scope-note">Aktif kapsam: ${escapeHtml(companyName)} / ${escapeHtml(siteName)}</span>
+      <div class="super-scope-card">
+        <div>
+          <div class="scope-kicker">Şu an görüntülenen kapsam</div>
+          <div class="scope-main">${escapeHtml(scopeMain)}</div>
+          <div class="scope-sub">Dashboard, Dashboard Pro, Kayıtlar, Lojistik ve raporlar bu kapsamla yüklenir.</div>
+        </div>
+      </div>
     `;
+    const side = document.getElementById('superScopeSidebarBadge');
+    if(side){
+      side.classList.add('active');
+      side.innerHTML = `<div class="badge-top">SUPER ADMIN VIEW</div><div class="badge-main">${escapeHtml(companyName)}</div><div class="badge-sub">${escapeHtml(siteName)}</div>`;
+    }
   }
   async function changeSuperScopeCompany(companyId){
     state.saasSelectedCompanyId = String(companyId || '');
