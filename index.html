@@ -343,6 +343,10 @@
     .pro-drill-card:hover{box-shadow:0 22px 42px rgba(79,70,229,.16), inset 0 1px 0 rgba(255,255,255,.9);transform:translateY(-2px)}
     .pro-quality-3d{box-shadow:0 18px 38px rgba(15,23,42,.13), inset 0 1px 0 rgba(255,255,255,.9);border:1px solid rgba(148,163,184,.45)}
 
+  
+    .user-passive-card{opacity:.72;background:linear-gradient(180deg,#ffffff 0%,#f8fafc 100%);border-color:#fecaca}
+    button:disabled,select:disabled,input:disabled{opacity:.55;cursor:not-allowed}
+
   </style>
 </head>
 <body>
@@ -1810,6 +1814,44 @@
   function canManageUsers(){
     return hasAnyRole(['super_admin','admin']);
   }
+  function isSuperAdmin(){
+    return currentUserRole() === 'super_admin';
+  }
+  function isCompanyAdmin(){
+    return currentUserRole() === 'admin';
+  }
+  function isCurrentUserId(userId){
+    return String(state.user?.id || '') === String(userId || '');
+  }
+  function isProtectedSuperAdminRow(row){
+    return normalizeRole(row?.role) === 'super_admin' && !isSuperAdmin();
+  }
+  function canEditUserProfile(row){
+    if(!row || !canManageUsers()) return false;
+    if(isSuperAdmin()) return true;
+    if(isCompanyAdmin()){
+      if(normalizeRole(row.role) === 'super_admin') return false;
+      if(String(row.company_id || '') && String(state.profile?.company_id || '') && String(row.company_id) !== String(state.profile.company_id)) return false;
+      return true;
+    }
+    return false;
+  }
+  function canChangeUserActive(row){
+    if(!canEditUserProfile(row)) return false;
+    if(isCurrentUserId(row.id)) return false;
+    return true;
+  }
+  function allowedAssignableRolesForCurrentUser(row){
+    const all = ['super_admin','admin','boss','site_manager','reporter','maintenance','finance','guest'];
+    if(isSuperAdmin()) return all;
+    const current = normalizeRole(row?.role);
+    const allowed = ['admin','boss','site_manager','reporter','maintenance','finance','guest'];
+    return current === 'super_admin' ? [current] : allowed;
+  }
+  function roleOptionsHtml(selectedRole, row){
+    const selected = normalizeRole(selectedRole);
+    return allowedAssignableRolesForCurrentUser(row).map(role=>`<option value="${role}" ${selected===role ? 'selected' : ''}>${escapeHtml(roleLabelTr(role))}</option>`).join('');
+  }
   function canOpenModalType(type){
     if(['definitionEquipment','definitionPackage','definitionTruckModel'].includes(type)) return canManageDefinitions();
     if(['startProductionExcavator','startProductionTruck','startProductionDrill','startProductionOther','endProduction','startRental','endRental'].includes(type)) return canManageProduction();
@@ -1859,6 +1901,8 @@
     meter_logs: [],
     truck_trips: [],
     drill_meterage_logs: [],
+    companies: [],
+    sites: [],
     userProfiles: [],
     currentPage: 'dashboard',
     recordTab: 'operations',
@@ -4431,6 +4475,8 @@
     DASHBOARD_SHIFT_SUMMARY: 'v_shift_summary_safe',
     DASHBOARD_EQUIPMENT_SHIFT_SUMMARY: 'v_equipment_shift_summary_safe',
     DASHBOARD_PRO_SHIFT_SUMMARY: 'v_dashboard_pro_shift_summary_safe',
+    COMPANIES: 'companies',
+    SITES: 'sites',
     DASHBOARD_PRO_FINAL: 'v_dashboard_pro_final'
   };
 
@@ -4922,7 +4968,15 @@
     }catch(err){
       log({stage:'profile-catch', message:String(err.message||err)});
     }
-    state.profile = profile || { full_name: state.user.email, role: 'guest' };
+    state.profile = profile || { full_name: state.user.email, role: 'guest', is_active: true };
+    if(state.profile && state.profile.is_active === false){
+      try{ await sb.auth.signOut(); }catch(e){}
+      state.user = null;
+      setStatus('Kullanıcı pasif durumda. Firma yöneticisi ile görüşün.', true);
+      document.getElementById('loginView').classList.remove('hidden');
+      document.getElementById('appView').classList.add('hidden');
+      return;
+    }
     await loadShiftConfigRemote();
     await loadTruckModelsRemote();
     await loadEquipmentModelMapRemote();
@@ -5179,7 +5233,7 @@
 
   async function loadAllSafe(){
     const tables = [TABLES.EQUIPMENTS, TABLES.PACKAGES, TABLES.PRODUCTIONS, TABLES.BREAKDOWNS, TABLES.RENTALS, TABLES.FUEL_LOGS, TABLES.METER_LOGS, TABLES.TRUCK_TRIPS, TABLES.DRILL_METERAGE_LOGS, TABLES.DASHBOARD_PRO_FINAL];
-    if(canManageUsers()) tables.push(TABLES.PROFILES);
+    if(canManageUsers()) tables.push(TABLES.PROFILES, TABLES.COMPANIES, TABLES.SITES);
     const results = {};
     for(const t of tables){
       results[t] = await safeSelect(t);
@@ -5257,6 +5311,8 @@
       };
     });
     state.userProfiles = canManageUsers() ? ((results[TABLES.PROFILES]?.data || []).sort((a,b)=>String(a.full_name || a.email || '').localeCompare(String(b.full_name || b.email || ''), 'tr'))) : [];
+    state.companies = canManageUsers() ? (results[TABLES.COMPANIES]?.data || []) : [];
+    state.sites = canManageUsers() ? (results[TABLES.SITES]?.data || []) : [];
 
     if(!state._autoClosingPreviousShift){
       state._autoClosingPreviousShift = true;
@@ -10834,28 +10890,96 @@ function renderDeleted(){
   async function saveUserRoleSettings(userId){
     if(!canManageUsers()){ alert('Bu alan yalnızca yöneticiye açıktır.'); return; }
     try{
-      const role = String(document.getElementById(`u_role_${userId}`)?.value || 'guest');
+      const row = (state.userProfiles || []).find(r=>String(r.id)===String(userId));
+      if(!row) throw new Error('Kullanıcı bulunamadı');
+      if(!canEditUserProfile(row)) throw new Error('Bu kullanıcıyı düzenleme yetkiniz yok');
+      const currentRole = normalizeRole(row.role);
+      let role = String(document.getElementById(`u_role_${userId}`)?.value || currentRole || 'guest');
+      if(isCompanyAdmin() && role === 'super_admin') throw new Error('Firma admini super_admin rolü veremez');
+      if(isCompanyAdmin() && currentRole === 'super_admin') throw new Error('Super admin kullanıcısı firma admini tarafından düzenlenemez');
+      if(isCurrentUserId(userId) && role !== currentRole){
+        throw new Error('Kendi rolünüzü değiştiremezsiniz');
+      }
       const assigned = String(document.getElementById(`u_shifts_${userId}`)?.value || '')
         .split(',')
         .map(v=>v.trim())
         .filter(Boolean);
       const canViewPast = !!document.getElementById(`u_past_${userId}`)?.checked;
-      const isActive = !!document.getElementById(`u_active_${userId}`)?.checked;
       const payload = {
         role,
         assigned_shift_names: assigned,
         can_view_past_shifts: canViewPast,
-        is_active: isActive
+        updated_at: new Date().toISOString()
       };
       const sb = await initClient();
       const res = await sb.from('profiles').update(payload).eq('id', userId);
       if(res.error) throw res.error;
-      const row = (state.userProfiles || []).find(r=>String(r.id)===String(userId));
-      if(row) Object.assign(row, payload);
+      Object.assign(row, payload);
       showToast('Kullanıcı yetkileri güncellendi');
       renderUsers();
     }catch(err){
       alert('Kullanıcı kaydı güncellenemedi: ' + (err.message || err));
+    }
+  }
+
+  async function toggleUserActive(userId, makeActive){
+    if(!canManageUsers()){ alert('Bu alan yalnızca yöneticiye açıktır.'); return; }
+    try{
+      const row = (state.userProfiles || []).find(r=>String(r.id)===String(userId));
+      if(!row) throw new Error('Kullanıcı bulunamadı');
+      if(!canChangeUserActive(row)) throw new Error('Bu kullanıcıyı aktif/pasif yapma yetkiniz yok');
+      const msg = makeActive
+        ? `${row.full_name || row.email || 'Kullanıcı'} tekrar aktif yapılsın mı?`
+        : `${row.full_name || row.email || 'Kullanıcı'} pasif yapılsın mı? Bu kullanıcı sisteme giriş yapamaz.`;
+      if(!confirm(msg)) return;
+      const payload = { is_active: !!makeActive, updated_at: new Date().toISOString() };
+      const sb = await initClient();
+      const res = await sb.from('profiles').update(payload).eq('id', userId);
+      if(res.error) throw res.error;
+      Object.assign(row, payload);
+      showToast(makeActive ? 'Kullanıcı aktif yapıldı' : 'Kullanıcı pasif yapıldı');
+      renderUsers();
+    }catch(err){
+      alert('Kullanıcı durumu güncellenemedi: ' + (err.message || err));
+    }
+  }
+
+  async function inviteUserFromPanel(){
+    if(!canManageUsers()){ alert('Bu alan yalnızca yöneticiye açıktır.'); return; }
+    const statusEl = document.getElementById('invite_status');
+    try{
+      const fullName = String(document.getElementById('invite_full_name')?.value || '').trim();
+      const email = String(document.getElementById('invite_email')?.value || '').trim().toLowerCase();
+      const role = String(document.getElementById('invite_role')?.value || 'guest').trim();
+      const siteId = String(document.getElementById('invite_site_id')?.value || state.profile?.site_id || '').trim();
+      const companyId = isSuperAdmin()
+        ? String(document.getElementById('invite_company_id')?.value || state.profile?.company_id || '').trim()
+        : String(state.profile?.company_id || '').trim();
+      if(!fullName) throw new Error('Ad Soyad gerekli');
+      if(!email || !email.includes('@')) throw new Error('Geçerli email gerekli');
+      if(isCompanyAdmin() && role === 'super_admin') throw new Error('Firma admini super_admin davet edemez');
+      if(!companyId) throw new Error('Firma bilgisi bulunamadı');
+      if(statusEl) statusEl.textContent = 'Davet gönderiliyor...';
+      const sb = await initClient();
+      const res = await sb.functions.invoke('invite-user', {
+        body: {
+          email,
+          full_name: fullName,
+          role,
+          company_id: companyId,
+          site_id: siteId || null
+        }
+      });
+      if(res.error) throw new Error(res.error.message || 'Edge Function hatası');
+      if(res.data && res.data.error) throw new Error(res.data.error);
+      if(statusEl) statusEl.textContent = 'Davet gönderildi. Kullanıcı e-postasındaki link ile şifre oluşturacak.';
+      showToast('Kullanıcı daveti gönderildi');
+      document.getElementById('invite_full_name').value = '';
+      document.getElementById('invite_email').value = '';
+      await refreshData();
+    }catch(err){
+      if(statusEl) statusEl.textContent = 'Hata: ' + (err.message || err);
+      alert('Kullanıcı daveti gönderilemedi: ' + (err.message || err));
     }
   }
 
@@ -11757,58 +11881,89 @@ function renderUsers(){
       el.innerHTML = `<div class="card"><h2 class="section-title">Kullanıcılar</h2><div class="notice">Bu alan yalnızca yöneticiye açıktır.</div></div>`;
       return;
     }
-    const rows = state.userProfiles || [];
+    const rows = (state.userProfiles || []).filter(r=>{
+      if(isSuperAdmin()) return true;
+      return !String(r.role || '').includes('super_admin') && (!r.company_id || !state.profile?.company_id || String(r.company_id) === String(state.profile.company_id));
+    });
     const shiftOptionsHint = (state.shiftConfig?.shifts || []).map(s=>s.name).join(', ') || 'Gündüz, Gece';
+    const inviteRoleOptions = allowedAssignableRolesForCurrentUser({role:'guest'}).filter(role=>isSuperAdmin() || role !== 'super_admin').map(role=>`<option value="${role}">${escapeHtml(roleLabelTr(role))}</option>`).join('');
+    const visibleSites = (state.sites || []).filter(site=>isSuperAdmin() || !state.profile?.company_id || String(site.company_id || '') === String(state.profile.company_id));
+    const siteOptions = visibleSites.map(site=>`<option value="${escapeHtml(site.id)}" ${String(site.id)===String(state.profile?.site_id || '') ? 'selected' : ''}>${escapeHtml(site.name || site.code || site.id)}</option>`).join('');
+    const companyOptions = isSuperAdmin() ? (state.companies || []).map(c=>`<option value="${escapeHtml(c.id)}" ${String(c.id)===String(state.profile?.company_id || '') ? 'selected' : ''}>${escapeHtml(c.name || c.code || c.id)}</option>`).join('') : '';
+    const superAdminInfo = isSuperAdmin()
+      ? '<span class="subtle">Super Admin: tüm firma kullanıcılarını görebilir. Tam silme ileride ayrı güvenlik onayıyla eklenecek.</span>'
+      : '<span class="subtle">Firma Admini: kullanıcı silemez; sadece aktif/pasif yapar. Geçmiş kayıtlar korunur.</span>';
     el.innerHTML = `
       <div class="card">
         <h2 class="section-title">Kullanıcı Yönetimi</h2>
         <div class="toolbar">
-          <span class="subtle">Mevcut kullanıcılar listelenir. Güvenli doğrudan kullanıcı oluşturma için ayrı backend gerekir; kullanıcı sisteme ilk kez giriş yaptıktan sonra burada rol ve vardiya atanır.</span>
+          ${superAdminInfo}
           <button class="secondary" onclick="refreshData()">Listeyi Yenile</button>
+        </div>
+        <div class="notice" style="margin-bottom:12px">
+          Silme işlemi kapalıdır. Kullanıcıyı devre dışı bırakmak için <b>Pasif Yap</b> kullanılır; böylece eski üretim, lojistik ve arıza kayıtlarındaki kullanıcı izi bozulmaz.
+        </div>
+        <div class="card" style="margin-bottom:14px;background:linear-gradient(180deg,#ffffff 0%,#f8fbff 100%)">
+          <h3 style="margin:0 0 10px">Yeni Kullanıcı Davet Et</h3>
+          <div class="muted" style="margin-bottom:10px">Kullanıcı Supabase paneline girmeden bu ekrandan davet edilir. Şifre oluşturma linki kullanıcının e-postasına gider.</div>
+          <div class="form-grid">
+            <div class="form-field"><label>Ad Soyad</label><input id="invite_full_name" placeholder="Ad Soyad" /></div>
+            <div class="form-field"><label>Email</label><input id="invite_email" placeholder="ornek@firma.com" /></div>
+            <div class="form-field"><label>Rol</label><select id="invite_role">${inviteRoleOptions}</select></div>
+            ${isSuperAdmin() ? `<div class="form-field"><label>Firma</label><select id="invite_company_id">${companyOptions}</select></div>` : ''}
+            <div class="form-field"><label>Saha</label><select id="invite_site_id"><option value="">Varsayılan saha</option>${siteOptions}</select></div>
+          </div>
+          <div class="actions">
+            <button onclick="inviteUserFromPanel()">Davet Gönder</button>
+          </div>
+          <div id="invite_status" class="muted" style="margin-top:8px"></div>
         </div>
         <div class="muted" style="margin-bottom:12px">Vardiyalar virgülle ayrılır. Örnek: <b data-no-i18n="1">Gündüz</b> veya <b data-no-i18n="1">Gece</b>. Tanımlı vardiyalar: <span data-no-i18n="1">${escapeHtml(shiftOptionsHint)}</span></div>
         <div class="users-grid">
-          ${rows.length ? rows.map(r=>`
-            <div class="user-card">
+          ${rows.length ? rows.map(r=>{
+            const editable = canEditUserProfile(r);
+            const activeChange = canChangeUserActive(r);
+            const isActive = r.is_active !== false;
+            const disabled = editable ? '' : 'disabled';
+            const roleDisabled = (editable && !isCurrentUserId(r.id)) ? '' : 'disabled';
+            return `
+            <div class="user-card ${isActive ? '' : 'user-passive-card'}">
               <div class="user-card-head">
                 <div>
                   <div class="user-card-name">${escapeHtml(r.full_name || '-')}</div>
                   <div class="user-card-sub">${escapeHtml(r.email || r.id || '-')}</div>
                 </div>
-                <span class="pill">${roleLabelTr(r.role)}</span>
+                <div class="badge-col">
+                  <span class="pill">${escapeHtml(roleLabelTr(r.role))}</span>
+                  <span class="pill ${isActive ? 'green' : 'red'}">${isActive ? 'Aktif' : 'Pasif'}</span>
+                </div>
               </div>
               <div class="user-card-body">
                 <div class="user-card-row">
                   <label>Rol</label>
-                  <select id="u_role_${r.id}">
-                    <option value="super_admin" ${normalizeRole(r.role)==='super_admin' ? 'selected' : ''}>Super Admin / SaaS Owner</option>
-                    <option value="admin" ${normalizeRole(r.role)==='admin' ? 'selected' : ''}>Admin</option>
-                    <option value="boss" ${normalizeRole(r.role)==='boss' ? 'selected' : ''}>Boss</option>
-                    <option value="site_manager" ${normalizeRole(r.role)==='site_manager' ? 'selected' : ''}>Saha Yöneticisi</option>
-                    <option value="reporter" ${normalizeRole(r.role)==='reporter' ? 'selected' : ''}>Raportör</option>
-                    <option value="maintenance" ${normalizeRole(r.role)==='maintenance' ? 'selected' : ''}>Bakımcı</option>
-                    <option value="finance" ${normalizeRole(r.role)==='finance' ? 'selected' : ''}>Muhasebe / Finans</option>
-                    <option value="guest" ${normalizeRole(r.role)==='guest' ? 'selected' : ''}>Misafir</option>
+                  <select id="u_role_${r.id}" ${roleDisabled}>
+                    ${roleOptionsHtml(r.role, r)}
                   </select>
+                  ${isCurrentUserId(r.id) ? '<div class="muted" style="margin-top:6px">Kendi rolünüzü değiştiremezsiniz.</div>' : ''}
                 </div>
                 <div class="user-card-row">
                   <label>Atanmış Vardiyalar</label>
-                  <input id="u_shifts_${r.id}" value="${escapeHtml((r.assigned_shift_names || []).join(', '))}" placeholder="Gündüz, Gece" />
+                  <input id="u_shifts_${r.id}" value="${escapeHtml((r.assigned_shift_names || []).join(', '))}" placeholder="Gündüz, Gece" ${disabled} />
                 </div>
                 <div class="inline">
                   <div class="user-card-row">
-                    <label><input id="u_past_${r.id}" type="checkbox" ${r.can_view_past_shifts ? 'checked' : ''} /> Geçmiş vardiyaları görsün</label>
-                  </div>
-                  <div class="user-card-row">
-                    <label><input id="u_active_${r.id}" type="checkbox" ${r.is_active !== false ? 'checked' : ''} /> Aktif kullanıcı</label>
+                    <label><input id="u_past_${r.id}" type="checkbox" ${r.can_view_past_shifts ? 'checked' : ''} ${disabled} /> Geçmiş vardiyaları görsün</label>
                   </div>
                 </div>
               </div>
               <div class="user-card-actions">
-                <button onclick="saveUserRoleSettings('${r.id}')">Kaydet</button>
+                <button onclick="saveUserRoleSettings('${r.id}')" ${editable ? '' : 'disabled'}>Kaydet</button>
+                ${isActive
+                  ? `<button class="warning" onclick="toggleUserActive('${r.id}', false)" ${activeChange ? '' : 'disabled'}>Pasif Yap</button>`
+                  : `<button class="success" onclick="toggleUserActive('${r.id}', true)" ${activeChange ? '' : 'disabled'}>Aktif Yap</button>`}
               </div>
-            </div>
-          `).join('') : '<div class="empty">Henüz kullanıcı bulunamadı.</div>'}
+            </div>`;
+          }).join('') : '<div class="empty">Henüz kullanıcı bulunamadı.</div>'}
         </div>
       </div>
     `;
