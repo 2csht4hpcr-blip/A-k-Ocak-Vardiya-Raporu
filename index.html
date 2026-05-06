@@ -361,6 +361,13 @@
     .saas-kpi-label{font-size:11px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.35px}
     .saas-kpi-value{font-size:26px;font-weight:900;color:#0f172a;margin-top:5px}
 
+    .super-scope-bar{display:none;align-items:center;gap:8px;flex-wrap:wrap;width:100%;margin-top:10px;padding:10px 12px;border-radius:16px;background:linear-gradient(135deg,#eef2ff 0%,#f8fbff 100%);border:1px solid #c7d2fe;box-shadow:0 8px 18px rgba(79,70,229,.08)}
+    .super-scope-bar.active{display:flex}
+    .super-scope-label{font-size:12px;font-weight:900;color:#3730a3;text-transform:uppercase;letter-spacing:.35px}
+    .super-scope-bar select{width:auto;min-width:210px;padding:9px 10px}
+    .super-scope-bar button{width:auto;padding:9px 12px;border-radius:10px}
+    .super-scope-note{font-size:12px;color:#475569;font-weight:700}
+
   </style>
 </head>
 <body>
@@ -1907,12 +1914,64 @@
     };
     return labels[normalized] || labels.guest;
   }
+  function allSitesForCompanyOptions(companyId){
+    const id = String(companyId || '');
+    return (state.sites || []).filter(site=>!id || String(site.company_id || '') === id);
+  }
+  function renderSuperScopeBar(){
+    const bar = document.getElementById('superScopeBar');
+    if(!bar) return;
+    if(!isSuperAdmin()){ bar.classList.remove('active'); bar.innerHTML = ''; return; }
+    const companies = state.companies || [];
+    const selectedCompany = String(state.saasSelectedCompanyId || '');
+    const selectedSite = String(state.saasSelectedSiteId || '');
+    const companyOptions = `<option value="">Tüm firmalar</option>` + companies.map(c=>`<option value="${escapeHtml(c.id)}" ${String(c.id)===selectedCompany?'selected':''}>${escapeHtml(c.name || c.code || c.id)}</option>`).join('');
+    const siteOptions = `<option value="">Tüm sahalar</option>` + allSitesForCompanyOptions(selectedCompany).map(site=>`<option value="${escapeHtml(site.id)}" ${String(site.id)===selectedSite?'selected':''}>${escapeHtml(site.name || site.code || site.id)}</option>`).join('');
+    const companyName = companyNameById(selectedCompany) || 'Tüm firmalar';
+    const siteName = (state.sites || []).find(s=>String(s.id)===selectedSite)?.name || (selectedSite ? 'Seçili saha' : 'Tüm sahalar');
+    bar.classList.add('active');
+    bar.innerHTML = `
+      <span class="super-scope-label">Super Admin Görünüm Modu</span>
+      <select id="super_scope_company" onchange="changeSuperScopeCompany(this.value)">${companyOptions}</select>
+      <select id="super_scope_site" onchange="changeSuperScopeSite(this.value)">${siteOptions}</select>
+      <button class="secondary" onclick="clearSuperScope()">Tümünü Göster</button>
+      <span class="super-scope-note">Aktif kapsam: ${escapeHtml(companyName)} / ${escapeHtml(siteName)}</span>
+    `;
+  }
+  async function changeSuperScopeCompany(companyId){
+    state.saasSelectedCompanyId = String(companyId || '');
+    state.saasSelectedSiteId = '';
+    await loadAllSafe();
+    renderAll();
+    applyRolePermissions();
+    showPage(state.currentPage || 'dashboard');
+    showToast(state.saasSelectedCompanyId ? 'Firma görünüm modu aktif' : 'Tüm firmalar görünümü aktif');
+  }
+  async function changeSuperScopeSite(siteId){
+    state.saasSelectedSiteId = String(siteId || '');
+    await loadAllSafe();
+    renderAll();
+    applyRolePermissions();
+    showPage(state.currentPage || 'dashboard');
+    showToast(state.saasSelectedSiteId ? 'Saha görünüm modu aktif' : 'Tüm sahalar görünümü aktif');
+  }
+  async function clearSuperScope(){
+    state.saasSelectedCompanyId = '';
+    state.saasSelectedSiteId = '';
+    await loadAllSafe();
+    renderAll();
+    applyRolePermissions();
+    showPage('saasAdmin');
+    showToast('Super Admin kapsam filtresi temizlendi');
+  }
+
   function applyRolePermissions(){
     document.querySelectorAll('.menu-btn').forEach(btn=>{
       const page = btn.dataset.page;
       const allowed = canAccessPage(page);
       btn.classList.toggle('hidden', !allowed);
     });
+    renderSuperScopeBar();
     if(!canAccessPage(state.currentPage)) showPage(firstAllowedPage());
     const roleText = document.getElementById('userRole');
     if(roleText){
@@ -1938,6 +1997,7 @@
     sites: [],
     userProfiles: [],
     saasSelectedCompanyId: '',
+    saasSelectedSiteId: '',
     currentPage: 'dashboard',
     recordTab: 'operations',
     modal: { type:null, data:null },
@@ -5136,10 +5196,28 @@
     updateOnlineUsersCard();
   }
 
+  function selectedCompanyIdForScope(){
+    return isSuperAdmin() ? String(state.saasSelectedCompanyId || '') : String(state.profile?.company_id || '');
+  }
+  function selectedSiteIdForScope(){
+    return isSuperAdmin() ? String(state.saasSelectedSiteId || '') : String(state.profile?.site_id || '');
+  }
+  function tableSupportsCompanyScope(table){
+    return [TABLES.EQUIPMENTS, TABLES.PACKAGES, TABLES.PRODUCTIONS, TABLES.BREAKDOWNS, TABLES.RENTALS, TABLES.FUEL_LOGS, TABLES.METER_LOGS, TABLES.TRUCK_TRIPS, TABLES.DRILL_METERAGE_LOGS, TABLES.DASHBOARD_PRO_FINAL, TABLES.PROFILES].includes(table);
+  }
+  function tableSupportsSiteScope(table){
+    return [TABLES.EQUIPMENTS, TABLES.PACKAGES, TABLES.PRODUCTIONS, TABLES.BREAKDOWNS, TABLES.RENTALS, TABLES.FUEL_LOGS, TABLES.METER_LOGS, TABLES.TRUCK_TRIPS, TABLES.DRILL_METERAGE_LOGS, TABLES.DASHBOARD_PRO_FINAL, TABLES.PROFILES].includes(table);
+  }
   async function safeSelect(table){
     const sb = await initClient();
     try{
-      const res = await withTimeout(sb.from(resolveDbTableName(table)).select('*'), 10000, table);
+      const dbTable = resolveDbTableName(table);
+      let q = sb.from(dbTable).select('*');
+      const companyId = selectedCompanyIdForScope();
+      const siteId = selectedSiteIdForScope();
+      if(isSuperAdmin() && companyId && tableSupportsCompanyScope(dbTable)) q = q.eq('company_id', companyId);
+      if(isSuperAdmin() && siteId && tableSupportsSiteScope(dbTable)) q = q.eq('site_id', siteId);
+      const res = await withTimeout(q, 10000, table);
       return { data: res.data || [], error: res.error || null };
     }catch(err){
       return { data: [], error: { message: String(err.message || err) } };
@@ -12047,13 +12125,22 @@ async function exportWeeklyExcel(){
     tables.forEach(t=>{ records += (state[t] || []).filter(r=>String(r.site_id || '') === id).length; });
     return { users: saasUsersForSite(id).length, records };
   }
-  function saasSelectCompany(companyId){
+  async function saasSelectCompany(companyId){
     state.saasSelectedCompanyId = String(companyId || '');
-    renderSaasAdmin();
+    state.saasSelectedSiteId = '';
+    await loadAllSafe();
+    renderAll();
+    applyRolePermissions();
+    showPage('dashboard');
+    showToast('Firma görünüm modu açıldı. Dashboard, Kayıtlar ve tüm analizler seçili firmaya göre çalışıyor.');
   }
-  function saasClearCompanySelection(){
+  async function saasClearCompanySelection(){
     state.saasSelectedCompanyId = '';
-    renderSaasAdmin();
+    state.saasSelectedSiteId = '';
+    await loadAllSafe();
+    renderAll();
+    applyRolePermissions();
+    showPage('saasAdmin');
   }
   function renderSaasAdmin(){
     const el = document.getElementById('saasAdmin');
@@ -12839,6 +12926,10 @@ function renderUsers(){
       log({stage:'auto-session-catch', message:String(err.message||err)});
     }
   })();
+  window.changeSuperScopeCompany = changeSuperScopeCompany;
+  window.changeSuperScopeSite = changeSuperScopeSite;
+  window.clearSuperScope = clearSuperScope;
+
 })();
 </script>
 </body>
