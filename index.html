@@ -1937,6 +1937,7 @@
     companies: [],
     sites: [],
     userProfiles: [],
+    saasSelectedCompanyId: '',
     currentPage: 'dashboard',
     recordTab: 'operations',
     modal: { type:null, data:null },
@@ -11036,6 +11037,16 @@ function renderDeleted(){
         can_view_past_shifts: canViewPast,
         updated_at: new Date().toISOString()
       };
+      if(isSuperAdmin()){
+        const companyId = String(document.getElementById(`u_company_${userId}`)?.value || '').trim();
+        const siteId = String(document.getElementById(`u_site_${userId}`)?.value || '').trim();
+        payload.company_id = companyId || null;
+        payload.site_id = siteId || null;
+      }else if(isCompanyAdmin()){
+        const siteId = String(document.getElementById(`u_site_${userId}`)?.value || '').trim();
+        payload.company_id = state.profile?.company_id || row.company_id || null;
+        payload.site_id = siteId || null;
+      }
       const sb = await initClient();
       const res = await sb.from('profiles').update(payload).eq('id', userId);
       if(res.error) throw res.error;
@@ -12013,6 +12024,37 @@ async function exportWeeklyExcel(){
   function activePill(v){
     return `<span class="pill ${v === false ? 'red' : 'green'}">${v === false ? 'Pasif' : 'Aktif'}</span>`;
   }
+  function saasUsersForCompany(companyId){
+    return (state.userProfiles || []).filter(u=>String(u.company_id || '') === String(companyId || ''));
+  }
+  function saasSitesForCompany(companyId){
+    return (state.sites || []).filter(s=>String(s.company_id || '') === String(companyId || ''));
+  }
+  function saasUsersForSite(siteId){
+    return (state.userProfiles || []).filter(u=>String(u.site_id || '') === String(siteId || ''));
+  }
+  function saasCompanyUsage(companyId){
+    const id = String(companyId || '');
+    const tables = ['equipments','packages','productions','breakdowns','rentals','fuel_logs','meter_logs','truck_trips','drill_meterage_logs'];
+    let records = 0;
+    tables.forEach(t=>{ records += (state[t] || []).filter(r=>String(r.company_id || '') === id).length; });
+    return { sites: saasSitesForCompany(id).length, users: saasUsersForCompany(id).length, records };
+  }
+  function saasSiteUsage(siteId){
+    const id = String(siteId || '');
+    const tables = ['equipments','packages','productions','breakdowns','rentals','fuel_logs','meter_logs','truck_trips','drill_meterage_logs'];
+    let records = 0;
+    tables.forEach(t=>{ records += (state[t] || []).filter(r=>String(r.site_id || '') === id).length; });
+    return { users: saasUsersForSite(id).length, records };
+  }
+  function saasSelectCompany(companyId){
+    state.saasSelectedCompanyId = String(companyId || '');
+    renderSaasAdmin();
+  }
+  function saasClearCompanySelection(){
+    state.saasSelectedCompanyId = '';
+    renderSaasAdmin();
+  }
   function renderSaasAdmin(){
     const el = document.getElementById('saasAdmin');
     if(!el) return;
@@ -12027,17 +12069,37 @@ async function exportWeeklyExcel(){
     const activeCompanies = companies.filter(c=>c.is_active !== false).length;
     const activeSites = sites.filter(s=>s.is_active !== false).length;
     const activeUsers = users.filter(u=>u.is_active !== false).length;
+    const selectedCompanyId = String(state.saasSelectedCompanyId || '');
+    const selectedCompany = companies.find(c=>String(c.id || '') === selectedCompanyId) || null;
+    const scopedSites = selectedCompany ? sites.filter(s=>String(s.company_id || '') === selectedCompanyId) : sites;
+    const scopedUsers = selectedCompany ? users.filter(u=>String(u.company_id || '') === selectedCompanyId) : users;
+    const companyDetail = selectedCompany ? `
+      <div class="saas-card" style="margin-top:14px;border-color:#bfdbfe;background:linear-gradient(180deg,#ffffff 0%,#eff6ff 100%)">
+        <div class="unified-records-head" style="padding:0;background:transparent;border:none;margin-bottom:10px">
+          <div>
+            <div class="unified-records-title">Seçili Firma: ${escapeHtml(selectedCompany.name || selectedCompany.code || '-')}</div>
+            <div class="unified-records-sub">Bu görünüm seçilen firmaya ait sahaları ve kullanıcıları süzer. Firma/saha sayfasını Super Admin olarak buradan takip edersin.</div>
+          </div>
+          <button class="secondary" onclick="saasClearCompanySelection()">Tüm Firmaları Göster</button>
+        </div>
+        <div class="pro-summary-grid">
+          <div class="pro-mini-card"><div class="pro-mini-label">Saha</div><div class="pro-mini-value">${scopedSites.length}</div></div>
+          <div class="pro-mini-card"><div class="pro-mini-label">Kullanıcı</div><div class="pro-mini-value">${scopedUsers.length}</div></div>
+          <div class="pro-mini-card"><div class="pro-mini-label">Aktif Kullanıcı</div><div class="pro-mini-value">${scopedUsers.filter(u=>u.is_active !== false).length}</div></div>
+        </div>
+      </div>` : '';
     el.innerHTML = `
       <div class="card pro-hero" style="margin-bottom:14px">
         <h2 class="section-title" style="color:#fff">SaaS Yönetimi</h2>
-        <div class="muted">Super Admin paneli: firma ve saha tanımları buradan eklenir. Kullanıcı davet ekranındaki Firma/Saha açılır pencereleri bu listedeki tanımlardan otomatik beslenir. Müşteri firma adminleri bu alanı göremez.</div>
+        <div class="muted">Super Admin paneli: tüm firmaları, sahaları ve kullanıcı atamalarını buradan yönetirsin. Müşteri firma adminleri bu alanı göremez.</div>
       </div>
       <div class="saas-kpi-grid">
         <div class="saas-kpi"><div class="saas-kpi-label">Firma</div><div class="saas-kpi-value">${companies.length}</div><div class="muted">Aktif: ${activeCompanies}</div></div>
         <div class="saas-kpi"><div class="saas-kpi-label">Saha</div><div class="saas-kpi-value">${sites.length}</div><div class="muted">Aktif: ${activeSites}</div></div>
         <div class="saas-kpi"><div class="saas-kpi-label">Kullanıcı</div><div class="saas-kpi-value">${users.length}</div><div class="muted">Aktif: ${activeUsers}</div></div>
       </div>
-      <div class="saas-admin-grid">
+      ${companyDetail}
+      <div class="saas-admin-grid" style="margin-top:14px">
         <div class="saas-card">
           <h3>Yeni Firma Oluştur</h3>
           <div class="form-grid">
@@ -12070,19 +12132,38 @@ async function exportWeeklyExcel(){
       <div class="saas-admin-grid" style="margin-top:14px">
         <div class="saas-card">
           <h3>Firmalar</h3>
-          ${companies.length ? companies.map(c=>`
+          ${companies.length ? companies.map(c=>{
+            const usage = saasCompanyUsage(c.id);
+            return `
             <div class="saas-row">
-              <div><div class="saas-name">${escapeHtml(c.name || '-')} ${activePill(c.is_active)}</div><div class="saas-sub">Kod: ${escapeHtml(c.code || '-')} • Sahalar: ${sitesForCompany(c.id).length}</div></div>
-              <div class="saas-actions"><button class="${c.is_active === false ? 'success' : 'warning'}" onclick="toggleSaasCompany('${c.id}', ${c.is_active === false ? 'true' : 'false'})">${c.is_active === false ? 'Aktif Yap' : 'Pasif Yap'}</button></div>
-            </div>`).join('') : '<div class="empty">Firma bulunamadı.</div>'}
+              <div><div class="saas-name">${escapeHtml(c.name || '-')} ${activePill(c.is_active)}</div><div class="saas-sub">Kod: ${escapeHtml(c.code || '-')} • Sahalar: ${usage.sites} • Kullanıcı: ${usage.users} • Kayıt: ${usage.records}</div></div>
+              <div class="saas-actions">
+                <button class="secondary" onclick="saasSelectCompany('${c.id}')">Sayfasını Gör</button>
+                <button class="${c.is_active === false ? 'success' : 'warning'}" onclick="toggleSaasCompany('${c.id}', ${c.is_active === false ? 'true' : 'false'})">${c.is_active === false ? 'Aktif Yap' : 'Pasif Yap'}</button>
+                <button class="danger" onclick="deleteSaasCompanyIfEmpty('${c.id}')">Sil</button>
+              </div>
+            </div>`}).join('') : '<div class="empty">Firma bulunamadı.</div>'}
         </div>
         <div class="saas-card">
-          <h3>Sahalar</h3>
-          ${sites.length ? sites.map(site=>`
+          <h3>${selectedCompany ? 'Seçili Firma Sahaları' : 'Sahalar'}</h3>
+          ${scopedSites.length ? scopedSites.map(site=>{
+            const usage = saasSiteUsage(site.id);
+            return `
             <div class="saas-row">
-              <div><div class="saas-name">${escapeHtml(site.name || '-')} ${activePill(site.is_active)}</div><div class="saas-sub">Firma: ${escapeHtml(companyNameById(site.company_id) || '-')} • Kod: ${escapeHtml(site.code || '-')}</div></div>
-              <div class="saas-actions"><button class="${site.is_active === false ? 'success' : 'warning'}" onclick="toggleSaasSite('${site.id}', ${site.is_active === false ? 'true' : 'false'})">${site.is_active === false ? 'Aktif Yap' : 'Pasif Yap'}</button></div>
-            </div>`).join('') : '<div class="empty">Saha bulunamadı.</div>'}
+              <div><div class="saas-name">${escapeHtml(site.name || '-')} ${activePill(site.is_active)}</div><div class="saas-sub">Firma: ${escapeHtml(companyNameById(site.company_id) || '-')} • Kod: ${escapeHtml(site.code || '-')} • Kullanıcı: ${usage.users} • Kayıt: ${usage.records}</div></div>
+              <div class="saas-actions">
+                <button class="${site.is_active === false ? 'success' : 'warning'}" onclick="toggleSaasSite('${site.id}', ${site.is_active === false ? 'true' : 'false'})">${site.is_active === false ? 'Aktif Yap' : 'Pasif Yap'}</button>
+                <button class="danger" onclick="deleteSaasSiteIfEmpty('${site.id}')">Sil</button>
+              </div>
+            </div>`}).join('') : '<div class="empty">Saha bulunamadı.</div>'}
+        </div>
+        <div class="saas-card">
+          <h3>${selectedCompany ? 'Seçili Firma Kullanıcıları' : 'Tüm Kullanıcılar'}</h3>
+          ${scopedUsers.length ? scopedUsers.map(u=>`
+            <div class="saas-row">
+              <div><div class="saas-name">${escapeHtml(u.full_name || u.email || '-')} ${activePill(u.is_active)}</div><div class="saas-sub">${escapeHtml(u.email || '-')} • Rol: ${escapeHtml(roleLabelTr(u.role))} • Firma: ${escapeHtml(companyNameById(u.company_id) || '-')} • Saha: ${escapeHtml((state.sites || []).find(s=>String(s.id)===String(u.site_id))?.name || '-')}</div></div>
+              <div class="saas-actions"><button onclick="showPage('users')">Kullanıcılar</button></div>
+            </div>`).join('') : '<div class="empty">Kullanıcı bulunamadı.</div>'}
         </div>
       </div>
     `;
@@ -12159,6 +12240,45 @@ async function exportWeeklyExcel(){
       showPage('saasAdmin');
     }catch(err){ alert('Saha durumu güncellenemedi: ' + (err.message || err)); }
   }
+  async function deleteSaasSiteIfEmpty(siteId){
+    if(!canManageSaas()){ alert('Bu işlem yalnızca Super Admin tarafından yapılabilir.'); return; }
+    try{
+      const site = (state.sites || []).find(s=>String(s.id)===String(siteId));
+      if(!site) throw new Error('Saha bulunamadı');
+      const usage = saasSiteUsage(siteId);
+      if(usage.users > 0 || usage.records > 0){
+        alert(`Bu saha silinemez. Önce kullanıcı/kayıt bağlantılarını taşı veya saha pasif yap. Kullanıcı: ${usage.users}, Kayıt: ${usage.records}`);
+        return;
+      }
+      if(!confirm(`${site.name || 'Saha'} kalıcı silinsin mi? Bu işlem geri alınamaz.`)) return;
+      const sb = await initClient();
+      const res = await sb.from('sites').delete().eq('id', siteId);
+      if(res.error) throw res.error;
+      showToast('Saha silindi');
+      await refreshData();
+      showPage('saasAdmin');
+    }catch(err){ alert('Saha silinemedi: ' + (err.message || err)); }
+  }
+  async function deleteSaasCompanyIfEmpty(companyId){
+    if(!canManageSaas()){ alert('Bu işlem yalnızca Super Admin tarafından yapılabilir.'); return; }
+    try{
+      const company = (state.companies || []).find(c=>String(c.id)===String(companyId));
+      if(!company) throw new Error('Firma bulunamadı');
+      const usage = saasCompanyUsage(companyId);
+      if(usage.sites > 0 || usage.users > 0 || usage.records > 0){
+        alert(`Bu firma silinemez. Önce saha/kullanıcı/kayıt bağlantılarını taşı veya firma pasif yap. Saha: ${usage.sites}, Kullanıcı: ${usage.users}, Kayıt: ${usage.records}`);
+        return;
+      }
+      if(!confirm(`${company.name || 'Firma'} kalıcı silinsin mi? Bu işlem geri alınamaz.`)) return;
+      const sb = await initClient();
+      const res = await sb.from('companies').delete().eq('id', companyId);
+      if(res.error) throw res.error;
+      showToast('Firma silindi');
+      await refreshData();
+      showPage('saasAdmin');
+    }catch(err){ alert('Firma silinemedi: ' + (err.message || err)); }
+  }
+
   async function inviteCompanyAdminFromSaasPanel(){
     if(!canManageSaas()){ alert('Bu işlem yalnızca Super Admin tarafından yapılabilir.'); return; }
     const statusEl = document.getElementById('saas_admin_invite_status');
@@ -12197,6 +12317,21 @@ async function exportWeeklyExcel(){
         return isSuperAdmin() || !state.profile?.company_id || String(site.company_id || '') === String(state.profile.company_id);
       });
       siteSelect.innerHTML = `<option value="">Varsayılan saha</option>${sites.map(site=>`<option value="${escapeHtml(site.id)}">${escapeHtml(site.name || site.code || site.id)}</option>`).join('')}`;
+    }catch(e){}
+  }
+
+  function userCompanyOptionsHtml(selectedCompanyId){
+    return (state.companies || []).map(c=>`<option value="${escapeHtml(c.id)}" ${String(c.id)===String(selectedCompanyId || '') ? 'selected' : ''}>${escapeHtml(c.name || c.code || c.id)}</option>`).join('');
+  }
+  function userSiteOptionsHtml(companyId, selectedSiteId){
+    const sites = (state.sites || []).filter(s=>!companyId || String(s.company_id || '') === String(companyId || ''));
+    return `<option value="">Saha seç</option>` + sites.map(site=>`<option value="${escapeHtml(site.id)}" ${String(site.id)===String(selectedSiteId || '') ? 'selected' : ''}>${escapeHtml(site.name || site.code || site.id)}</option>`).join('');
+  }
+  function syncUserSiteOptions(userId){
+    try{
+      const companyId = document.getElementById(`u_company_${userId}`)?.value || '';
+      const siteEl = document.getElementById(`u_site_${userId}`);
+      if(siteEl) siteEl.innerHTML = userSiteOptionsHtml(companyId, '');
     }catch(e){}
   }
 
@@ -12273,6 +12408,11 @@ function renderUsers(){
                   </select>
                   ${isCurrentUserId(r.id) ? '<div class="muted" style="margin-top:6px">Kendi rolünüzü değiştiremezsiniz.</div>' : ''}
                 </div>
+                ${(isSuperAdmin() || isCompanyAdmin()) ? `
+                <div class="form-grid">
+                  ${isSuperAdmin() ? `<div class="user-card-row"><label>Firma</label><select id="u_company_${r.id}" onchange="syncUserSiteOptions('${r.id}')" ${disabled}>${userCompanyOptionsHtml(r.company_id)}</select></div>` : ''}
+                  <div class="user-card-row"><label>Saha</label><select id="u_site_${r.id}" ${disabled}>${userSiteOptionsHtml(r.company_id || state.profile?.company_id, r.site_id)}</select></div>
+                </div>` : ''}
                 <div class="user-card-row">
                   <label>Atanmış Vardiyalar</label>
                   <input id="u_shifts_${r.id}" value="${escapeHtml((r.assigned_shift_names || []).join(', '))}" placeholder="Gündüz, Gece" ${disabled} />
@@ -12681,7 +12821,7 @@ function renderUsers(){
   document.getElementById('newPassword')?.addEventListener('keydown', e=>{ if(e.key==='Enter') saveNewPasswordFromLink(); });
   document.getElementById('newPasswordConfirm')?.addEventListener('keydown', e=>{ if(e.key==='Enter') saveNewPasswordFromLink(); });
 
-  Object.assign(window, { openModal, closeModal, existingLogisticsRowForProduction, assertNoDuplicateProductionLog, assertProductionStartAllowedFinal, markQualityPanelStabilizedDone, fillTruckRouteFromExcavator, updateAutoMeterLabels, updateProductionStartMeterHints, updateTripProductionContext, updateFuelProductionContext, updateMeterCorrectionContext, toggleProductionEditLinkedField, refreshLogisticsEquipmentSelect, markShiftSelectManual, continueBreakdownToCurrentShift, finishBreakdownFromWarning, saveStartProductionExcavator, saveStartProductionTruck, saveStartProductionDrill, saveStartProductionOther, saveEndProduction, saveStartBreakdown, saveEndBreakdown, saveStartRental, saveEndRental, saveNewTrip, saveNewFuel, saveNewMeter, saveNewDrillMeterage, updateDrillMeterageProductionContext, confirmSoftDelete, restoreDeleted, deleteAllDeletedRecordsNow, deleteDeletedOlderThan30Days, saveEditRecord, saveDefinition, deleteTruckModel, toggleDefinitionTruckModelField, renderShiftConfigInputs, saveShiftConfigFromForm, renderShiftConfigCardRefresh, applyRecordFiltersFromUI, resetRecordFilters, bulkDeleteRecordTable, exportRecordsToExcel, saveUserRoleSettings, toggleUserActive, inviteUserFromPanel, syncInviteSiteOptions, renderSaasAdmin, syncSaasAdminSiteOptions, createSaasCompany, createSaasSite, toggleSaasCompany, toggleSaasSite, inviteCompanyAdminFromSaasPanel, sendPasswordResetEmail, saveNewPasswordFromLink, refreshData, exportDailyPdf, exportWeeklyExcel, exportShiftReport });
+  Object.assign(window, { openModal, closeModal, existingLogisticsRowForProduction, assertNoDuplicateProductionLog, assertProductionStartAllowedFinal, markQualityPanelStabilizedDone, fillTruckRouteFromExcavator, updateAutoMeterLabels, updateProductionStartMeterHints, updateTripProductionContext, updateFuelProductionContext, updateMeterCorrectionContext, toggleProductionEditLinkedField, refreshLogisticsEquipmentSelect, markShiftSelectManual, continueBreakdownToCurrentShift, finishBreakdownFromWarning, saveStartProductionExcavator, saveStartProductionTruck, saveStartProductionDrill, saveStartProductionOther, saveEndProduction, saveStartBreakdown, saveEndBreakdown, saveStartRental, saveEndRental, saveNewTrip, saveNewFuel, saveNewMeter, saveNewDrillMeterage, updateDrillMeterageProductionContext, confirmSoftDelete, restoreDeleted, deleteAllDeletedRecordsNow, deleteDeletedOlderThan30Days, saveEditRecord, saveDefinition, deleteTruckModel, toggleDefinitionTruckModelField, renderShiftConfigInputs, saveShiftConfigFromForm, renderShiftConfigCardRefresh, applyRecordFiltersFromUI, resetRecordFilters, bulkDeleteRecordTable, exportRecordsToExcel, saveUserRoleSettings, toggleUserActive, inviteUserFromPanel, syncInviteSiteOptions, syncUserSiteOptions, renderSaasAdmin, syncSaasAdminSiteOptions, createSaasCompany, createSaasSite, toggleSaasCompany, toggleSaasSite, deleteSaasCompanyIfEmpty, deleteSaasSiteIfEmpty, saasSelectCompany, saasClearCompanySelection, inviteCompanyAdminFromSaasPanel, sendPasswordResetEmail, saveNewPasswordFromLink, refreshData, exportDailyPdf, exportWeeklyExcel, exportShiftReport });
 
   (async function autoSession(){
     try{
