@@ -181,6 +181,16 @@
     .pro-alert-head{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:8px}
     .pro-alert-title{font-size:14px;font-weight:900;color:#0f172a}
     .pro-alert-text{font-size:13px;color:#475569;line-height:1.45}
+    .smart-alert-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:12px}
+    .smart-alert-summary-card{padding:12px 13px;border-radius:16px;background:#fff;border:1px solid #e2e8f0;box-shadow:0 8px 18px rgba(15,23,42,.05)}
+    .smart-alert-summary-card.red{background:linear-gradient(180deg,#fff 0%,#fef2f2 100%);border-color:#fecaca}
+    .smart-alert-summary-card.orange{background:linear-gradient(180deg,#fff 0%,#fff7ed 100%);border-color:#fed7aa}
+    .smart-alert-summary-label{font-size:10px;font-weight:900;letter-spacing:.35px;text-transform:uppercase;color:#64748b}
+    .smart-alert-summary-value{font-size:25px;font-weight:900;color:#0f172a;margin-top:4px}
+    .smart-alert-group-title{display:flex;align-items:center;gap:8px;margin:12px 0 8px;font-size:14px;font-weight:900;color:#0f172a}
+    .smart-alert-priority{display:inline-flex;align-items:center;gap:6px;padding:5px 8px;border-radius:999px;background:#f8fafc;border:1px solid #e2e8f0;color:#475569;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.25px}
+    .smart-alert-meta{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
+    .smart-alert-meta span{font-size:11px;font-weight:800;padding:4px 7px;border-radius:999px;background:#f8fafc;border:1px solid #e2e8f0;color:#475569}
     .pro-summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
     .pro-mini-card{padding:13px 14px;border-radius:18px;background:linear-gradient(180deg,#ffffff 0%,#f8fafc 100%);border:1px solid #e2e8f0;box-shadow:0 6px 16px rgba(15,23,42,.05)}
     .pro-mini-label{font-size:11px;font-weight:800;color:#64748b;letter-spacing:.35px;text-transform:uppercase}
@@ -314,6 +324,16 @@
 
     .final-lock-note{margin-top:10px;padding:10px 12px;border-radius:14px;background:linear-gradient(135deg,#f0fdf4 0%,#ecfeff 100%);border:1px solid #bbf7d0;color:#14532d;font-size:12px;font-weight:800;line-height:1.45}
     .record-quality-card.final-score{background:linear-gradient(145deg,#ecfdf5 0%,#eff6ff 100%);border-color:#bfdbfe}
+
+    .record-quality-toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px}
+    .record-quality-filter-btn{width:auto;padding:8px 11px;border-radius:999px;background:#f8fafc;color:#334155;border:1px solid #cbd5e1;font-size:12px;font-weight:900}
+    .record-quality-filter-btn.active{background:#2563eb;color:#fff;border-color:#2563eb;box-shadow:0 8px 18px rgba(37,99,235,.18)}
+    .record-quality-card.selected{outline:3px solid rgba(37,99,235,.28);transform:translateY(-2px)}
+    .quality-task-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-top:12px}
+    .quality-task-card{padding:11px 12px;border-radius:15px;background:rgba(255,255,255,.9);border:1px solid #e2e8f0;box-shadow:0 8px 18px rgba(15,23,42,.06)}
+    .quality-task-label{font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.35px;color:#64748b}
+    .quality-task-value{font-size:22px;font-weight:900;color:#0f172a;margin-top:4px}
+    .quality-task-sub{font-size:11px;color:#64748b;margin-top:4px;line-height:1.35}
     .record-quality-detail-row.final-new-done{animation:finalTaskDropPulse 1.2s ease-out 1}
     @keyframes finalTaskDropPulse{0%{transform:scale(1);box-shadow:0 0 0 rgba(16,185,129,0)}40%{transform:scale(1.012);box-shadow:0 18px 34px rgba(16,185,129,.22)}100%{transform:scale(1);box-shadow:0 6px 16px rgba(15,23,42,.05)}}
     .record-quality-card,.unified-record-card{box-shadow:0 12px 26px rgba(15,23,42,.10), inset 0 1px 0 rgba(255,255,255,.88)!important;transition:transform .16s ease,box-shadow .16s ease}
@@ -344,41 +364,41 @@
 
   <div id="appView" class="app hidden">
     <aside class="sidebar">
-      <div class="brand">⛏️ Maden Takip</div>
+      <div class="brand" data-i18n-key="⛏️ Maden Takip">⛏️ Maden Takip</div>
 
       <div class="menu-group">
-        <div class="menu-title">Genel</div>
-        <button class="menu-btn active" data-page="dashboard">Dashboard</button>
-        <button class="menu-btn" data-page="dashboardPro">Dashboard Pro</button>
+        <div class="menu-title" data-i18n-key="Genel">Genel</div>
+        <button class="menu-btn active" data-page="dashboard" data-i18n-key="Dashboard">Dashboard</button>
+        <button class="menu-btn" data-page="dashboardPro" data-i18n-key="Dashboard Pro">Dashboard Pro</button>
       </div>
 
       <div class="menu-group">
-        <div class="menu-title">Operasyon</div>
-        <button class="menu-btn" data-page="production">Üretim</button>
-        <button class="menu-btn" data-page="breakdown">Arıza</button>
-        <button class="menu-btn" data-page="rental">Kiralık</button>
+        <div class="menu-title" data-i18n-key="Operasyon">Operasyon</div>
+        <button class="menu-btn" data-page="production" data-i18n-key="Üretim">Üretim</button>
+        <button class="menu-btn" data-page="breakdown" data-i18n-key="Arıza">Arıza</button>
+        <button class="menu-btn" data-page="rental" data-i18n-key="Kiralık">Kiralık</button>
       </div>
 
       <div class="menu-group">
-        <div class="menu-title">Lojistik</div>
-        <button class="menu-btn" data-page="logisticsControl">Kontrol Paneli</button>
-        <button class="menu-btn" data-page="meter">Sayaç Kayıtları</button>
-        <button class="menu-btn" data-page="trip">Sefer Kayıtları</button>
-        <button class="menu-btn" data-page="fuel">Yakıt Kayıtları</button>
-        <button class="menu-btn" data-page="drillMeterage">Delici Metraj Kayıtları</button>
+        <div class="menu-title" data-i18n-key="Lojistik">Lojistik</div>
+        <button class="menu-btn" data-page="logisticsControl" data-i18n-key="Kontrol Paneli">Kontrol Paneli</button>
+        <button class="menu-btn" data-page="meter" data-i18n-key="Sayaç Kayıtları">Sayaç Kayıtları</button>
+        <button class="menu-btn" data-page="trip" data-i18n-key="Sefer Kayıtları">Sefer Kayıtları</button>
+        <button class="menu-btn" data-page="fuel" data-i18n-key="Yakıt Kayıtları">Yakıt Kayıtları</button>
+        <button class="menu-btn" data-page="drillMeterage" data-i18n-key="Delici Metraj Kayıtları">Delici Metraj Kayıtları</button>
       </div>
 
       <div class="menu-group">
-        <div class="menu-title">Geçmiş</div>
-        <button class="menu-btn" data-page="records">Kayıtlar</button>
-        <button class="menu-btn" data-page="deleted">Silinenler</button>
+        <div class="menu-title" data-i18n-key="Geçmiş">Geçmiş</div>
+        <button class="menu-btn" data-page="records" data-i18n-key="Kayıtlar">Kayıtlar</button>
+        <button class="menu-btn" data-page="deleted" data-i18n-key="Silinenler">Silinenler</button>
       </div>
 
       <div class="menu-group">
-        <div class="menu-title">Yönetim</div>
-        <button class="menu-btn" data-page="definitions">Tanımlar</button>
-        <button class="menu-btn" data-page="users">Kullanıcılar</button>
-        <button class="menu-btn" data-page="reports">Raporlar</button>
+        <div class="menu-title" data-i18n-key="Yönetim">Yönetim</div>
+        <button class="menu-btn" data-page="definitions" data-i18n-key="Tanımlar">Tanımlar</button>
+        <button class="menu-btn" data-page="users" data-i18n-key="Kullanıcılar">Kullanıcılar</button>
+        <button class="menu-btn" data-page="reports" data-i18n-key="Raporlar">Raporlar</button>
       </div>
     </aside>
 
@@ -398,8 +418,8 @@
             <option value="en">EN</option>
             <option value="ru">RU</option>
           </select>
-          <button id="refreshBtn" class="secondary">Yenile</button>
-          <button id="logoutBtn" class="secondary">Çıkış</button>
+          <button id="refreshBtn" class="secondary" data-i18n-key="Yenile">Yenile</button>
+          <button id="logoutBtn" class="secondary" data-i18n-key="Çıkış">Çıkış</button>
         </div>
       </div>
 
@@ -434,7 +454,7 @@
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <script>
 (function(){
-  const DEVELOPMENT_BUILD_NAME = 'index_maden_takip_sistemi_gpssiz_v8_3d_kalite_panelleri_2026-05-06';
+  const DEVELOPMENT_BUILD_NAME = 'index_maden_takip_sistemi_gpssiz_v9_phase1_i18n_stabilizasyon_2026-05-06';
   // v8 stabilizasyon: mevcut çalışan akış korunur; yeni loader/arıza/vardiya mantığı fallback ile eklenir.
   function loadShiftConfig(){
     try{
@@ -1763,6 +1783,7 @@
     recordPages: {},
     recordsServer: {},
     recordsLoading: false,
+    qualityFilter: 'all',
     dashboardProFilters: { day:'', date_start:'', date_end:'', shift_name:'', equipment_type:'', equipment_id:'', sort:'trip_desc' },
     definitionsFilters: { equipment_type:'', package_material:'' },
     truckModels: loadTruckModels(),
@@ -3676,6 +3697,360 @@
   };
   Object.keys(I18N_DASHBOARD_RECORDS_FINAL_20260506).forEach(lang=>Object.assign(I18N[lang], I18N_DASHBOARD_RECORDS_FINAL_20260506[lang] || {}));
 
+
+
+  // v9 Phase-1: final i18n stabilization supplement.
+  // Purpose: connect remaining hard-coded dashboard / dashboard pro / records / logistics texts to TR-EN-RU language flow without changing business logic.
+  const I18N_V9_PHASE1_STABILIZATION = {
+    en: {
+      "Tonaj faktörleri bu cihazda saklandı": "Tonnage factors were saved on this device",
+      "Vardiya ayarları bu cihazda saklandı": "Shift settings were saved on this device",
+      "Kamyon modelleri bu cihazda saklandı": "Truck models were saved on this device",
+      "Ekipman model eşleşmeleri bu cihazda saklandı": "Equipment model mappings were saved on this device",
+      "Supabase kaydı olmadı, bu cihazda saklandı": "Supabase save failed; saved on this device",
+      "Uyarı eşikleri Supabase varsayılanına döndü": "Alert thresholds were reset to Supabase defaults",
+      "Uyarı eşikleri varsayılan değerlere döndü": "Alert thresholds were reset to defaults",
+      "Vardiya tanımı bu cihazda saklandı": "Shift definition was saved on this device",
+      "Arıza kaydı bulunamadı": "Breakdown record not found",
+      "Arıza kapatıldı": "Breakdown closed",
+      "Kendi vardiyası": "Own shift",
+      "Kayıt Zamanı": "Record Time",
+      "Başlangıç Zamanı": "Start Time",
+      "Bitiş Zamanı": "End Time",
+      "Başlangıç Sayaç": "Start Meter",
+      "Bitiş Sayaç": "End Meter",
+      "Ekipman Adı": "Equipment Name",
+      "Paket Adı": "Package Name",
+      "Paket Faktörü": "Package Factor",
+      "Tonaj hesabı: Sefer × Kamyon Model Tonajı × Paket Faktörü": "Tonnage calculation: Trips × Truck Model Tonnage × Package Factor",
+      "Model Adı": "Model Name",
+      "Ekskavatör üretime alındı": "Excavator started production",
+      "Kamyon üretime alındı": "Truck started production",
+      "Ekipman üretime alındı": "Equipment started production",
+      "Üretim kapatıldı": "Production closed",
+      "Arıza kaydı açıldı": "Breakdown record opened",
+      "Kiralık kaydı açıldı": "Rental record opened",
+      "Kiralık kapatıldı": "Rental closed",
+      "Sefer sayısı 0’dan büyük olmalı": "Trip count must be greater than 0",
+      "Litre 0’dan büyük olmalı": "Liters must be greater than 0",
+      "Kayıt silinenlere taşındı": "Record moved to deleted items",
+      "Paket faktörü 0’dan büyük olmalı": "Package factor must be greater than 0",
+      "Nominal tonaj 0’dan büyük olmalı": "Nominal tonnage must be greater than 0",
+      "Silinecek model bulunamadı": "Model to delete was not found",
+      "Model bulunamadı": "Model not found",
+      "ÇALIŞILAN YER BELİRTİLMEDİ": "WORK AREA NOT SPECIFIED",
+      "HEDEF BELİRTİLMEDİ": "DESTINATION NOT SPECIFIED",
+      "Sebep girilmemiş": "Reason not entered",
+      "Sefer Başına Kamyon Yakıtı": "Truck Fuel per Trip",
+      "Önceki Vardiya Kıyası": "Previous Shift Comparison",
+      "verilen litre / iki yakıt kaydı arasındaki sayaç farkı": "issued liters / meter difference between two fuel records",
+      "Bu vardiyada yakıt almadı": "No fuel taken in this shift",
+      "üstü turuncu uyarı": "above this value gives an orange warning",
+      "Aktif vardiya bulunamadı": "Active shift not found",
+      "Vardiya Tanımı": "Shift Definition",
+      "Vardiya Sayısı": "Shift Count",
+      "Makine Seç": "Select Machine",
+      "Arızaya almak için makine seç": "Select a machine to put into breakdown",
+      "Kiralığa almak için makine seç": "Select a machine for rental",
+      "Makine seç": "Select machine",
+      "Satır Sayıları": "Row Counts",
+      "Bitiş": "End",
+      "Sayaç Başlangıç": "Meter Start",
+      "Sayaç Bitiş": "Meter End",
+      "Çalışma Farkı": "Working Difference",
+      "Sayaç Kaydı": "Meter Record",
+      "İşlem fonksiyonu bulunamadı": "Action function not found",
+      "Giriş": "Entry",
+      "Ekipman seç": "Select equipment",
+      "Sefer Sayısı": "Trip Count",
+      "Yakıt tüketimi hesaplanamadı": "Fuel consumption could not be calculated",
+      "Yakıt tüketimi eşik dışı": "Fuel consumption is outside the threshold",
+      "Yakıt yükselmiş": "Fuel consumption increased",
+      "Tam depo varsayımı": "Full tank assumption",
+      "Sayaç Farkı": "Meter Difference",
+      "Son bilinen sayaç": "Last known meter",
+      "Arıza Açıklaması": "Breakdown Description",
+      "SQL özet bağlı": "SQL summary connected",
+      "Tonaj katkısı": "Tonnage contribution",
+      "dolumdan hesaplandı": "calculated from refill",
+      "Hesaplanamadı": "Could not be calculated",
+      "Düşük üretim vardiyası": "Low production shift",
+      "Anormal km farkı": "Abnormal km difference",
+      "Km / sefer sapması": "Km / trip deviation",
+      "Kullanıcı": "User",
+      "zaman aşımı": "timeout",
+      "Bağlantı başarılı": "Connection successful",
+      "Email veya şifre boş": "Email or password is empty",
+      "Giriş başarılı": "Login successful",
+      "Oturum bulunamadı": "Session not found",
+      "Örn: Kırıcı": "Example: Crusher",
+      "Yetki Ayrımı": "Permission Separation",
+      "Vardiya Ayarları": "Shift Settings",
+      "Düşük üretim oranı": "Low production ratio",
+      "Yüksek yakıt oranı": "High fuel ratio",
+      "Uzun arıza dakikası": "Long breakdown minutes",
+      "Km / sefer sapma oranı": "Km / trip deviation ratio",
+      "Düşük ekskavatör verimi oranı": "Low excavator efficiency ratio",
+      "Rol Seç": "Select Role",
+      "Kayıt bulunamadı": "No record found",
+      "Önceki vardiya kapanışı": "Previous shift closing",
+      "Arıza Türü": "Breakdown Type",
+      "Paket faktörü": "Package factor",
+      "Toplam tonaj katkısı": "Total tonnage contribution",
+      "Üretim Kayıtları": "Production Records",
+      "Arıza Kayıtları": "Breakdown Records",
+      "Dashboard Pro Uyarıları": "Dashboard Pro Warnings",
+      "Dashboard Pro Excel dosyası hazırlandı": "Dashboard Pro Excel file is ready",
+      "Dashboard Pro PDF çıktısı hazırlandı": "Dashboard Pro PDF output is ready",
+      "Aktif kullanıcı": "Active user",
+      "Toplam Arıza Dakikası": "Total Breakdown Minutes",
+      "Uzun Arıza Sayısı": "Long Breakdown Count",
+      "Vardiya Sayaç Farkı": "Shift Meter Difference",
+      "Eşik üstü": "Above threshold",
+      "Ortalama üstü": "Above average",
+      "Kiralık Kayıtları": "Rental Records",
+      "Tonaj hesabı": "Tonnage calculation",
+      "Sefer × Kamyon Model Tonajı × Paket Faktörü": "Trips × Truck Model Tonnage × Package Factor",
+      "Aktif Ekipman Toplamı": "Total Active Equipment",
+      "Analize girmeyen lojistik kayıtları": "Logistics records excluded from analysis",
+      "Arıza Kaydı": "Breakdown Record",
+      "Delici Metraj Kayıtları": "Drill Meterage Records",
+      "Delici metraj 0’dan büyük olmalı": "Drill meterage must be greater than 0",
+      "Delici metraj için bağlı üretim kaydı bulunmalı": "A linked production record is required for drill meterage",
+      "Delici metraj kaydı üretim kaydına bağlı olmalı": "Drill meterage record must be linked to a production record",
+      "Delici üretime alındı": "Drill started production",
+      "Ekipman Performansı": "Equipment Performance",
+      "Ekskavatör tonajı hesaplanamadı": "Excavator tonnage could not be calculated",
+      "Excel dosyası hazırlandı": "Excel file is ready",
+      "Kamyon tonajı hesaplanamadı": "Truck tonnage could not be calculated",
+      "Kayıt Sayısı": "Record Count",
+      "Kiralık Kaydı": "Rental Record",
+      "Loder yardımcı işler için üretime alındı": "Loader started production for auxiliary work",
+      "Loder yükleyici olarak üretime alındı": "Loader started production as loader",
+      "Negatif sayaç farkı": "Negative meter difference",
+      "Nereden / Çalışma Alanı": "From / Work Area",
+      "Rapor Türü": "Report Type",
+      "Sefer Kaydı": "Trip Record",
+      "Seçilen yükleyici aktif üretimde bulunamadı": "Selected loader was not found in active production",
+      "Yakıt Kaydı": "Fuel Record",
+      "sayaç": "meter",
+      "ÇALIŞMA ALANI BELİRTİLMEDİ": "WORK AREA NOT SPECIFIED",
+      "Çalışma Alanı": "Work Area",
+      "Üretim Kaydı": "Production Record",
+      "Sayaç farkı bulunan yakıt kayıtlarından hesaplandı": "Calculated from fuel records with meter difference",
+      "Metraj katkısı": "Meterage contribution",
+      "Sayaç farkı bulunmadığı için hesaplanamadı": "Could not be calculated because no meter difference exists",
+      "Kontrol Paneli": "Control Panel",
+      "Lojistik Kontrol": "Logistics Control",
+      "Eksik Giriş": "Missing Entry",
+      "Tamamlanan Giriş": "Completed Entry",
+      "Akıllı Uyarı": "Smart Alert",
+      "Akıllı Uyarılar": "Smart Alerts",
+      "Kritik Uyarılar": "Critical Alerts",
+      "Kalite Kontrol": "Quality Control",
+      "Genel Kalite Kontrol": "General Quality Control",
+      "Detayları Göster": "Show Details",
+      "Detayları Gizle": "Hide Details",
+      "Eksik olanlar": "Missing items",
+      "Tamamlananlar": "Completed items",
+      "Görüntüle": "View",
+      "İncele": "Review",
+      "Temizle": "Clear",
+      "Uygula": "Apply",
+      "Aktif Deliciler": "Active Drills",
+      "Deliciler": "Drills",
+      "Delici Metraj": "Drill Meterage",
+      "Toplam Metraj": "Total Meterage",
+      "Metre/Saat": "Meters/Hour",
+      "Yakıt/Metre": "Fuel/Meter",
+      "Litre/Metre": "Liter/Meter",
+      "Toplam verilen yakıt": "Total issued fuel",
+      "Toplam yakıt tüketimi": "Total fuel consumption",
+      "Vardiya sonu": "Shift end",
+      "Eksik kayıt listesi": "Missing record list",
+      "Tamamlandı": "Completed",
+      "Bekliyor": "Pending",
+      "Kritik": "Critical",
+      "İyi": "Good",
+      "Orta": "Medium",
+      "Kötü": "Bad"
+    },
+    ru: {
+      "Tonaj faktörleri bu cihazda saklandı": "Коэффициенты тоннажа сохранены на этом устройстве",
+      "Vardiya ayarları bu cihazda saklandı": "Настройки смены сохранены на этом устройстве",
+      "Kamyon modelleri bu cihazda saklandı": "Модели самосвалов сохранены на этом устройстве",
+      "Ekipman model eşleşmeleri bu cihazda saklandı": "Сопоставления моделей техники сохранены на этом устройстве",
+      "Supabase kaydı olmadı, bu cihazda saklandı": "Сохранение в Supabase не выполнено; сохранено на этом устройстве",
+      "Uyarı eşikleri Supabase varsayılanına döndü": "Пороги предупреждений сброшены к значениям Supabase по умолчанию",
+      "Uyarı eşikleri varsayılan değerlere döndü": "Пороги предупреждений сброшены к значениям по умолчанию",
+      "Vardiya tanımı bu cihazda saklandı": "Описание смены сохранено на этом устройстве",
+      "Arıza kaydı bulunamadı": "Запись простоя не найдена",
+      "Arıza kapatıldı": "Простой закрыт",
+      "Kendi vardiyası": "Своя смена",
+      "Kayıt Zamanı": "Время записи",
+      "Başlangıç Zamanı": "Время начала",
+      "Bitiş Zamanı": "Время окончания",
+      "Başlangıç Sayaç": "Начальный счетчик",
+      "Bitiş Sayaç": "Конечный счетчик",
+      "Ekipman Adı": "Название техники",
+      "Paket Adı": "Название пакета",
+      "Paket Faktörü": "Коэффициент пакета",
+      "Tonaj hesabı: Sefer × Kamyon Model Tonajı × Paket Faktörü": "Расчет тоннажа: рейсы × тоннаж модели самосвала × коэффициент пакета",
+      "Model Adı": "Название модели",
+      "Ekskavatör üretime alındı": "Экскаватор запущен в производство",
+      "Kamyon üretime alındı": "Самосвал запущен в производство",
+      "Ekipman üretime alındı": "Техника запущена в производство",
+      "Üretim kapatıldı": "Производство закрыто",
+      "Arıza kaydı açıldı": "Запись простоя открыта",
+      "Kiralık kaydı açıldı": "Запись аренды открыта",
+      "Kiralık kapatıldı": "Аренда закрыта",
+      "Sefer sayısı 0’dan büyük olmalı": "Количество рейсов должно быть больше 0",
+      "Litre 0’dan büyük olmalı": "Литры должны быть больше 0",
+      "Kayıt silinenlere taşındı": "Запись перемещена в удаленные",
+      "Paket faktörü 0’dan büyük olmalı": "Коэффициент пакета должен быть больше 0",
+      "Nominal tonaj 0’dan büyük olmalı": "Номинальный тоннаж должен быть больше 0",
+      "Silinecek model bulunamadı": "Модель для удаления не найдена",
+      "Model bulunamadı": "Модель не найдена",
+      "ÇALIŞILAN YER BELİRTİLMEDİ": "МЕСТО РАБОТЫ НЕ УКАЗАНО",
+      "HEDEF BELİRTİLMEDİ": "ПУНКТ НАЗНАЧЕНИЯ НЕ УКАЗАН",
+      "Sebep girilmemiş": "Причина не введена",
+      "Sefer Başına Kamyon Yakıtı": "Топливо самосвала на рейс",
+      "Önceki Vardiya Kıyası": "Сравнение с предыдущей сменой",
+      "verilen litre / iki yakıt kaydı arasındaki sayaç farkı": "выданные литры / разница счетчика между двумя записями топлива",
+      "Bu vardiyada yakıt almadı": "В этой смене топливо не получал",
+      "üstü turuncu uyarı": "выше этого значения — оранжевое предупреждение",
+      "Aktif vardiya bulunamadı": "Активная смена не найдена",
+      "Vardiya Tanımı": "Описание смены",
+      "Vardiya Sayısı": "Количество смен",
+      "Makine Seç": "Выбрать машину",
+      "Arızaya almak için makine seç": "Выберите машину для перевода в простой",
+      "Kiralığa almak için makine seç": "Выберите машину для аренды",
+      "Makine seç": "Выбрать машину",
+      "Satır Sayıları": "Количество строк",
+      "Bitiş": "Окончание",
+      "Sayaç Başlangıç": "Начальный счетчик",
+      "Sayaç Bitiş": "Конечный счетчик",
+      "Çalışma Farkı": "Разница работы",
+      "Sayaç Kaydı": "Запись счетчика",
+      "İşlem fonksiyonu bulunamadı": "Функция действия не найдена",
+      "Giriş": "Ввод",
+      "Ekipman seç": "Выберите технику",
+      "Sefer Sayısı": "Количество рейсов",
+      "Yakıt tüketimi hesaplanamadı": "Расход топлива не рассчитан",
+      "Yakıt tüketimi eşik dışı": "Расход топлива вне порога",
+      "Yakıt yükselmiş": "Расход топлива увеличился",
+      "Tam depo varsayımı": "Предположение полного бака",
+      "Sayaç Farkı": "Разница счетчика",
+      "Son bilinen sayaç": "Последний известный счетчик",
+      "Arıza Açıklaması": "Описание простоя",
+      "SQL özet bağlı": "SQL-сводка подключена",
+      "Tonaj katkısı": "Вклад в тоннаж",
+      "dolumdan hesaplandı": "рассчитано по заправке",
+      "Hesaplanamadı": "Не рассчитано",
+      "Düşük üretim vardiyası": "Смена с низкой производительностью",
+      "Anormal km farkı": "Аномальная разница км",
+      "Km / sefer sapması": "Отклонение км / рейс",
+      "Kullanıcı": "Пользователь",
+      "zaman aşımı": "тайм-аут",
+      "Bağlantı başarılı": "Соединение успешно",
+      "Email veya şifre boş": "Email или пароль пустой",
+      "Giriş başarılı": "Вход успешен",
+      "Oturum bulunamadı": "Сессия не найдена",
+      "Örn: Kırıcı": "Напр.: дробилка",
+      "Yetki Ayrımı": "Разделение прав",
+      "Vardiya Ayarları": "Настройки смены",
+      "Düşük üretim oranı": "Коэффициент низкой производительности",
+      "Yüksek yakıt oranı": "Коэффициент высокого топлива",
+      "Uzun arıza dakikası": "Минуты длительного простоя",
+      "Km / sefer sapma oranı": "Коэффициент отклонения км / рейс",
+      "Düşük ekskavatör verimi oranı": "Коэффициент низкой эффективности экскаватора",
+      "Rol Seç": "Выбрать роль",
+      "Kayıt bulunamadı": "Запись не найдена",
+      "Önceki vardiya kapanışı": "Закрытие предыдущей смены",
+      "Arıza Türü": "Тип простоя",
+      "Paket faktörü": "Коэффициент пакета",
+      "Toplam tonaj katkısı": "Общий вклад в тоннаж",
+      "Üretim Kayıtları": "Записи производства",
+      "Arıza Kayıtları": "Записи простоя",
+      "Dashboard Pro Uyarıları": "Предупреждения Dashboard Pro",
+      "Dashboard Pro Excel dosyası hazırlandı": "Excel-файл Dashboard Pro готов",
+      "Dashboard Pro PDF çıktısı hazırlandı": "PDF Dashboard Pro готов",
+      "Aktif kullanıcı": "Активный пользователь",
+      "Toplam Arıza Dakikası": "Всего минут простоя",
+      "Uzun Arıza Sayısı": "Количество длительных простоев",
+      "Vardiya Sayaç Farkı": "Разница счетчика за смену",
+      "Eşik üstü": "Выше порога",
+      "Ortalama üstü": "Выше среднего",
+      "Kiralık Kayıtları": "Записи аренды",
+      "Tonaj hesabı": "Расчет тоннажа",
+      "Sefer × Kamyon Model Tonajı × Paket Faktörü": "Рейсы × тоннаж модели самосвала × коэффициент пакета",
+      "Aktif Ekipman Toplamı": "Всего активной техники",
+      "Analize girmeyen lojistik kayıtları": "Логистические записи вне анализа",
+      "Arıza Kaydı": "Запись простоя",
+      "Delici Metraj Kayıtları": "Записи метража бурения",
+      "Delici metraj 0’dan büyük olmalı": "Метраж бурения должен быть больше 0",
+      "Delici metraj için bağlı üretim kaydı bulunmalı": "Для метража бурения нужна связанная запись производства",
+      "Delici metraj kaydı üretim kaydına bağlı olmalı": "Запись метража бурения должна быть связана с записью производства",
+      "Delici üretime alındı": "Буровой станок запущен в производство",
+      "Ekipman Performansı": "Производительность техники",
+      "Ekskavatör tonajı hesaplanamadı": "Тоннаж экскаватора не рассчитан",
+      "Excel dosyası hazırlandı": "Excel-файл готов",
+      "Kamyon tonajı hesaplanamadı": "Тоннаж самосвала не рассчитан",
+      "Kayıt Sayısı": "Количество записей",
+      "Kiralık Kaydı": "Запись аренды",
+      "Loder yardımcı işler için üretime alındı": "Погрузчик запущен для вспомогательных работ",
+      "Loder yükleyici olarak üretime alındı": "Погрузчик запущен как погрузчик",
+      "Negatif sayaç farkı": "Отрицательная разница счетчика",
+      "Nereden / Çalışma Alanı": "Откуда / рабочая зона",
+      "Rapor Türü": "Тип отчета",
+      "Sefer Kaydı": "Запись рейса",
+      "Seçilen yükleyici aktif üretimde bulunamadı": "Выбранный погрузчик не найден в активном производстве",
+      "Yakıt Kaydı": "Запись топлива",
+      "sayaç": "счетчик",
+      "ÇALIŞMA ALANI BELİRTİLMEDİ": "РАБОЧАЯ ЗОНА НЕ УКАЗАНА",
+      "Çalışma Alanı": "Рабочая зона",
+      "Üretim Kaydı": "Запись производства",
+      "Sayaç farkı bulunan yakıt kayıtlarından hesaplandı": "Рассчитано по записям топлива с разницей счетчика",
+      "Metraj katkısı": "Вклад метража",
+      "Sayaç farkı bulunmadığı için hesaplanamadı": "Не рассчитано, потому что нет разницы счетчика",
+      "Kontrol Paneli": "Панель контроля",
+      "Lojistik Kontrol": "Контроль логистики",
+      "Eksik Giriş": "Недостающий ввод",
+      "Tamamlanan Giriş": "Завершенный ввод",
+      "Akıllı Uyarı": "Умное предупреждение",
+      "Akıllı Uyarılar": "Умные предупреждения",
+      "Kritik Uyarılar": "Критические предупреждения",
+      "Kalite Kontrol": "Контроль качества",
+      "Genel Kalite Kontrol": "Общий контроль качества",
+      "Detayları Göster": "Показать детали",
+      "Detayları Gizle": "Скрыть детали",
+      "Eksik olanlar": "Недостающие",
+      "Tamamlananlar": "Завершенные",
+      "Görüntüle": "Просмотр",
+      "İncele": "Проверить",
+      "Temizle": "Очистить",
+      "Uygula": "Применить",
+      "Aktif Deliciler": "Активные буровые станки",
+      "Deliciler": "Буровые станки",
+      "Delici Metraj": "Метраж бурения",
+      "Toplam Metraj": "Общий метраж",
+      "Metre/Saat": "Метров/час",
+      "Yakıt/Metre": "Топливо/метр",
+      "Litre/Metre": "Литр/метр",
+      "Toplam verilen yakıt": "Всего выданного топлива",
+      "Toplam yakıt tüketimi": "Общий расход топлива",
+      "Vardiya sonu": "Конец смены",
+      "Eksik kayıt listesi": "Список недостающих записей",
+      "Tamamlandı": "Завершено",
+      "Bekliyor": "Ожидает",
+      "Kritik": "Критично",
+      "İyi": "Хорошо",
+      "Orta": "Средне",
+      "Kötü": "Плохо"
+    }
+  };
+  Object.keys(I18N_V9_PHASE1_STABILIZATION).forEach(lang=>Object.assign(I18N[lang], I18N_V9_PHASE1_STABILIZATION[lang] || {}));
+
   function getNoTranslateTerms(){
     try{
       const terms = new Set();
@@ -3706,6 +4081,111 @@
     (placeholders || []).forEach(([token, term])=>{ out = out.split(token).join(term); });
     return out;
   }
+
+
+  // v9 language hotfix: static menu binding + mining terminology.
+  // IMPORTANT: In this GPS-less mining module, Turkish "Sefer" means haul/transport cycle, not flight/trip.
+  const I18N_V9_MENU_CYCLE_HOTFIX = {
+    en: {
+      "Kontrol Paneli":"Control Panel",
+      "Sayaç Kayıtları":"Meter Records",
+      "Sefer":"Cycle",
+      "Sefer Kayıtları":"Cycle Records",
+      "Yakıt Kayıtları":"Fuel Records",
+      "Delici Metraj Kayıtları":"Drill Meterage Records",
+      "Yeni Sefer":"New Cycle",
+      "Sefer Düzenleme":"Cycle Editing",
+      "Sefer Kaydı":"Cycle Record",
+      "Sefer Kaydı Düzenle":"Edit Cycle Record",
+      "Sefer Sayısı":"Cycle Count",
+      "Sefer sayısı 0’dan büyük olmalı":"Cycle count must be greater than 0",
+      "Sefer kaydı eklendi":"Cycle record added",
+      "Sefer kaydı üretim bilgisiyle eklendi":"Cycle record added with production info",
+      "Sefer kaydı var fakat tonaj 0 görünüyor. Kamyon tonajı veya paket katsayılarını kontrol edin.":"Cycle record exists but tonnage appears as 0. Check truck tonnage or package coefficients.",
+      "Sefer kaydı yok":"No cycle record",
+      "Sefer gir":"Enter cycle",
+      "Toplam Sefer":"Total Cycles",
+      "Kamyon Başına Ort. Sefer":"Avg. Cycles per Truck",
+      "Sefer Başına Kamyon Yakıtı":"Truck Fuel per Cycle",
+      "Sefer yoğunluğu":"Cycle density",
+      "Sefer çoktan aza":"Cycles high to low",
+      "Sefer/Saat":"Cycles/Hour",
+      "KM/Sefer":"KM/Cycle",
+      "Ton/Sefer":"Ton/Cycle",
+      "Yakıt/Sefer":"Fuel/Cycle",
+      "Km / sefer sapması":"Km / cycle deviation",
+      "Km / sefer sapma oranı":"Km / cycle deviation ratio",
+      "Km / sefer":"Km / cycle",
+      "Tonaj hesabı: Sefer × Kamyon Model Tonajı × Paket Faktörü":"Tonnage calculation: Cycles × Truck Model Tonnage × Package Factor",
+      "Sefer × Kamyon Model Tonajı × Paket Faktörü":"Cycles × Truck Model Tonnage × Package Factor",
+      "Kontrol Paneli dışında girilen sefer kayıtlarını listeleme/düzeltme amaçlı kullanılır.":"Used to list/edit cycle records entered outside the Control Panel.",
+      "✔ Sefer":"✔ Cycle",
+      "❌ Sefer":"❌ Cycle",
+      "Trip Records":"Cycle Records",
+      "Trip Record":"Cycle Record",
+      "New Trip":"New Cycle",
+      "Trip Count":"Cycle Count",
+      "Total Trips":"Total Cycles",
+      "Trips/Hour":"Cycles/Hour",
+      "KM/Trip":"KM/Cycle",
+      "Ton/Trip":"Ton/Cycle",
+      "Fuel/Trip":"Fuel/Cycle",
+      "Truck Fuel per Trip":"Truck Fuel per Cycle",
+      "Avg. Trips per Truck":"Avg. Cycles per Truck",
+      "Trip density":"Cycle density",
+      "Trips high to low":"Cycles high to low"
+    },
+    ru: {
+      "Kontrol Paneli":"Панель контроля",
+      "Sayaç Kayıtları":"Записи счетчиков",
+      "Sefer":"Цикл",
+      "Sefer Kayıtları":"Записи циклов",
+      "Yakıt Kayıtları":"Записи топлива",
+      "Delici Metraj Kayıtları":"Записи метража бурения",
+      "Yeni Sefer":"Новый цикл",
+      "Sefer Düzenleme":"Редактирование циклов",
+      "Sefer Kaydı":"Запись цикла",
+      "Sefer Kaydı Düzenle":"Редактировать запись цикла",
+      "Sefer Sayısı":"Количество циклов",
+      "Sefer sayısı 0’dan büyük olmalı":"Количество циклов должно быть больше 0",
+      "Sefer kaydı eklendi":"Запись цикла добавлена",
+      "Sefer kaydı üretim bilgisiyle eklendi":"Запись цикла добавлена с данными производства",
+      "Sefer kaydı var fakat tonaj 0 görünüyor. Kamyon tonajı veya paket katsayılarını kontrol edin.":"Запись цикла есть, но тоннаж равен 0. Проверьте тоннаж самосвала или коэффициенты пакета.",
+      "Sefer kaydı yok":"Нет записи цикла",
+      "Sefer gir":"Ввести цикл",
+      "Toplam Sefer":"Всего циклов",
+      "Kamyon Başına Ort. Sefer":"Сред. циклов на самосвал",
+      "Sefer Başına Kamyon Yakıtı":"Топливо самосвала на цикл",
+      "Sefer yoğunluğu":"Плотность циклов",
+      "Sefer çoktan aza":"Циклы: по убыванию",
+      "Sefer/Saat":"Циклы/час",
+      "KM/Sefer":"Км/цикл",
+      "Ton/Sefer":"Тонн/цикл",
+      "Yakıt/Sefer":"Топливо/цикл",
+      "Km / sefer sapması":"Отклонение км/цикл",
+      "Km / sefer sapma oranı":"Коэффициент отклонения км/цикл",
+      "Km / sefer":"Км/цикл",
+      "Tonaj hesabı: Sefer × Kamyon Model Tonajı × Paket Faktörü":"Расчет тоннажа: циклы × тоннаж модели самосвала × коэффициент пакета",
+      "Sefer × Kamyon Model Tonajı × Paket Faktörü":"Циклы × тоннаж модели самосвала × коэффициент пакета",
+      "Kontrol Paneli dışında girilen sefer kayıtlarını listeleme/düzeltme amaçlı kullanılır.":"Используется для списка/редактирования записей циклов, введенных вне панели контроля.",
+      "✔ Sefer":"✔ Цикл",
+      "❌ Sefer":"❌ Цикл",
+      "Trip Records":"Записи циклов",
+      "Trip Record":"Запись цикла",
+      "New Trip":"Новый цикл",
+      "Trip Count":"Количество циклов",
+      "Total Trips":"Всего циклов",
+      "Trips/Hour":"Циклы/час",
+      "KM/Trip":"Км/цикл",
+      "Ton/Trip":"Тонн/цикл",
+      "Fuel/Trip":"Топливо/цикл",
+      "Truck Fuel per Trip":"Топливо самосвала на цикл",
+      "Avg. Trips per Truck":"Сред. циклов на самосвал",
+      "Trip density":"Плотность циклов",
+      "Trips high to low":"Циклы: по убыванию"
+    }
+  };
+  Object.keys(I18N_V9_MENU_CYCLE_HOTFIX).forEach(lang=>Object.assign(I18N[lang], I18N_V9_MENU_CYCLE_HOTFIX[lang] || {}));
 
   function trText(text){
     const lang = state.lang || 'tr';
@@ -3773,6 +4253,11 @@
       const host = root || document.body;
       if(!host) return;
       const lang = state.lang || 'tr';
+      host.querySelectorAll('[data-i18n-key]').forEach(el=>{
+        if((el.dataset && el.dataset.noI18n === '1') || (el.closest && el.closest('[data-no-i18n],.no-translate'))) return;
+        const key = el.getAttribute('data-i18n-key') || '';
+        if(key) el.textContent = lang === 'tr' ? key : trText(key);
+      });
       const skipTags = new Set(['SCRIPT','STYLE','TEXTAREA']);
       const walker = document.createTreeWalker(host, NodeFilter.SHOW_TEXT, {
         acceptNode(node){
@@ -7964,6 +8449,7 @@
     const rules = { ...DEFAULT_ALERT_RULES, ...(state.alertRules || {}) };
     if(type === 'truck') return Number(rules.fuelConsumptionTruckMax || DEFAULT_ALERT_RULES.fuelConsumptionTruckMax);
     if(type === 'excavator') return Number(rules.fuelConsumptionExcavatorMax || DEFAULT_ALERT_RULES.fuelConsumptionExcavatorMax);
+    if(type === 'drill') return Number(rules.fuelConsumptionHelperMax || DEFAULT_ALERT_RULES.fuelConsumptionHelperMax);
     return Number(rules.fuelConsumptionHelperMax || DEFAULT_ALERT_RULES.fuelConsumptionHelperMax);
   }
   function fuelConsumptionAlertInfo(item, agg){
@@ -7990,37 +8476,14 @@
     if(level === 'orange') return 'pill orange';
     return 'pill green';
   }
-  function buildDashboardFuelConsumptionItems(summary, selected, truckItems, excItems){
-    const filters = state.dashboardProFilters || {};
-    const selectedType = String(filters.equipment_type || '');
-    const selectedEquipmentId = String(filters.equipment_id || '');
-    const ids = new Set();
-    (truckItems || []).forEach(item=>ids.add(String(item.id || '')));
-    (excItems || []).forEach(item=>ids.add(String(item.id || '')));
-    (summary?.fuels || []).forEach(row=>ids.add(String(row.equipment_id || '')));
-    (summary?.meters || []).forEach(row=>ids.add(String(row.equipment_id || '')));
-    (summary?.productions || []).forEach(row=>ids.add(String(row.equipment_id || '')));
-    rowsForShiftBucket(state.rentals, summary.shift_name, summary.shift_date).forEach(row=>ids.add(String(row.equipment_id || '')));
-    return Array.from(ids).filter(Boolean).map(id=>{
-      const eq = findEquipmentById(id) || {};
-      const type = fuelConsumptionTypeForEquipment(eq);
-      if(selectedType && type !== selectedType) return null;
-      if(selectedEquipmentId && String(id) !== selectedEquipmentId) return null;
-      const shiftLogs = (summary?.fuels || []).filter(r=>String(r.equipment_id || '') === id);
-      const shiftAgg = aggregateFuelConsumptionLogs(shiftLogs);
-      const unit = fuelConsumptionUnitForEquipment(id);
-      return { id, type, name:eq.name || (shiftLogs[0]?.equipment_name || '-'), unit, shift:shiftAgg, day:fuelConsumptionAverageForPeriod(id, summary.shift_date, 'day'), week:fuelConsumptionAverageForPeriod(id, summary.shift_date, 'week'), month:fuelConsumptionAverageForPeriod(id, summary.shift_date, 'month'), year:fuelConsumptionAverageForPeriod(id, summary.shift_date, 'year') };
-    }).filter(Boolean).sort((a,b)=>{
-      const typeOrder = { excavator:1, truck:2, helper:3 };
-      return (typeOrder[a.type] || 9) - (typeOrder[b.type] || 9) || String(a.name || '').localeCompare(String(b.name || ''), 'tr');
-    });
-  }
+    // v9 phase2: eski yakıt tüketimi fonksiyon kopyası kaldırıldı; tek merkezli fonksiyon aşağıda korunur.
+
   function renderFuelConsumptionKpi(label, agg, unit){
     return `<div class="fuel-consumption-kpi"><div class="k-label">${escapeHtml(label)}</div><div class="k-value">${formatFuelConsumptionRate(agg?.rate, unit)}</div></div>`;
   }
   function renderDashboardFuelConsumption(items){
     if(!items || !items.length) return '<div class="empty">Seçilen filtre için yakıt tüketimi analizi yok.</div>';
-    const groups = [{ type:'excavator', icon:'⛏️' }, { type:'truck', icon:'🚛' }, { type:'helper', icon:'🛠️' }];
+    const groups = [{ type:'excavator', icon:'⛏️' }, { type:'truck', icon:'🚛' }, { type:'drill', icon:'🕳️' }, { type:'helper', icon:'🛠️' }];
     return groups.map(g=>{
       const rows = items.filter(item=>item.type === g.type);
       if(!rows.length) return '';
@@ -8057,18 +8520,40 @@
 
 
   function buildDashboardFuelConsumptionItems(summary, selected, truckItems, excItems){
-    // Dashboard Pro yakit tuketimi artik v_dashboard_pro_final satirlarindan gelir.
+    // v9 phase2 Dashboard Pro hesap çekirdeği: yakıt tüketimi tek merkezden ve filtreye uyumlu hesaplanır.
+    const filters = state.dashboardProFilters || {};
+    const selectedType = String(filters.equipment_type || '');
+    const selectedEquipmentId = String(filters.equipment_id || '');
     const rows = dashboardProFinalRowsForBuckets(summary?.buckets || []);
+    const allowedIds = new Set([...(truckItems || []), ...(excItems || []), ...((summary?.drill_analysis || []) || [])].map(item=>String(item.id || '')).filter(Boolean));
     const byId = new Map();
     rows.forEach(r=>{
       const id = String(r.equipment_id || '');
       if(!id) return;
       const type = dashboardProItemTypeKeyForRow(r);
-      if(!byId.has(id)) byId.set(id, { id, name:r.equipment_name || '-', type, shift:{ totalLiters:0, totalDiff:0, validCount:0, hasFuel:false, rate:null, unit:type === 'truck' ? 'L/km' : 'L/saat' } });
+      if(selectedType && type !== selectedType) return;
+      if(selectedEquipmentId && id !== selectedEquipmentId) return;
+      if((selectedType || selectedEquipmentId) && allowedIds.size && !allowedIds.has(id)) return;
+      if(!byId.has(id)){
+        byId.set(id, {
+          id,
+          name:r.equipment_name || findEquipmentById(id)?.name || '-',
+          type,
+          unit:type === 'truck' ? 'L/km' : (type === 'drill' ? 'L/saat' : 'L/saat'),
+          shift:{ totalLiters:0, totalDiff:0, validCount:0, hasFuel:false, rate:null, unit:type === 'truck' ? 'L/km' : 'L/saat', fuelLogCount:0 },
+          day:fuelConsumptionAverageForPeriod(id, summary?.shift_date, 'day'),
+          week:fuelConsumptionAverageForPeriod(id, summary?.shift_date, 'week'),
+          month:fuelConsumptionAverageForPeriod(id, summary?.shift_date, 'month'),
+          year:fuelConsumptionAverageForPeriod(id, summary?.shift_date, 'year')
+        });
+      }
       const item = byId.get(id);
-      item.shift.totalLiters += Number(r.total_given_fuel || 0) || 0;
-      item.shift.totalDiff += Number(r.meter_diff || 0) || 0;
-      item.shift.hasFuel = item.shift.hasFuel || Number(r.total_given_fuel || 0) > 0;
+      const liters = Number(r.total_given_fuel || 0) || 0;
+      const diff = Number(r.meter_diff || 0) || 0;
+      item.shift.totalLiters += liters;
+      item.shift.totalDiff += diff;
+      item.shift.hasFuel = item.shift.hasFuel || liters > 0;
+      if(liters > 0) item.shift.fuelLogCount += 1;
     });
     byId.forEach(item=>{
       if(item.shift.totalLiters > 0 && item.shift.totalDiff > 0){
@@ -8076,8 +8561,93 @@
         item.shift.rate = item.shift.totalLiters / item.shift.totalDiff;
       }
     });
-    return Array.from(byId.values());
+    const typeOrder = { excavator:1, truck:2, drill:3, helper:4 };
+    return Array.from(byId.values()).sort((a,b)=>{
+      return (typeOrder[a.type] || 9) - (typeOrder[b.type] || 9) || String(a.name || '').localeCompare(String(b.name || ''), 'tr');
+    });
   }
+
+  function dashboardProAlertPriority(level){
+    if(level === 'red') return 1;
+    if(level === 'orange') return 2;
+    return 3;
+  }
+  function dashboardProAlertCategoryLabel(category){
+    const map = {
+      missing:'Eksik Veri',
+      integrity:'Bağlantı / Kayıt',
+      fuel:'Yakıt',
+      production:'Üretim',
+      breakdown:'Arıza',
+      truck:'Kamyon',
+      loader:'Yükleyici',
+      drill:'Delici',
+      general:'Genel'
+    };
+    return map[category] || 'Genel';
+  }
+  function dashboardProAlertLevelLabel(level){
+    return level === 'red' ? 'Kritik' : (level === 'orange' ? 'Dikkat' : 'Bilgi');
+  }
+  function dashboardProBuildLogisticsCompleteness(summary, rows){
+    const productions = Array.isArray(rows) ? rows : [];
+    const tripDone = new Set((summary?.trips || []).filter(r=>Number(r.trip_count || 0) > 0 && r.production_id).map(r=>String(r.production_id)));
+    const fuelDone = new Set((summary?.fuels || []).filter(r=>Number(r.liters || 0) > 0 && r.production_id).map(r=>String(r.production_id)));
+    const meterDone = new Set((summary?.meters || []).filter(r=>Number(r.meter_value || 0) > 0 && r.production_id).map(r=>String(r.production_id)));
+    const drillDone = new Set((state.drill_meterage_logs || []).filter(r=>!r?.deleted_at && r.production_id && Number(r.drilled_meter || r.meterage || r.meters || 0) > 0).map(r=>String(r.production_id)));
+    const missing = { meter:[], fuel:[], trip:[], drill:[] };
+    productions.forEach(p=>{
+      const id = String(p.id || p.production_id || '');
+      if(!id) return;
+      const type = dashboardProItemTypeKeyForRow(p);
+      const name = p.equipment_name || findEquipmentById(p.equipment_id)?.name || '-';
+      const label = `${name} • ${p.shift_date || ''} ${p.shift_name || ''}`.trim();
+      const meterDiff = productionMeterDiff(p);
+      if(!meterDone.has(id) || !Number.isFinite(Number(meterDiff)) || Number(meterDiff) <= 0) missing.meter.push(label);
+      if(!fuelDone.has(id)) missing.fuel.push(label);
+      if(type === 'truck' && !tripDone.has(id)) missing.trip.push(label);
+      if(type === 'drill' && !drillDone.has(id)) missing.drill.push(label);
+    });
+    return missing;
+  }
+  function dashboardProPushAlert(alerts, level, category, title, text, meta){
+    alerts.push({
+      level: level || 'orange',
+      category: category || 'general',
+      title: title || 'Uyarı',
+      text: text || '',
+      meta: Array.isArray(meta) ? meta.filter(Boolean) : []
+    });
+  }
+  function renderDashboardProSmartAlerts(alerts){
+    const list = (alerts || []).slice().sort((a,b)=>{
+      return dashboardProAlertPriority(a.level) - dashboardProAlertPriority(b.level) || String(a.category || '').localeCompare(String(b.category || ''), 'tr') || String(a.title || '').localeCompare(String(b.title || ''), 'tr');
+    });
+    if(!list.length) return '<div class="empty">Seçilen filtre için kritik uyarı görünmüyor.</div>';
+    const critical = list.filter(a=>a.level === 'red').length;
+    const warning = list.filter(a=>a.level === 'orange').length;
+    const categories = Array.from(new Set(list.map(a=>a.category || 'general')));
+    const summaryHtml = `
+      <div class="smart-alert-summary">
+        <div class="smart-alert-summary-card red"><div class="smart-alert-summary-label">Kritik</div><div class="smart-alert-summary-value">${critical}</div></div>
+        <div class="smart-alert-summary-card orange"><div class="smart-alert-summary-label">Dikkat</div><div class="smart-alert-summary-value">${warning}</div></div>
+        <div class="smart-alert-summary-card"><div class="smart-alert-summary-label">Kategori</div><div class="smart-alert-summary-value">${categories.length}</div></div>
+      </div>`;
+    const grouped = categories.map(category=>{
+      const rows = list.filter(a=>(a.category || 'general') === category);
+      return `<div class="smart-alert-group-title">${escapeHtml(dashboardProAlertCategoryLabel(category))} <span class="group-count">${rows.length}</span></div>` + rows.map(a=>`
+        <div class="pro-alert-card ${a.level === 'red' ? 'red' : 'orange'}">
+          <div class="pro-alert-head">
+            <div class="pro-alert-title">${escapeHtml(a.title)}</div>
+            <span class="pill ${a.level === 'red' ? 'red' : 'orange'}">${escapeHtml(dashboardProAlertLevelLabel(a.level))}</span>
+          </div>
+          <div class="pro-alert-text">${escapeHtml(a.text)}</div>
+          ${a.meta?.length ? `<div class="smart-alert-meta">${a.meta.slice(0,6).map(x=>`<span>${escapeHtml(x)}</span>`).join('')}${a.meta.length>6?`<span>+${a.meta.length-6}</span>`:''}</div>` : ''}
+        </div>`).join('');
+    }).join('');
+    return summaryHtml + grouped;
+  }
+
 
   async function renderDashboardProData(){
 
@@ -8179,9 +8749,13 @@
     }, 0);
     const filteredExcFuelLiters = filteredFuels.reduce((s,row)=>{
       const eq = findEquipmentById(row.equipment_id);
-      return s + (isExcavatorEquipment(eq) ? (Number(row.liters || 0) || 0) : 0);
+      return s + (isLoadingEquipment(eq) ? (Number(row.liters || 0) || 0) : 0);
     }, 0);
-    const filteredHelperFuelLiters = Math.max(0, filteredFuelLiters - filteredTruckFuelLiters - filteredExcFuelLiters);
+    const filteredDrillFuelLiters = filteredFuels.reduce((s,row)=>{
+      const eq = findEquipmentById(row.equipment_id);
+      return s + (isDrillEquipment(eq) ? (Number(row.liters || 0) || 0) : 0);
+    }, 0);
+    const filteredHelperFuelLiters = Math.max(0, filteredFuelLiters - filteredTruckFuelLiters - filteredExcFuelLiters - filteredDrillFuelLiters);
     const filteredWorkHours = filteredClosedProductions.reduce((s,row)=>s + productionDurationHours(row), 0);
     const filteredTruckCount = selectedType === 'excavator' ? 0 : truckItems.length;
     const filteredExcCount = selectedType === 'truck' ? 0 : excItems.length;
@@ -8218,7 +8792,7 @@
     document.getElementById('proTripsStat').textContent = String(filteredTripCount);
     document.getElementById('proTripsSub').innerHTML = `Seçilen aralık: <b>${escapeHtml(summary.label)}</b> • Kapsam: <b>${selectedBuckets.length}</b> vardiya`;
     document.getElementById('proFuelStat').textContent = `${filteredFuelLiters.toFixed(0)} L`;
-    document.getElementById('proFuelSub').innerHTML = `Kamyon: <b>${filteredTruckFuelLiters.toFixed(0)} L</b> • Ekskavatör: <b>${filteredExcFuelLiters.toFixed(0)} L</b> • Yardımcı: <b>${filteredHelperFuelLiters.toFixed(0)} L</b>`;
+    document.getElementById('proFuelSub').innerHTML = `Kamyon: <b>${filteredTruckFuelLiters.toFixed(0)} L</b> • Yükleyici/Ekskavatör: <b>${filteredExcFuelLiters.toFixed(0)} L</b> • Delici: <b>${filteredDrillFuelLiters.toFixed(0)} L</b> • Yardımcı: <b>${filteredHelperFuelLiters.toFixed(0)} L</b>`;
     document.getElementById('proConsumedFuelStat').textContent = totalConsumedFuelLiters > 0 ? `${totalConsumedFuelLiters.toFixed(0)} L` : '-';
     document.getElementById('proConsumedFuelSub').innerHTML = totalConsumedFuelLiters > 0 ? `Sayaç farkı bulunan yakıt kayıtlarından hesaplandı • Ekipman: <b>${consumedFuelCoverageCount}</b>` : 'Sayaç farkı bulunmadığı için hesaplanamadı';
     document.getElementById('proTruckKmFuelStat').textContent = truckFuelPerKm > 0 ? `${truckFuelPerKm.toFixed(2)} L/km` : '-';
@@ -8244,15 +8818,20 @@
     const unlinkedTripCount = (summary.trips || []).filter(t=>!t?.production_id).length;
     const unlinkedFuelCount = (summary.fuels || []).filter(f=>!f?.production_id).length;
     const unlinkedMeterCount = (summary.meters || []).filter(m=>!m?.production_id).length;
+    const logisticsMissing = dashboardProBuildLogisticsCompleteness(summary, filteredClosedProductions);
+    if(logisticsMissing.meter.length) dashboardProPushAlert(alerts, 'red', 'missing', 'Eksik sayaç girişi', `${logisticsMissing.meter.length} tamamlanmış üretimde sayaç girişi veya geçerli sayaç farkı eksik.`, logisticsMissing.meter);
+    if(logisticsMissing.trip.length) dashboardProPushAlert(alerts, 'red', 'missing', 'Eksik sefer girişi', `${logisticsMissing.trip.length} kamyon üretiminde sefer girişi yok. Tonaj ve yükleyici toplamları eksik kalır.`, logisticsMissing.trip);
+    if(logisticsMissing.fuel.length) dashboardProPushAlert(alerts, 'orange', 'missing', 'Eksik yakıt girişi', `${logisticsMissing.fuel.length} üretimde yakıt girişi yok. Verilen yakıt ve tüketim analizleri eksik kalır.`, logisticsMissing.fuel);
+    if(logisticsMissing.drill.length) dashboardProPushAlert(alerts, 'red', 'missing', 'Eksik delici metraj girişi', `${logisticsMissing.drill.length} delici üretiminde metraj girişi yok. Delici m/saat ve yakıt/metre analizleri eksik kalır.`, logisticsMissing.drill);
 
-    if(activeProductionCount > 0) alerts.push({level:'orange', title:'Devam eden üretim var', text:`Seçilen aralıkta ${activeProductionCount} üretim henüz kapatılmamış. Bu kayıtlar tamamlanmadan bazı analizler eksik görünebilir.`});
-    if(unlinkedTripCount || unlinkedFuelCount || unlinkedMeterCount) alerts.push({level:'red', title:'Analize girmeyen lojistik kayıtları', text:`Production bağlantısı olmayan kayıt var. Sefer: ${unlinkedTripCount}, yakıt: ${unlinkedFuelCount}, sayaç: ${unlinkedMeterCount}. Kayıtlarda görünür ama Dashboard Pro analizine alınmaz.`});
-    if(closedMissingEndMeterCount > 0) alerts.push({level:'red', title:'Bitiş sayacı eksik', text:`${closedMissingEndMeterCount} tamamlanmış üretimde sayaç farkı yok veya sıfır. Yakıt tüketimi ve verim hesapları güvenilir olmayabilir.`});
+    if(activeProductionCount > 0) alerts.push({level:'orange', category:'production', title:'Devam eden üretim var', text:`Seçilen aralıkta ${activeProductionCount} üretim henüz kapatılmamış. Bu kayıtlar tamamlanmadan bazı analizler eksik görünebilir.`});
+    if(unlinkedTripCount || unlinkedFuelCount || unlinkedMeterCount) alerts.push({level:'red', category:'integrity', title:'Analize girmeyen lojistik kayıtları', text:`Production bağlantısı olmayan kayıt var. Sefer: ${unlinkedTripCount}, yakıt: ${unlinkedFuelCount}, sayaç: ${unlinkedMeterCount}. Kayıtlarda görünür ama Dashboard Pro analizine alınmaz.`});
+    if(closedMissingEndMeterCount > 0) alerts.push({level:'red', category:'missing', title:'Bitiş sayacı eksik', text:`${closedMissingEndMeterCount} tamamlanmış üretimde sayaç farkı yok veya sıfır. Yakıt tüketimi ve verim hesapları güvenilir olmayabilir.`});
 
-    if(fuelConsumptionNoFuelCount > 0) alerts.push({level:'orange', title:'Yakıt kaydı olmayan ekipman', text:`Seçilen aralıkta ${fuelConsumptionNoFuelCount} ekipman çalıştı ancak yakıt kaydı yok.`});
-    if(fuelConsumptionInvalidCount > 0) alerts.push({level:'red', title:'Yakıt tüketimi hesaplanamadı', text:`${fuelConsumptionInvalidCount} ekipmanda sayaç farkı veya önceki yakıt sayaç kaydı eksik.`});
-    if(fuelConsumptionHighCount > 0) alerts.push({level:'red', title:'Yakıt tüketimi eşik dışı', text:`${fuelConsumptionHighCount} ekipmanda yakıt tüketimi belirlenen eşiklerin dışında.`});
-    if(filteredLongBreakdowns > 0 || filteredBreakdownMinutes >= alertRules.longBreakdownMinutes) alerts.push({level:'red', title:'Uzun süren arıza', text:`Bu seçimde toplam ${formatDurationMinutes(filteredBreakdownMinutes)} arıza süresi var.`});
+    if(fuelConsumptionNoFuelCount > 0) alerts.push({level:'orange', category:'fuel', title:'Yakıt kaydı olmayan ekipman', text:`Seçilen aralıkta ${fuelConsumptionNoFuelCount} ekipman çalıştı ancak yakıt kaydı yok.`});
+    if(fuelConsumptionInvalidCount > 0) alerts.push({level:'red', category:'fuel', title:'Yakıt tüketimi hesaplanamadı', text:`${fuelConsumptionInvalidCount} ekipmanda sayaç farkı veya önceki yakıt sayaç kaydı eksik.`});
+    if(fuelConsumptionHighCount > 0) alerts.push({level:'red', category:'fuel', title:'Yakıt tüketimi eşik dışı', text:`${fuelConsumptionHighCount} ekipmanda yakıt tüketimi belirlenen eşiklerin dışında.`});
+    if(filteredLongBreakdowns > 0 || filteredBreakdownMinutes >= alertRules.longBreakdownMinutes) alerts.push({level:'red', category:'breakdown', title:'Uzun süren arıza', text:`Bu seçimde toplam ${formatDurationMinutes(filteredBreakdownMinutes)} arıza süresi var.`});
 
     const fleetAvgKmPerTrip = truckItems.length ? truckItems.reduce((s,x)=>s + (x.kmPerTrip || 0), 0) / truckItems.length : 0;
     const truckFuelItems = fuelConsumptionItems.filter(item=>item.type === 'truck' && item.shift?.validCount && Number.isFinite(Number(item.shift?.rate)));
@@ -8260,12 +8839,12 @@
     truckItems.forEach(t=>{
       const fuelItem = fuelConsumptionByEquipmentId.get(String(t.id || ''));
       const fuelRate = Number(fuelItem?.shift?.rate);
-      if((t.tripCount || 0) > 0 && (t.tonnage || 0) <= 0) alerts.push({level:'red', title:'Kamyon tonajı hesaplanamadı', text:`${t.name}: sefer var ama tonaj 0. Kamyon modeli veya paket faktörü kontrol edilmeli.`});
-      if((t.meterDiff || 0) > alertRules.abnormalKmThreshold && (t.tripCount || 0) < alertRules.abnormalKmTripLimit) alerts.push({level:'red', title:'Anormal km farkı', text:`${t.name}: ${t.meterDiff.toFixed(1)} km, ${t.tripCount} sefer.`});
-      else if(fleetAvgKmPerTrip > 0 && (t.kmPerTrip || 0) > fleetAvgKmPerTrip * alertRules.kmPerTripRatio) alerts.push({level:'orange', title:'Km / sefer sapması', text:`${t.name}: sefer başına ${t.kmPerTrip.toFixed(1)} km.`});
+      if((t.tripCount || 0) > 0 && (t.tonnage || 0) <= 0) alerts.push({level:'red', category:'truck', title:'Kamyon tonajı hesaplanamadı', text:`${t.name}: sefer var ama tonaj 0. Kamyon modeli veya paket faktörü kontrol edilmeli.`});
+      if((t.meterDiff || 0) > alertRules.abnormalKmThreshold && (t.tripCount || 0) < alertRules.abnormalKmTripLimit) alerts.push({level:'red', category:'truck', title:'Anormal km farkı', text:`${t.name}: ${t.meterDiff.toFixed(1)} km, ${t.tripCount} sefer.`});
+      else if(fleetAvgKmPerTrip > 0 && (t.kmPerTrip || 0) > fleetAvgKmPerTrip * alertRules.kmPerTripRatio) alerts.push({level:'orange', category:'truck', title:'Km / sefer sapması', text:`${t.name}: sefer başına ${t.kmPerTrip.toFixed(1)} km.`});
       if(Number.isFinite(fuelRate) && fuelRate > 0){
-        if(fuelRate > alertRules.fuelConsumptionTruckMax) alerts.push({level:'red', title:'Kamyon yakıt tüketimi yüksek', text:`${t.name}: ${fuelRate.toFixed(2)} L/km. Eşik: ${Number(alertRules.fuelConsumptionTruckMax || 0).toFixed(2)} L/km.`});
-        else if(avgTruckFuelRate > 0 && fuelRate > avgTruckFuelRate * alertRules.fuelConsumptionHighRatio) alerts.push({level:'orange', title:'Kamyon tüketimi ortalamanın üstünde', text:`${t.name}: ${fuelRate.toFixed(2)} L/km, filo ortalaması ${avgTruckFuelRate.toFixed(2)} L/km.`});
+        if(fuelRate > alertRules.fuelConsumptionTruckMax) alerts.push({level:'red', category:'fuel', title:'Kamyon yakıt tüketimi yüksek', text:`${t.name}: ${fuelRate.toFixed(2)} L/km. Eşik: ${Number(alertRules.fuelConsumptionTruckMax || 0).toFixed(2)} L/km.`});
+        else if(avgTruckFuelRate > 0 && fuelRate > avgTruckFuelRate * alertRules.fuelConsumptionHighRatio) alerts.push({level:'orange', category:'fuel', title:'Kamyon tüketimi ortalamanın üstünde', text:`${t.name}: ${fuelRate.toFixed(2)} L/km, filo ortalaması ${avgTruckFuelRate.toFixed(2)} L/km.`});
       }
     });
 
@@ -8276,18 +8855,30 @@
     excItems.forEach(e=>{
       const fuelItem = fuelConsumptionByEquipmentId.get(String(e.id || ''));
       const fuelRate = Number(fuelItem?.shift?.rate);
-      if((e.tripCount || 0) > 0 && (e.tonnage || 0) <= 0) alerts.push({level:'red', title:'Ekskavatör tonajı hesaplanamadı', text:`${e.name}: bağlı sefer var ama tonaj 0. Kamyon model tonajı, paket faktörü veya loader_id bağlantısı kontrol edilmeli.`});
-      if(fleetExcEff > 0 && (e.efficiency || 0) < fleetExcEff * alertRules.lowExcEfficiencyRatio) alerts.push({level:'orange', title:'Düşük ekskavatör sefer verimi', text:`${e.name}: ${e.efficiency.toFixed(2)} sefer/saat.`});
-      if(fleetExcTonPerHour > 0 && (e.tonPerHour || 0) < fleetExcTonPerHour * alertRules.lowExcEfficiencyRatio) alerts.push({level:'orange', title:'Düşük ekskavatör ton/saat', text:`${e.name}: ${e.tonPerHour.toFixed(1)} ton/saat, ortalama ${fleetExcTonPerHour.toFixed(1)} ton/saat.`});
+      if((e.tripCount || 0) > 0 && (e.tonnage || 0) <= 0) alerts.push({level:'red', category:'loader', title:'Ekskavatör tonajı hesaplanamadı', text:`${e.name}: bağlı sefer var ama tonaj 0. Kamyon model tonajı, paket faktörü veya loader_id bağlantısı kontrol edilmeli.`});
+      if(fleetExcEff > 0 && (e.efficiency || 0) < fleetExcEff * alertRules.lowExcEfficiencyRatio) alerts.push({level:'orange', category:'loader', title:'Düşük ekskavatör sefer verimi', text:`${e.name}: ${e.efficiency.toFixed(2)} sefer/saat.`});
+      if(fleetExcTonPerHour > 0 && (e.tonPerHour || 0) < fleetExcTonPerHour * alertRules.lowExcEfficiencyRatio) alerts.push({level:'orange', category:'loader', title:'Düşük ekskavatör ton/saat', text:`${e.name}: ${e.tonPerHour.toFixed(1)} ton/saat, ortalama ${fleetExcTonPerHour.toFixed(1)} ton/saat.`});
       if(Number.isFinite(fuelRate) && fuelRate > 0){
-        if(fuelRate > alertRules.fuelConsumptionExcavatorMax) alerts.push({level:'red', title:'Ekskavatör yakıt tüketimi yüksek', text:`${e.name}: ${fuelRate.toFixed(2)} L/saat. Eşik: ${Number(alertRules.fuelConsumptionExcavatorMax || 0).toFixed(2)} L/saat.`});
-        else if(avgExcFuelRate > 0 && fuelRate > avgExcFuelRate * alertRules.fuelConsumptionHighRatio) alerts.push({level:'orange', title:'Ekskavatör tüketimi ortalamanın üstünde', text:`${e.name}: ${fuelRate.toFixed(2)} L/saat, ortalama ${avgExcFuelRate.toFixed(2)} L/saat.`});
+        if(fuelRate > alertRules.fuelConsumptionExcavatorMax) alerts.push({level:'red', category:'fuel', title:'Ekskavatör yakıt tüketimi yüksek', text:`${e.name}: ${fuelRate.toFixed(2)} L/saat. Eşik: ${Number(alertRules.fuelConsumptionExcavatorMax || 0).toFixed(2)} L/saat.`});
+        else if(avgExcFuelRate > 0 && fuelRate > avgExcFuelRate * alertRules.fuelConsumptionHighRatio) alerts.push({level:'orange', category:'fuel', title:'Ekskavatör tüketimi ortalamanın üstünde', text:`${e.name}: ${fuelRate.toFixed(2)} L/saat, ortalama ${avgExcFuelRate.toFixed(2)} L/saat.`});
+      }
+    });
+
+    const fleetDrillMeterPerHour = drillItems.length ? drillItems.reduce((s,x)=>s + (Number(x.meterPerHour || 0) || 0), 0) / drillItems.length : 0;
+    drillItems.forEach(d=>{
+      const fuelItem = fuelConsumptionByEquipmentId.get(String(d.id || ''));
+      const fuelRate = Number(fuelItem?.shift?.rate);
+      if((d.workHours || 0) > 0 && (d.drilledMeters || 0) <= 0) alerts.push({level:'red', category:'drill', title:'Delici metraj eksik', text:`${d.name}: çalışma saati var ancak delinen metraj 0 görünüyor.`});
+      if(fleetDrillMeterPerHour > 0 && (d.meterPerHour || 0) > 0 && (d.meterPerHour || 0) < fleetDrillMeterPerHour * 0.70) alerts.push({level:'orange', category:'drill', title:'Düşük delici m/saat', text:`${d.name}: ${(d.meterPerHour || 0).toFixed(1)} m/saat, ortalama ${fleetDrillMeterPerHour.toFixed(1)} m/saat.`});
+      if((d.drilledMeters || 0) > 0 && Number.isFinite(fuelRate) && fuelRate > 0){
+        const fuelPerMeterCalc = (Number(fuelItem?.shift?.totalLiters || 0) || 0) / (Number(d.drilledMeters || 0) || 1);
+        if(fuelPerMeterCalc > 2.5) alerts.push({level:'orange', category:'drill', title:'Delici yakıt/metre yüksek', text:`${d.name}: ${fuelPerMeterCalc.toFixed(2)} L/m. Yakıt ve metraj girişleri kontrol edilmeli.`});
       }
     });
 
     if(filteredTonnage > 0 && fuelPerTon > 0){
       const highFuelPerTonLimit = 0.20;
-      if(fuelPerTon > highFuelPerTonLimit) alerts.push({level:'orange', title:'Ton başına yakıt yüksek', text:`Seçilen aralıkta ${fuelPerTon.toFixed(3)} L/ton. Verilen yakıt, sayaç ve tonaj dağılımı kontrol edilmeli.`});
+      if(fuelPerTon > highFuelPerTonLimit) alerts.push({level:'orange', category:'fuel', title:'Ton başına yakıt yüksek', text:`Seçilen aralıkta ${fuelPerTon.toFixed(3)} L/ton. Verilen yakıt, sayaç ve tonaj dağılımı kontrol edilmeli.`});
     }
     const maxTruckTrips = Math.max(1, ...truckItems.map(x=>Number(x.tripCount || 0) || 0));
     const maxTruckTonnage = Math.max(1, ...truckItems.map(x=>Number(x.tonnage || 0) || 0));
@@ -8296,7 +8887,7 @@
     const maxDrillMeters = Math.max(1, ...drillItems.map(x=>Number(x.drilledMeters || 0) || 0));
     const maxDrillMeterPerHour = Math.max(1, ...drillItems.map(x=>Number(x.meterPerHour || 0) || 0));
 
-    document.getElementById('dashboardProAlertsBody').innerHTML = alerts.length ? alerts.map(a=>`<div class="pro-alert-card ${a.level === 'red' ? 'red' : 'orange'}"><div class="pro-alert-head"><div class="pro-alert-title">${escapeHtml(a.title)}</div><span class="pill ${a.level === 'red' ? 'red' : 'orange'}">${a.level === 'red' ? 'Kritik' : 'Dikkat'}</span></div><div class="pro-alert-text">${escapeHtml(a.text)}</div></div>`).join('') : '<div class="empty">Seçilen filtre için kritik uyarı görünmüyor.</div>';
+    document.getElementById('dashboardProAlertsBody').innerHTML = renderDashboardProSmartAlerts(alerts);
 
 
     const drillBody = document.getElementById('dashboardProDrillBody');
@@ -9820,6 +10411,34 @@ function applyRecordFilters(rows){
     }
   }
 
+
+  function qualityFilterLabel(filter){
+    const map = { all:'Tümü', missing:'Eksik', error:'Hatalı', active:'Aktif', ok:'Tamam' };
+    return map[filter] || map.all;
+  }
+  function setQualityFilter(filter){
+    state.qualityFilter = ['all','missing','error','active','ok'].includes(filter) ? filter : 'all';
+    try{ if(state.currentPage === 'records') renderRecordsBody(); else if(state.currentPage === 'logisticsControl') renderLogisticsControl(); else renderAll(); }catch(e){ try{ renderAll(); }catch(_e){} }
+  }
+  function qualityTaskSummaryHtml(entries){
+    const missing = entries.filter(x=>x.bundle.status === 'missing' || x.bundle.status === 'error');
+    const countBy = (test)=>missing.filter(x=>test(x.row, x.bundle)).length;
+    const meterMissing = countBy((row,b)=>!b.open && (!b.hasEndMeter || !b.hasMeterLog));
+    const fuelMissing = countBy((row,b)=>!b.open && !b.hasFuelLog);
+    const tripMissing = countBy((row,b)=>!b.open && b.isTruck && !b.hasTripLog);
+    const drillMissing = countBy((row,b)=>!b.open && b.isDrill && !b.hasDrillLog);
+    const errorCount = entries.filter(x=>x.bundle.status === 'error').length;
+    return `
+      <div class="quality-task-summary">
+        <div class="quality-task-card"><div class="quality-task-label">Sayaç işi</div><div class="quality-task-value">${meterMissing}</div><div class="quality-task-sub">Bitiş sayaç veya sayaç kaydı bekleyen kapalı üretim</div></div>
+        <div class="quality-task-card"><div class="quality-task-label">Yakıt işi</div><div class="quality-task-value">${fuelMissing}</div><div class="quality-task-sub">production_id ile yakıt girişi bekleyen kayıt</div></div>
+        <div class="quality-task-card"><div class="quality-task-label">Sefer işi</div><div class="quality-task-value">${tripMissing}</div><div class="quality-task-sub">Sadece kamyon üretimleri için kontrol edilir</div></div>
+        <div class="quality-task-card"><div class="quality-task-label">Delici metraj</div><div class="quality-task-value">${drillMissing}</div><div class="quality-task-sub">Sadece delici üretimleri için zorunludur</div></div>
+        <div class="quality-task-card"><div class="quality-task-label">Hatalı kayıt</div><div class="quality-task-value">${errorCount}</div><div class="quality-task-sub">Negatif/0 sayaç, bağlantı veya mantık hatası</div></div>
+      </div>
+    `;
+  }
+
   function renderQualityQuickActions(row, b){
     if(!canEditOperations()) return '';
     const parts = [];
@@ -9888,12 +10507,18 @@ function applyRecordFilters(rows){
     const score = closedTotal ? Math.max(0, Math.min(100, Math.round(((okEntries.length) / Math.max(closedTotal, 1)) * 100))) : 100;
     const ready = error === 0 && missing === 0;
     const detailLimit = Number(options.detailLimit || 25);
+    const selectedFilter = state.qualityFilter || 'all';
+    const showSection = (type)=>selectedFilter === 'all' || selectedFilter === type;
     const detailHtml = `
+      <div class="record-quality-toolbar">
+        ${['all','missing','error','active','ok'].map(f=>`<button type="button" class="record-quality-filter-btn ${selectedFilter === f ? 'active' : ''}" data-quality-filter="${f}">${escapeHtml(qualityFilterLabel(f))}</button>`).join('')}
+      </div>
+      ${qualityTaskSummaryHtml(entries)}
       <div class="record-quality-detail-wrap">
-        ${renderQualityDetailSection('Eksik kayıtlar - tamamlanacak işler', missingEntries, 'missing', detailLimit)}
-        ${renderQualityDetailSection('Hatalı kayıtlar - kontrol edilmeli', errorEntries, 'error', detailLimit)}
-        ${renderQualityDetailSection('Aktif üretimler - açık olduğu için eksik sayılmaz', activeEntries, 'active', detailLimit)}
-        ${renderQualityDetailSection('Tam kayıtlar', okEntries, 'ok', Math.min(detailLimit, 12))}
+        ${showSection('missing') ? renderQualityDetailSection('Eksik kayıtlar - tamamlanacak işler', missingEntries, 'missing', detailLimit) : ''}
+        ${showSection('error') ? renderQualityDetailSection('Hatalı kayıtlar - kontrol edilmeli', errorEntries, 'error', detailLimit) : ''}
+        ${showSection('active') ? renderQualityDetailSection('Aktif üretimler - açık olduğu için eksik sayılmaz', activeEntries, 'active', detailLimit) : ''}
+        ${showSection('ok') ? renderQualityDetailSection('Tam kayıtlar', okEntries, 'ok', Math.min(detailLimit, 12)) : ''}
       </div>
     `;
     return `
@@ -9909,10 +10534,10 @@ function applyRecordFilters(rows){
           </div>
         </div>
         <div class="record-quality-grid">
-          <div class="record-quality-card active"><div class="record-quality-label">Aktif Üretim</div><div class="record-quality-value">${active}</div></div>
-          <div class="record-quality-card good"><div class="record-quality-label">Tam Kayıt</div><div class="record-quality-value">${ok}</div></div>
-          <div class="record-quality-card warn"><div class="record-quality-label">Eksik Kayıt</div><div class="record-quality-value">${missing}</div></div>
-          <div class="record-quality-card ${error ? 'bad' : 'good'}"><div class="record-quality-label">Hatalı Kayıt</div><div class="record-quality-value">${error}</div></div>
+          <div class="record-quality-card active ${selectedFilter === 'active' ? 'selected' : ''}" data-quality-filter="active"><div class="record-quality-label">Aktif Üretim</div><div class="record-quality-value">${active}</div></div>
+          <div class="record-quality-card good ${selectedFilter === 'ok' ? 'selected' : ''}" data-quality-filter="ok"><div class="record-quality-label">Tam Kayıt</div><div class="record-quality-value">${ok}</div></div>
+          <div class="record-quality-card warn ${selectedFilter === 'missing' ? 'selected' : ''}" data-quality-filter="missing"><div class="record-quality-label">Eksik Kayıt</div><div class="record-quality-value">${missing}</div></div>
+          <div class="record-quality-card ${error ? 'bad' : 'good'} ${selectedFilter === 'error' ? 'selected' : ''}" data-quality-filter="error"><div class="record-quality-label">Hatalı Kayıt</div><div class="record-quality-value">${error}</div></div>
           <div class="record-quality-card final-score ${score >= 90 ? 'good' : score >= 70 ? 'warn' : 'bad'}"><div class="record-quality-label">Kayıt Kalitesi</div><div class="record-quality-value">%${score}</div></div>
         </div>
         <div class="record-quality-score-wrap">
@@ -9942,12 +10567,8 @@ function applyRecordFilters(rows){
       const fuelPerMeter = b.isDrill && b.drillTotal > 0 && b.fuelTotal > 0 ? (b.fuelTotal / b.drillTotal) : null;
       const hours = Number(b.meterDiffVal || 0);
       const meterPerHour = b.isDrill && b.drillTotal > 0 && hours > 0 ? (b.drillTotal / hours) : null;
-      const prefillBase = { equipment_id: row.equipment_id || '', shift_name: shiftName, date: shiftDate, production_id: row.id || '' };
       const actions = canEditOperations() ? `
-        ${(b.status !== 'active' && (!b.hasEndMeter || !b.hasMeterLog)) ? `<button class="secondary" data-open-modal="newMeter" data-modal-data="${encodeModalData({ prefill: prefillBase })}">Sayaç gir</button>` : ''}
-        ${(b.status !== 'active' && !b.hasFuelLog) ? `<button class="secondary" data-open-modal="newFuel" data-modal-data="${encodeModalData({ prefill: { ...prefillBase, equipment_type: detectEquipmentTypeKeyById(row.equipment_id || '') } })}">Yakıt gir</button>` : ''}
-        ${(b.status !== 'active' && b.isTruck && !b.hasTripLog) ? `<button class="secondary" data-open-modal="newTrip" data-modal-data="${encodeModalData({ prefill: { ...prefillBase, package_id: row.package_id || '', from_location: row.from_location || '', to_location: row.to_location || '' } })}">Sefer gir</button>` : ''}
-        ${(b.status !== 'active' && b.isDrill && !b.hasDrillLog) ? `<button class="secondary" data-open-modal="newDrillMeterage" data-modal-data="${encodeModalData({ prefill: prefillBase })}">Metraj gir</button>` : ''}
+        ${renderQualityQuickActions(row, b)}
         ${actionButtons('productions', row, false, 'records')}
       ` : '';
       const extraKpis = b.isTruck ? `
@@ -11374,6 +11995,14 @@ function renderUsers(){
   async function logout(){ try{ await teardownRealtimeSubscriptions(); await teardownOnlinePresence(); const sb = await initClient(); await sb.auth.signOut(); } catch(e){} location.reload(); }
 
   document.addEventListener('click', async (e)=>{
+    const qualityFilterBtn = e.target.closest('[data-quality-filter]');
+    if(qualityFilterBtn){
+      e.preventDefault();
+      e.stopPropagation();
+      setQualityFilter(qualityFilterBtn.getAttribute('data-quality-filter') || 'all');
+      return;
+    }
+
     const closeBtn = e.target.closest('[data-close-modal]');
     if(closeBtn){
       e.preventDefault();
