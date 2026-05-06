@@ -361,8 +361,21 @@
         <button id="testBtn" class="secondary">Bağlantıyı Test Et</button>
         <button id="loginBtn">Giriş Yap</button>
       </div>
+      <button id="forgotPasswordBtn" class="secondary" style="margin-top:10px">Şifremi Unuttum</button>
       <div id="loginStatus" class="muted" style="margin-top:12px">Hazır</div>
       <pre id="debugBox"></pre>
+    </div>
+  </div>
+
+  <div id="passwordSetupView" class="login-wrap hidden">
+    <div class="card login-card">
+      <h2 id="passwordSetupTitle">Yeni Şifre Oluştur</h2>
+      <div class="muted" id="passwordSetupHint" style="margin-bottom:12px">Davet veya şifre sıfırlama bağlantısı doğrulandı. Devam etmek için yeni şifrenizi oluşturun.</div>
+      <input id="newPassword" type="password" placeholder="Yeni şifre" autocomplete="new-password" />
+      <input id="newPasswordConfirm" type="password" placeholder="Yeni şifre tekrar" autocomplete="new-password" style="margin-top:10px" />
+      <button id="saveNewPasswordBtn" style="margin-top:10px">Şifreyi Kaydet</button>
+      <button id="backToLoginBtn" class="secondary" style="margin-top:10px">Giriş Ekranına Dön</button>
+      <div id="passwordSetupStatus" class="muted" style="margin-top:12px">Hazır</div>
     </div>
   </div>
 
@@ -4946,6 +4959,98 @@
     }catch(err){
       log({stage:'login-catch', message:String(err.message||err)});
       setStatus('Giriş başarısız', true);
+    }
+  }
+
+
+
+  function getPasswordFlowMode(){
+    try{
+      const params = new URLSearchParams(window.location.search || '');
+      const hash = new URLSearchParams(String(window.location.hash || '').replace(/^#/, ''));
+      if(params.get('set_password') === '1' || hash.get('type') === 'invite') return 'set';
+      if(params.get('reset_password') === '1' || hash.get('type') === 'recovery') return 'reset';
+      if(hash.get('access_token') && (params.get('set_password') === '1' || params.get('reset_password') === '1')) return params.get('reset_password') === '1' ? 'reset' : 'set';
+      return '';
+    }catch(e){ return ''; }
+  }
+
+  function showPasswordSetup(mode){
+    const loginView = document.getElementById('loginView');
+    const appView = document.getElementById('appView');
+    const passwordView = document.getElementById('passwordSetupView');
+    if(loginView) loginView.classList.add('hidden');
+    if(appView) appView.classList.add('hidden');
+    if(passwordView) passwordView.classList.remove('hidden');
+    const title = document.getElementById('passwordSetupTitle');
+    const hint = document.getElementById('passwordSetupHint');
+    if(title) title.textContent = mode === 'reset' ? 'Yeni Şifre Belirle' : 'İlk Şifreni Oluştur';
+    if(hint) hint.textContent = mode === 'reset'
+      ? 'Şifre sıfırlama bağlantısı doğrulandı. Yeni şifrenizi belirleyin.'
+      : 'Davet bağlantısı doğrulandı. Sisteme devam etmek için ilk şifrenizi oluşturun.';
+  }
+
+  function setPasswordSetupStatus(text, isErr){
+    const el = document.getElementById('passwordSetupStatus');
+    if(el) el.innerHTML = '<span class="' + (isErr ? 'err' : 'ok') + '">' + escapeHtml(text || '') + '</span>';
+  }
+
+  async function ensureAuthLinkSession(){
+    const sb = await initClient();
+    try{
+      // Supabase v2 usually detects invite/recovery tokens in the URL automatically.
+      // This small delay gives the client time to persist the session after page load.
+      await new Promise(resolve=>setTimeout(resolve, 250));
+      const sess = await sb.auth.getSession();
+      return sess?.data?.session || null;
+    }catch(e){ return null; }
+  }
+
+  async function maybeShowPasswordSetupFromUrl(){
+    const mode = getPasswordFlowMode();
+    if(!mode) return false;
+    showPasswordSetup(mode);
+    const session = await ensureAuthLinkSession();
+    if(!session?.user){
+      setPasswordSetupStatus('Bağlantı doğrulandı ama oturum oluşmadı. Maildeki bağlantıyı tekrar açın veya yeni davet/şifre sıfırlama isteyin.', true);
+    }else{
+      setPasswordSetupStatus('Bağlantı doğrulandı. Yeni şifrenizi oluşturabilirsiniz.');
+    }
+    return true;
+  }
+
+  async function saveNewPasswordFromLink(){
+    try{
+      const password = String(document.getElementById('newPassword')?.value || '').trim();
+      const confirm = String(document.getElementById('newPasswordConfirm')?.value || '').trim();
+      if(password.length < 8){ setPasswordSetupStatus('Şifre en az 8 karakter olmalı', true); return; }
+      if(password !== confirm){ setPasswordSetupStatus('Şifreler aynı değil', true); return; }
+      const sb = await initClient();
+      const session = await ensureAuthLinkSession();
+      if(!session?.user){ setPasswordSetupStatus('Aktif davet/sıfırlama oturumu bulunamadı. Linki yeniden açın.', true); return; }
+      setPasswordSetupStatus('Şifre kaydediliyor...');
+      const res = await sb.auth.updateUser({ password });
+      if(res.error){ setPasswordSetupStatus(res.error.message || 'Şifre kaydedilemedi', true); return; }
+      try{ window.history.replaceState({}, document.title, window.location.origin + window.location.pathname); }catch(e){}
+      setPasswordSetupStatus('Şifre kaydedildi. Sistem açılıyor...');
+      await bootstrap();
+    }catch(err){
+      setPasswordSetupStatus(String(err?.message || err), true);
+    }
+  }
+
+  async function sendPasswordResetEmail(){
+    try{
+      const email = String(document.getElementById('email')?.value || '').trim().toLowerCase();
+      if(!email){ setStatus('Şifre sıfırlama için email yazınız', true); return; }
+      const sb = await initClient();
+      setStatus('Şifre sıfırlama maili gönderiliyor...');
+      const redirectTo = window.location.origin + window.location.pathname + '?reset_password=1';
+      const res = await sb.auth.resetPasswordForEmail(email, { redirectTo });
+      if(res.error){ setStatus(res.error.message || 'Şifre sıfırlama maili gönderilemedi', true); return; }
+      setStatus('Şifre sıfırlama maili gönderildi. Email kutunuzu kontrol edin.');
+    }catch(err){
+      setStatus(String(err?.message || err), true);
     }
   }
 
@@ -12319,6 +12424,9 @@ function renderUsers(){
 
   document.getElementById('testBtn').addEventListener('click', testConnection);
   document.getElementById('loginBtn').addEventListener('click', login);
+  document.getElementById('forgotPasswordBtn')?.addEventListener('click', sendPasswordResetEmail);
+  document.getElementById('saveNewPasswordBtn')?.addEventListener('click', saveNewPasswordFromLink);
+  document.getElementById('backToLoginBtn')?.addEventListener('click', async ()=>{ try{ const sb = await initClient(); await sb.auth.signOut(); }catch(e){} location.href = window.location.origin + window.location.pathname; });
   document.getElementById('refreshBtn').addEventListener('click', refreshData);
   const langSelectEl = document.getElementById('langSelect');
   if(langSelectEl){
@@ -12347,11 +12455,15 @@ function renderUsers(){
   document.querySelectorAll('.menu-btn').forEach(btn=>{ btn.addEventListener('click', ()=>{ try{ renderAll(); }catch(e){} showPage(btn.dataset.page); }); });
   document.getElementById('email').addEventListener('keydown', e=>{ if(e.key==='Enter') login(); });
   document.getElementById('password').addEventListener('keydown', e=>{ if(e.key==='Enter') login(); });
+  document.getElementById('newPassword')?.addEventListener('keydown', e=>{ if(e.key==='Enter') saveNewPasswordFromLink(); });
+  document.getElementById('newPasswordConfirm')?.addEventListener('keydown', e=>{ if(e.key==='Enter') saveNewPasswordFromLink(); });
 
-  Object.assign(window, { openModal, closeModal, existingLogisticsRowForProduction, assertNoDuplicateProductionLog, assertProductionStartAllowedFinal, markQualityPanelStabilizedDone, fillTruckRouteFromExcavator, updateAutoMeterLabels, updateProductionStartMeterHints, updateTripProductionContext, updateFuelProductionContext, updateMeterCorrectionContext, toggleProductionEditLinkedField, refreshLogisticsEquipmentSelect, markShiftSelectManual, continueBreakdownToCurrentShift, finishBreakdownFromWarning, saveStartProductionExcavator, saveStartProductionTruck, saveStartProductionDrill, saveStartProductionOther, saveEndProduction, saveStartBreakdown, saveEndBreakdown, saveStartRental, saveEndRental, saveNewTrip, saveNewFuel, saveNewMeter, saveNewDrillMeterage, updateDrillMeterageProductionContext, confirmSoftDelete, restoreDeleted, deleteAllDeletedRecordsNow, deleteDeletedOlderThan30Days, saveEditRecord, saveDefinition, deleteTruckModel, toggleDefinitionTruckModelField, renderShiftConfigInputs, saveShiftConfigFromForm, renderShiftConfigCardRefresh, applyRecordFiltersFromUI, resetRecordFilters, bulkDeleteRecordTable, exportRecordsToExcel, saveUserRoleSettings, toggleUserActive, inviteUserFromPanel, refreshData, exportDailyPdf, exportWeeklyExcel, exportShiftReport });
+  Object.assign(window, { openModal, closeModal, existingLogisticsRowForProduction, assertNoDuplicateProductionLog, assertProductionStartAllowedFinal, markQualityPanelStabilizedDone, fillTruckRouteFromExcavator, updateAutoMeterLabels, updateProductionStartMeterHints, updateTripProductionContext, updateFuelProductionContext, updateMeterCorrectionContext, toggleProductionEditLinkedField, refreshLogisticsEquipmentSelect, markShiftSelectManual, continueBreakdownToCurrentShift, finishBreakdownFromWarning, saveStartProductionExcavator, saveStartProductionTruck, saveStartProductionDrill, saveStartProductionOther, saveEndProduction, saveStartBreakdown, saveEndBreakdown, saveStartRental, saveEndRental, saveNewTrip, saveNewFuel, saveNewMeter, saveNewDrillMeterage, updateDrillMeterageProductionContext, confirmSoftDelete, restoreDeleted, deleteAllDeletedRecordsNow, deleteDeletedOlderThan30Days, saveEditRecord, saveDefinition, deleteTruckModel, toggleDefinitionTruckModelField, renderShiftConfigInputs, saveShiftConfigFromForm, renderShiftConfigCardRefresh, applyRecordFiltersFromUI, resetRecordFilters, bulkDeleteRecordTable, exportRecordsToExcel, saveUserRoleSettings, toggleUserActive, inviteUserFromPanel, sendPasswordResetEmail, saveNewPasswordFromLink, refreshData, exportDailyPdf, exportWeeklyExcel, exportShiftReport });
 
   (async function autoSession(){
     try{
+      const handledPasswordFlow = await maybeShowPasswordSetupFromUrl();
+      if(handledPasswordFlow) return;
       const sb = await initClient();
       const sess = await withTimeout(sb.auth.getSession(), 8000, 'Auto session');
       if(sess?.data?.session?.user){
