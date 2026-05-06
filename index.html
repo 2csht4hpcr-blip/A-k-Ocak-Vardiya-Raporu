@@ -303,6 +303,21 @@
     .record-quality-row-name{font-size:14px;font-weight:900;color:#0f172a;line-height:1.25}.record-quality-row-sub{font-size:12px;color:#64748b;margin-top:3px;line-height:1.35}.record-quality-issues{font-size:12px;font-weight:800;color:#475569;line-height:1.45}.record-quality-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}.record-quality-actions button{width:auto;padding:7px 9px;border-radius:10px;font-size:12px}
     @media(max-width:900px){.record-quality-detail-row{grid-template-columns:1fr}.record-quality-actions{justify-content:flex-start}}
 
+
+    .smart-entry-chip{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border-radius:999px;background:#eff6ff;border:1px solid #bfdbfe;color:#1d4ed8;font-size:10px;font-weight:900;letter-spacing:.25px;text-transform:uppercase}
+    .record-quality-actions button.smart-primary{background:linear-gradient(135deg,#2563eb 0%,#38bdf8 100%);color:#fff;border:none;box-shadow:0 8px 18px rgba(37,99,235,.22)}
+    .record-quality-actions button.smart-locked{background:#fff;color:#475569;border:1px solid #cbd5e1}
+    .smart-entry-note{margin-top:8px;padding:10px 12px;border-radius:14px;background:linear-gradient(135deg,#eff6ff 0%,#f8fbff 100%);border:1px solid #bfdbfe;color:#1e3a8a;font-size:12px;font-weight:700;line-height:1.45}
+    .field-stabilized-done{animation:stabilizedDonePulse 1.15s ease-out 1}
+    @keyframes stabilizedDonePulse{0%{transform:translateY(0) scale(1);box-shadow:0 0 0 rgba(16,185,129,0)}35%{transform:translateY(-2px) scale(1.01);box-shadow:0 18px 34px rgba(16,185,129,.22)}100%{transform:translateY(0) scale(1);box-shadow:0 12px 30px rgba(15,23,42,.07)}}
+    .record-quality-panel,.unified-records-panel{transform:perspective(1200px) translateZ(0);box-shadow:0 18px 42px rgba(15,23,42,.13), inset 0 1px 0 rgba(255,255,255,.9)!important}
+
+    .final-lock-note{margin-top:10px;padding:10px 12px;border-radius:14px;background:linear-gradient(135deg,#f0fdf4 0%,#ecfeff 100%);border:1px solid #bbf7d0;color:#14532d;font-size:12px;font-weight:800;line-height:1.45}
+    .record-quality-card.final-score{background:linear-gradient(145deg,#ecfdf5 0%,#eff6ff 100%);border-color:#bfdbfe}
+    .record-quality-detail-row.final-new-done{animation:finalTaskDropPulse 1.2s ease-out 1}
+    @keyframes finalTaskDropPulse{0%{transform:scale(1);box-shadow:0 0 0 rgba(16,185,129,0)}40%{transform:scale(1.012);box-shadow:0 18px 34px rgba(16,185,129,.22)}100%{transform:scale(1);box-shadow:0 6px 16px rgba(15,23,42,.05)}}
+    .record-quality-card,.unified-record-card{box-shadow:0 12px 26px rgba(15,23,42,.10), inset 0 1px 0 rgba(255,255,255,.88)!important;transition:transform .16s ease,box-shadow .16s ease}
+    .record-quality-card:hover,.unified-record-card:hover{transform:translateY(-3px);box-shadow:0 18px 36px rgba(15,23,42,.16), inset 0 1px 0 rgba(255,255,255,.92)!important}
   </style>
 </head>
 <body>
@@ -5178,6 +5193,7 @@
       el.innerHTML = modalShell('Sefer Düzenleme', `
         <div class="notice">Ekskavatör seçimi gerekmiyor. Tarih ve vardiya seçildiğinde kamyonun ilgili üretim kaydından rota ve paket otomatik alınır.</div>
         <input type="hidden" id="m_trip_production_id" value="${escapeHtml(prefill.production_id || '')}">
+        ${prefill.smart_entry ? `<div class="smart-entry-note">Akıllı giriş: Bu sefer kaydı seçili üretime production_id ile bağlanacak. Aynı üretim için ikinci sefer kaydı oluşturulamaz.</div>` : ''}
         <div class="form-grid" style="margin-top:12px">
           <div class="form-field"><label>Kamyon</label><select id="m_trip_equipment_id" onchange="updateTripProductionContext()">${truckOptions}</select></div>
           <div class="form-field"><label>Tarih</label><input id="m_trip_date" type="date" value="${escapeHtml(prefill.date || todayStr())}" onchange="updateTripProductionContext()"></div>
@@ -5207,6 +5223,7 @@
       const shiftOptions = (state.shiftConfig?.shifts || []).map(s=>`<option value="${escapeHtml(s.name)}" ${String(s.name)===String(prefill.shift_name || '') ? 'selected' : ''}>${escapeHtml(s.name)}</option>`).join('');
       el.innerHTML = modalShell('Yakıt Düzenleme', `
         <input type="hidden" id="m_fuel_production_id" value="${escapeHtml(prefill.production_id || '')}">
+        ${prefill.smart_entry ? `<div class="smart-entry-note">Akıllı giriş: Bu yakıt kaydı seçili üretime production_id ile bağlanacak. Aynı üretim için ikinci yakıt kaydı oluşturulamaz.</div>` : ''}
         <div class="form-grid">
           <div class="form-field"><label>Ekipman Tipi</label><select id="m_fuel_equipment_type" onchange="refreshLogisticsEquipmentSelect('fuel')"><option value="">Tümü</option>${typeOptions}</select></div>
           <div class="form-field"><label>Ekipman</label><select id="m_fuel_equipment_id" onchange="updateAutoMeterLabels();updateFuelProductionContext()"><option value="">Seçiniz</option>${eqOptions}</select></div>
@@ -5245,6 +5262,7 @@
       const shiftOptions = (state.shiftConfig?.shifts || []).map(s=>`<option value="${escapeHtml(s.name)}" ${String(s.name)===String(prefill.shift_name || '') ? 'selected' : ''}>${escapeHtml(s.name)}</option>`).join('');
       el.innerHTML = modalShell('Sayaç Düzenleme', `
         <input type="hidden" id="m_meter_production_id" value="${escapeHtml(prefill.production_id || '')}">
+        ${prefill.smart_entry ? `<div class="smart-entry-note">Akıllı giriş: Bu sayaç kaydı seçili üretime production_id ile bağlanacak. Aynı üretim için ikinci sayaç kaydı oluşturulamaz.</div>` : ''}
         <div class="notice">Üretimden gelen son sayaç bilgileri otomatik önerilir. Değer yoksa elle giriş yapabilirsin.</div>
         <div class="form-grid" style="margin-top:12px">
           <div class="form-field"><label>Ekipman Tipi</label><select id="m_meter_equipment_type" onchange="refreshLogisticsEquipmentSelect('meter')"><option value="">Tümü</option>${typeOptions}</select></div>
@@ -5283,6 +5301,7 @@
           <div class="form-field"><label>Delinen Metraj (m)</label><input id="m_drill_meterage" type="number" step="0.01" placeholder="0"></div>
           <div class="form-field" style="grid-column:1 / -1"><label>Not</label><textarea id="m_drill_note" placeholder="Opsiyonel not"></textarea></div>
           <input id="m_drill_production_id" type="hidden" value="${escapeHtml(prefill.production_id || '')}">
+          ${prefill.smart_entry ? `<div class="smart-entry-note" style="grid-column:1 / -1">Akıllı giriş: Bu delici metraj kaydı seçili üretime production_id ile bağlanacak. Aynı üretim için ikinci metraj kaydı oluşturulamaz.</div>` : ''}
         </div>
         <div id="m_drill_context" class="subtle" style="margin-top:8px"></div>
         <div class="actions"><button class="secondary" data-close-modal="1">İptal</button><button type="button" data-action="saveNewDrillMeterage">Kaydet</button></div>
@@ -5526,6 +5545,26 @@
   }
 
 
+  function assertProductionStartAllowedFinal(equipmentId){
+    // FINAL SAHA PATCH: Vardiya kilidi + aynı ekipman açık kayıt kilidi.
+    // Amaç: kapanmış vardiyaya yeni üretim açılmasını ve aynı ekipmanın iki açık production kaydı üretmesini engellemek.
+    const cfg = state.shiftConfig || { count:0, shifts:[] };
+    const hasShiftDefinition = !!(cfg.count && Array.isArray(cfg.shifts) && cfg.shifts.length);
+    const currentShift = getCurrentShiftInfo();
+    if(hasShiftDefinition && !currentShift){
+      throw new Error('Aktif vardiya bulunamadı. Yeni üretim açılamaz; sadece geçmiş vardiya için sayaç/sefer/yakıt/metraj girişi yapılabilir. Vardiya saatlerini Tanımlar’dan kontrol edin.');
+    }
+    const openSameEquipment = (state.productions || []).find(r=>!r?.deleted_at && String(r.equipment_id || '') === String(equipmentId || '') && isOpenRow(r));
+    if(openSameEquipment){
+      if(isShiftExpiredOpenRow(openSameEquipment)){
+        throw new Error('Bu ekipmanın önceki vardiyadan açık üretim kaydı var. Önce vardiya sonu kapanışını/kayıt kontrolünü tamamlayın; sonra yeni üretim açın.');
+      }
+      throw new Error('Bu ekipman zaten aktif üretimde. Aynı ekipman için ikinci açık üretim kaydı açılamaz.');
+    }
+    return true;
+  }
+
+
   async function saveStartProductionExcavator(){
     if(!canEditOperations()){ alert('Bu işlem için yetkin yok.'); return; }
 
@@ -5533,6 +5572,7 @@
       const equipment_id = document.getElementById('m_equipment_id').value;
       const eq = findEquipmentById(equipment_id);
       if(!equipment_id) throw new Error('Ekipman seçiniz');
+      assertProductionStartAllowedFinal(equipment_id);
       if(currentOpenBreakdownForEquipment(equipment_id)) throw new Error('Arızadaki ekipman üretime alınamaz');
       const isLoderOnly = isLoaderEquipment(eq) && !isExcavatorEquipment(eq);
       const selectedMode = isLoderOnly ? String(document.getElementById('m_production_mode')?.value || 'loading') : 'loading';
@@ -5572,6 +5612,7 @@
       const equipment_id = document.getElementById('m_equipment_id').value;
       const eq = findEquipmentById(equipment_id);
       if(!equipment_id) throw new Error('Kamyon seçiniz');
+      assertProductionStartAllowedFinal(equipment_id);
       if(currentOpenBreakdownForEquipment(equipment_id)) throw new Error('Arızadaki ekipman üretime alınamaz');
       const linkedProductionId = document.getElementById('m_linked_production_id').value || null;
       if(!linkedProductionId) throw new Error('Kamyon üretime alınırken ekskavatör veya loder yükleyici seçmek zorunludur');
@@ -5616,6 +5657,7 @@
       const equipment_id = document.getElementById('m_equipment_id').value;
       const eq = findEquipmentById(equipment_id);
       if(!equipment_id) throw new Error('Delici seçiniz');
+      assertProductionStartAllowedFinal(equipment_id);
       if(!isDrillEquipment(eq)) throw new Error('Seçilen ekipman delici değil');
       if(currentOpenBreakdownForEquipment(equipment_id)) throw new Error('Arızadaki ekipman üretime alınamaz');
       if(currentOpenProductionForEquipment(equipment_id)) throw new Error('Bu delici zaten aktif üretimde');
@@ -5656,6 +5698,7 @@
       const equipment_id = document.getElementById('m_equipment_id').value;
       const eq = findEquipmentById(equipment_id);
       if(!equipment_id) throw new Error('Ekipman seçiniz');
+      assertProductionStartAllowedFinal(equipment_id);
       if(currentOpenBreakdownForEquipment(equipment_id)) throw new Error('Arızadaki ekipman üretime alınamaz');
       const unit = autoMeterTypeForEquipment(equipment_id);
       const inputVal = document.getElementById('m_start_meter').value;
@@ -5864,6 +5907,7 @@
       if(!matchedProduction?.id){
         throw new Error('Bu kamyon için seçilen tarih/vardiyada aktif üretim kaydı bulunamadı. Önce üretimi başlatın veya doğru tarih/vardiya seçin.');
       }
+      assertNoDuplicateProductionLog('trip', matchedProduction.id);
 
       const selectedShift = getShiftNameForRow(matchedProduction) || selectedShiftInput;
       const eventAt = buildLogisticsEventIso(tripDate, selectedShift, '', '12:00') || eventAtGuess;
@@ -5917,6 +5961,7 @@
       const production_id = document.getElementById('m_fuel_production_id')?.value || null;
       const selectedShiftInput = inferShiftNameForInput('m_fuel_shift_name', shiftSeed);
       const matchedProduction = getProductionRowById(production_id) || findProductionByShiftBucket(equipment_id, fuelDate, selectedShiftInput) || productionForEquipmentAt(equipment_id, shiftSeed) || null;
+      if(matchedProduction?.id) assertNoDuplicateProductionLog('fuel', matchedProduction.id);
       const selectedShift = matchedProduction ? (getShiftNameForRow(matchedProduction) || selectedShiftInput) : selectedShiftInput;
       const eventAt = buildLogisticsEventIso(fuelDate, selectedShift, manualTime, '12:00') || nowIso();
       const liters = num(document.getElementById('m_fuel_liters').value);
@@ -6028,6 +6073,7 @@
       const selectedShiftInput = inferShiftNameForInput('m_drill_shift_name', seed);
       const matchedProduction = getProductionRowById(production_id) || findProductionByShiftBucket(equipment_id, dateVal, selectedShiftInput) || productionForEquipmentAt(equipment_id, seed) || null;
       if(!matchedProduction?.id) throw new Error('Delici metraj için bağlı üretim kaydı bulunmalı');
+      assertNoDuplicateProductionLog('drillMeterage', matchedProduction.id);
       const selectedShift = getShiftNameForRow(matchedProduction) || selectedShiftInput;
       const eventAt = buildLogisticsEventIso(dateVal, selectedShift, '', '12:00') || seed;
       const payload = {
@@ -6074,6 +6120,7 @@
       const production_id = document.getElementById('m_meter_production_id')?.value || null;
       const selectedShiftInput = inferShiftNameForInput('m_meter_shift_name', inferredSeed);
       const matchedProduction = getProductionRowById(production_id) || findProductionByShiftBucket(equipment_id, meterDate, selectedShiftInput) || null;
+      if(matchedProduction?.id) assertNoDuplicateProductionLog('meter', matchedProduction.id);
       const selectedShift = matchedProduction ? (getShiftNameForRow(matchedProduction) || selectedShiftInput) : selectedShiftInput;
       const eventAt = buildLogisticsEventIso(meterDate, selectedShift, '', '12:00') || inferredSeed;
       if(!Number.isFinite(Number(endVal))) throw new Error('Sayaç değeri giriniz');
@@ -9197,10 +9244,36 @@ function applyRecordFilters(rows){
     return total || Number(row.drilled_meter || 0) || 0;
   }
 
+  function linkedTruckProductionsForLoader(row){
+    try{
+      if(!row || !isLoaderAnalysisProduction(row)) return [];
+      const loaderEquipmentId = String(row.equipment_id || '');
+      const loaderProductionId = String(row.id || '');
+      const loaderShiftKey = String(getRowShiftBucketKey(row) || '');
+      return (state.productions || []).filter(t=>{
+        if(!t || t.deleted_at || String(t.id || '') === loaderProductionId) return false;
+        if(!isTruckEquipment(findEquipmentById(t.equipment_id))) return false;
+        const linkedId = String(getProductionLoaderId(t) || t.loader_id || t.linked_excavator_id || '');
+        const linkedProdId = String(t.loader_production_id || t.linked_production_id || '');
+        const sameLoader = linkedId === loaderEquipmentId || linkedProdId === loaderProductionId;
+        if(!sameLoader) return false;
+        const truckShiftKey = String(getRowShiftBucketKey(t) || '');
+        return !loaderShiftKey || !truckShiftKey || truckShiftKey === loaderShiftKey;
+      });
+    }catch(e){ return []; }
+  }
+
+  function linkedTruckTripMissingCountForLoader(row){
+    try{
+      return linkedTruckProductionsForLoader(row).filter(t=>!existingLogisticsRowForProduction('trip', t.id)).length;
+    }catch(e){ return 0; }
+  }
+
   function productionLogisticsBundle(row){
     const eq = findEquipmentById(row?.equipment_id);
     const isTruck = isTruckEquipment(eq);
     const isDrill = isDrillEquipment(eq);
+    const isLoader = isLoaderAnalysisProduction(row);
     const startMeter = Number(getEffectiveProductionStartMeter(row));
     const endMeter = Number(getEffectiveProductionEndMeter(row));
     const hasStartMeter = Number.isFinite(startMeter);
@@ -9213,6 +9286,11 @@ function applyRecordFilters(rows){
     const hasFuelLog = (state.fuel_logs || []).some(f=>!f.deleted_at && String(f.production_id || '') === String(row.id || ''));
     const hasTripLog = !isTruck || (state.truck_trips || []).some(t=>!t.deleted_at && String(t.production_id || '') === String(row.id || ''));
     const hasDrillLog = !isDrill || (state.drill_meterage_logs || []).some(d=>!d.deleted_at && String(d.production_id || '') === String(row.id || ''));
+    const finalFuelRatio = (()=>{
+      const diff = Number(meterDiffVal || 0);
+      if(!Number.isFinite(diff) || diff <= 0 || !Number.isFinite(Number(fuelTotal)) || Number(fuelTotal) <= 0) return null;
+      return Number(fuelTotal) / diff;
+    })();
     const issues = [];
     const open = isOpenRow(row);
     if(open){
@@ -9223,28 +9301,86 @@ function applyRecordFilters(rows){
       if(!hasStartMeter) issues.push('Başlangıç sayaç yok');
       if(!hasEndMeter) issues.push('Bitiş sayaç yok');
       if(meterDiffVal !== null && meterDiffVal < 0) issues.push('Negatif sayaç farkı');
+      if(meterDiffVal !== null && meterDiffVal === 0) issues.push('Sayaç farkı 0');
       if(!hasMeterLog && !hasEndMeter) issues.push('Sayaç kaydı yok');
       if(!hasFuelLog) issues.push('Yakıt kaydı yok');
+      if(hasFuelLog && fuelTotal <= 0) issues.push('Yakıt 0 olamaz');
+      if(finalFuelRatio !== null){
+        if(isTruck && finalFuelRatio > 2.0) issues.push('Yakıt/km yüksek');
+        if(!isTruck && !isDrill && finalFuelRatio > 80) issues.push('Yakıt/saat yüksek');
+        if(isDrill && finalFuelRatio > 80) issues.push('Delici yakıt/saat yüksek');
+      }
       if(isTruck && !getProductionLoaderId(row)) issues.push('Yükleyici bağı yok');
       if(isTruck && !hasTripLog) issues.push('Sefer kaydı yok');
+      if(isTruck && hasTripLog && tripTotal <= 0) issues.push('Sefer 0 olamaz');
+      if(isLoader){
+        const missingLinkedTrips = linkedTruckTripMissingCountForLoader(row);
+        if(missingLinkedTrips > 0) issues.push(`Bağlı kamyon sefer eksiği: ${missingLinkedTrips}`);
+      }
       if(isDrill && !hasDrillLog) issues.push('Delici metraj yok');
+      if(isDrill && hasDrillLog && drillTotal <= 0) issues.push('Delici metraj 0 olamaz');
     }
-    const hasError = issues.some(x=>/negatif|bağı yok/i.test(x));
+    const hasError = issues.some(x=>/negatif|bağı yok|0 olamaz|sayaç farkı 0/i.test(x));
     const status = open ? 'active' : (issues.length ? (hasError ? 'error' : 'missing') : 'ok');
-    return { eq, isTruck, isDrill, open, startMeter, endMeter, hasStartMeter, hasEndMeter, meterDiffVal, fuelTotal, tripTotal, drillTotal, hasMeterLog, hasFuelLog, hasTripLog, hasDrillLog, issues, status };
+    return { eq, isTruck, isDrill, isLoader, open, startMeter, endMeter, hasStartMeter, hasEndMeter, meterDiffVal, fuelTotal, tripTotal, drillTotal, hasMeterLog, hasFuelLog, hasTripLog, hasDrillLog, issues, status };
+  }
+
+  function existingLogisticsRowForProduction(kind, productionId){
+    const pid = String(productionId || '');
+    if(!pid) return null;
+    let rows = [];
+    if(kind === 'meter') rows = state.meter_logs || [];
+    else if(kind === 'fuel') rows = state.fuel_logs || [];
+    else if(kind === 'trip') rows = state.truck_trips || [];
+    else if(kind === 'drillMeterage' || kind === 'drill_meterage') rows = state.drill_meterage_logs || [];
+    else return null;
+    return rows.find(r=>!r?.deleted_at && String(r.production_id || '') === pid) || null;
+  }
+
+  function smartEntryPrefillForProduction(row, extra){
+    const bucket = resolveShiftBucketForRow(row) || {};
+    const shiftDate = bucket.shift_date || String(row.start_at || row.start_time || row.created_at || '').slice(0,10) || todayStr();
+    const shiftName = getShiftNameForRow(row) || '';
+    return {
+      smart_entry: '1',
+      lock_production_id: '1',
+      equipment_id: row.equipment_id || '',
+      equipment_type: detectEquipmentTypeKeyById(row.equipment_id || ''),
+      shift_name: shiftName,
+      date: shiftDate,
+      production_id: row.id || '',
+      package_id: row.package_id || '',
+      from_location: row.from_location || '',
+      to_location: row.to_location || '',
+      ...(extra || {})
+    };
+  }
+
+  function smartEntryButton(kind, row, label, modalType, extraPrefill){
+    const existing = existingLogisticsRowForProduction(kind, row?.id);
+    const tableMap = { meter:'meter_logs', fuel:'fuel_logs', trip:'truck_trips', drillMeterage:'drill_meterage_logs', drill_meterage:'drill_meterage_logs' };
+    if(existing){
+      return `<button class="secondary smart-locked" data-open-modal="editRecord" data-modal-data="${encodeModalData({ table: tableMap[kind] || kind, row: existing })}">Mevcut ${escapeHtml(label)} düzenle</button>`;
+    }
+    const prefill = smartEntryPrefillForProduction(row, extraPrefill);
+    return `<button class="secondary smart-primary" data-open-modal="${escapeHtml(modalType)}" data-modal-data="${encodeModalData({ prefill })}">${escapeHtml(label)}</button>`;
+  }
+
+  function assertNoDuplicateProductionLog(kind, productionId){
+    const existing = existingLogisticsRowForProduction(kind, productionId);
+    if(existing){
+      const labelMap = { meter:'sayaç', fuel:'yakıt', trip:'sefer', drillMeterage:'delici metraj', drill_meterage:'delici metraj' };
+      throw new Error(`Bu üretime bağlı ${labelMap[kind] || 'lojistik'} kaydı zaten var. Çift kayıt oluşmaması için mevcut kaydı düzenleyin.`);
+    }
   }
 
   function renderQualityQuickActions(row, b){
     if(!canEditOperations()) return '';
-    const bucket = resolveShiftBucketForRow(row) || {};
-    const shiftDate = bucket.shift_date || String(row.start_at || row.start_time || row.created_at || '').slice(0,10);
-    const shiftName = getShiftNameForRow(row) || '';
-    const prefillBase = { equipment_id: row.equipment_id || '', shift_name: shiftName, date: shiftDate, production_id: row.id || '' };
     const parts = [];
-    if(b.status !== 'active' && (!b.hasEndMeter || !b.hasMeterLog)) parts.push(`<button class="secondary" data-open-modal="newMeter" data-modal-data="${encodeModalData({ prefill: prefillBase })}">Sayaç gir</button>`);
-    if(b.status !== 'active' && !b.hasFuelLog) parts.push(`<button class="secondary" data-open-modal="newFuel" data-modal-data="${encodeModalData({ prefill: { ...prefillBase, equipment_type: detectEquipmentTypeKeyById(row.equipment_id || '') } })}">Yakıt gir</button>`);
-    if(b.status !== 'active' && b.isTruck && !b.hasTripLog) parts.push(`<button class="secondary" data-open-modal="newTrip" data-modal-data="${encodeModalData({ prefill: { ...prefillBase, package_id: row.package_id || '', from_location: row.from_location || '', to_location: row.to_location || '' } })}">Sefer gir</button>`);
-    if(b.status !== 'active' && b.isDrill && !b.hasDrillLog) parts.push(`<button class="secondary" data-open-modal="newDrillMeterage" data-modal-data="${encodeModalData({ prefill: prefillBase })}">Metraj gir</button>`);
+    if(b.status !== 'active' && (!b.hasEndMeter || !b.hasMeterLog)) parts.push(smartEntryButton('meter', row, 'Sayaç gir', 'newMeter'));
+    if(b.status !== 'active' && !b.hasFuelLog) parts.push(smartEntryButton('fuel', row, 'Yakıt gir', 'newFuel'));
+    if(b.status !== 'active' && b.isTruck && !b.hasTripLog) parts.push(smartEntryButton('trip', row, 'Sefer gir', 'newTrip'));
+    if(b.status !== 'active' && b.isDrill && !b.hasDrillLog) parts.push(smartEntryButton('drillMeterage', row, 'Metraj gir', 'newDrillMeterage'));
     if(!parts.length && b.status !== 'active') parts.push(`<button class="secondary" data-open-modal="editRecord" data-modal-data="${encodeModalData({ table:'productions', row })}">Üretimi incele</button>`);
     return parts.join('');
   }
@@ -9303,7 +9439,7 @@ function applyRecordFilters(rows){
     const missing = missingEntries.length;
     const error = errorEntries.length;
     const closedTotal = Math.max(0, prodRows.length - active);
-    const score = closedTotal ? Math.max(0, Math.round(100 - (error * 10) - (missing * 4))) : 100;
+    const score = closedTotal ? Math.max(0, Math.min(100, Math.round(((okEntries.length) / Math.max(closedTotal, 1)) * 100))) : 100;
     const ready = error === 0 && missing === 0;
     const detailLimit = Number(options.detailLimit || 25);
     const detailHtml = `
@@ -9315,7 +9451,7 @@ function applyRecordFilters(rows){
       </div>
     `;
     return `
-      <div class="record-quality-panel">
+      <div class="record-quality-panel" data-quality-panel="1">
         <div class="record-quality-head">
           <div>
             <h3 class="record-quality-title">${escapeHtml(panelTitle)}</h3>
@@ -9331,13 +9467,14 @@ function applyRecordFilters(rows){
           <div class="record-quality-card good"><div class="record-quality-label">Tam Kayıt</div><div class="record-quality-value">${ok}</div></div>
           <div class="record-quality-card warn"><div class="record-quality-label">Eksik Kayıt</div><div class="record-quality-value">${missing}</div></div>
           <div class="record-quality-card ${error ? 'bad' : 'good'}"><div class="record-quality-label">Hatalı Kayıt</div><div class="record-quality-value">${error}</div></div>
-          <div class="record-quality-card ${score >= 90 ? 'good' : score >= 70 ? 'warn' : 'bad'}"><div class="record-quality-label">Analiz Güveni</div><div class="record-quality-value">%${score}</div></div>
+          <div class="record-quality-card final-score ${score >= 90 ? 'good' : score >= 70 ? 'warn' : 'bad'}"><div class="record-quality-label">Kayıt Kalitesi</div><div class="record-quality-value">%${score}</div></div>
         </div>
         <div class="record-quality-score-wrap">
           <div style="font-size:12px;font-weight:900;color:#334155">Kalite</div>
           <div class="record-quality-score-track"><div class="record-quality-score-fill" style="width:${score}%"></div></div>
           <div style="font-size:12px;font-weight:900;color:#334155">%${score}</div>
         </div>
+        <div class="final-lock-note">Final saha modu aktif: Yeni üretim sadece aktif vardiyada açılır; kapanmış vardiyalar için sadece eksik lojistik girişleri yapılır. Aynı production_id için çift sayaç/yakıt/sefer/metraj engellenir.</div>
         ${detailHtml}
       </div>
     `;
@@ -10686,6 +10823,7 @@ function renderUsers(){
       dashboardProClearInvalidSelection();
       renderAll();
       showPage(pageToKeep);
+      try{ markQualityPanelStabilizedDone(pageToKeep); }catch(e){}
       if(pageToKeep === 'dashboardPro'){
         try{ await renderDashboardProData(); }catch(e){ console.error('dashboard pro refresh after delete', e); }
       }
@@ -10705,16 +10843,37 @@ function renderUsers(){
     }
   }
 
+  function markQualityPanelStabilizedDone(pageId){
+    try{
+      const root = document.getElementById(pageId || state.currentPage || '');
+      const panel = root?.querySelector?.('[data-quality-panel="1"]') || document.querySelector('[data-quality-panel="1"]');
+      if(!panel) return;
+      panel.classList.remove('field-stabilized-done');
+      void panel.offsetWidth;
+      panel.classList.add('field-stabilized-done');
+      setTimeout(()=>{ try{ panel.classList.remove('field-stabilized-done'); }catch(e){} }, 1300);
+    }catch(e){}
+  }
+
   async function refreshLogisticsAfterSave(targetPage){
-    // Dar kapsamlı kayıt sonrası yenileme:
-    // Sefer/Yakıt/Sayaç kaydı eklendiğinde ilgili liste, eksik giriş uyarıları
-    // ve Dashboard Pro analizleri aynı state üzerinden anında yeniden hesaplanır.
+    // Saha modu stabilizasyon:
+    // Lojistik Kontrol Paneli veya Kayıtlar üzerinden Smart Entry ile giriş yapıldığında
+    // kullanıcı aynı denetim ekranında kalır; görev listesi anında yeniden hesaplanır.
+    // Alt liste sayfalarında manuel giriş yapılırsa o sayfa korunur.
     // Veri modeli, Supabase kolonları ve diğer modüller değiştirilmez.
-    const pageToKeep = targetPage || state.currentPage || 'dashboard';
+    const currentPageBeforeSave = state.currentPage || '';
+    const pageToKeep = (currentPageBeforeSave === 'logisticsControl' || currentPageBeforeSave === 'records')
+      ? currentPageBeforeSave
+      : (targetPage || currentPageBeforeSave || 'dashboard');
+    try{ localStorage.setItem('maden_last_stabilized_save', JSON.stringify({ at:Date.now(), kind:targetPage || '', page:pageToKeep })); }catch(e){}
     try{
       await loadAllSafe();
       renderAll();
       showPage(pageToKeep);
+      try{ markQualityPanelStabilizedDone(pageToKeep); }catch(e){}
+      if(pageToKeep === 'records'){
+        try{ await loadRecordsPageData(); }catch(e){ console.error('records refresh after logistics save', e); }
+      }
       if(pageToKeep === 'dashboardPro'){
         try{ await renderDashboardProData(); }catch(e){ console.error('dashboard pro refresh after logistics save', e); }
       }
@@ -10868,7 +11027,7 @@ function renderUsers(){
   document.getElementById('email').addEventListener('keydown', e=>{ if(e.key==='Enter') login(); });
   document.getElementById('password').addEventListener('keydown', e=>{ if(e.key==='Enter') login(); });
 
-  Object.assign(window, { openModal, closeModal, fillTruckRouteFromExcavator, updateAutoMeterLabels, updateProductionStartMeterHints, updateTripProductionContext, updateFuelProductionContext, updateMeterCorrectionContext, toggleProductionEditLinkedField, refreshLogisticsEquipmentSelect, markShiftSelectManual, continueBreakdownToCurrentShift, finishBreakdownFromWarning, saveStartProductionExcavator, saveStartProductionTruck, saveStartProductionDrill, saveStartProductionOther, saveEndProduction, saveStartBreakdown, saveEndBreakdown, saveStartRental, saveEndRental, saveNewTrip, saveNewFuel, saveNewMeter, saveNewDrillMeterage, updateDrillMeterageProductionContext, confirmSoftDelete, restoreDeleted, deleteAllDeletedRecordsNow, deleteDeletedOlderThan30Days, saveEditRecord, saveDefinition, deleteTruckModel, toggleDefinitionTruckModelField, renderShiftConfigInputs, saveShiftConfigFromForm, renderShiftConfigCardRefresh, applyRecordFiltersFromUI, resetRecordFilters, bulkDeleteRecordTable, exportRecordsToExcel, saveUserRoleSettings, refreshData, exportDailyPdf, exportWeeklyExcel, exportShiftReport });
+  Object.assign(window, { openModal, closeModal, existingLogisticsRowForProduction, assertNoDuplicateProductionLog, assertProductionStartAllowedFinal, markQualityPanelStabilizedDone, fillTruckRouteFromExcavator, updateAutoMeterLabels, updateProductionStartMeterHints, updateTripProductionContext, updateFuelProductionContext, updateMeterCorrectionContext, toggleProductionEditLinkedField, refreshLogisticsEquipmentSelect, markShiftSelectManual, continueBreakdownToCurrentShift, finishBreakdownFromWarning, saveStartProductionExcavator, saveStartProductionTruck, saveStartProductionDrill, saveStartProductionOther, saveEndProduction, saveStartBreakdown, saveEndBreakdown, saveStartRental, saveEndRental, saveNewTrip, saveNewFuel, saveNewMeter, saveNewDrillMeterage, updateDrillMeterageProductionContext, confirmSoftDelete, restoreDeleted, deleteAllDeletedRecordsNow, deleteDeletedOlderThan30Days, saveEditRecord, saveDefinition, deleteTruckModel, toggleDefinitionTruckModelField, renderShiftConfigInputs, saveShiftConfigFromForm, renderShiftConfigCardRefresh, applyRecordFiltersFromUI, resetRecordFilters, bulkDeleteRecordTable, exportRecordsToExcel, saveUserRoleSettings, refreshData, exportDailyPdf, exportWeeklyExcel, exportShiftReport });
 
   (async function autoSession(){
     try{
