@@ -7282,7 +7282,7 @@
         await updateWithOptionalColumns(TABLES.PRODUCTIONS, { trip_count: nextTripTotal }, ['trip_count'], matchedProduction.id);
       }
       closeModal();
-      await refreshLogisticsAfterSave('trip');
+      await refreshLogisticsAfterSave('trip', { table: TABLES.TRUCK_TRIPS, row: insertedRow });
       showToast(payload.production_id ? 'Sefer kaydı üretim bilgisiyle eklendi' : 'Sefer kaydı eklendi');
     }catch(err){ alert(err.message || err); }
   }
@@ -7324,7 +7324,7 @@
       const insertedRow = (res.data && res.data[0]) ? res.data[0] : { ...payload, id:`temp_fuel_${Date.now()}` };
       state.fuel_logs = [insertedRow, ...state.fuel_logs.filter(r=>String(r.id)!==String(insertedRow.id))];
       closeModal();
-      await refreshLogisticsAfterSave('fuel');
+      await refreshLogisticsAfterSave('fuel', { table: TABLES.FUEL_LOGS, row: insertedRow });
       showToast(payload.production_id ? 'Yakıt kaydı üretim bağlantısıyla eklendi' : 'Yakıt kaydı eklendi');
     }catch(err){ alert(err.message || err); }
   }
@@ -7436,7 +7436,7 @@
       await updateWithOptionalColumns(TABLES.PRODUCTIONS, { drilled_meter: drilled, updated_at: nowIso() }, ['drilled_meter','updated_at'], matchedProduction.id);
       try{ await writeAuditLog({ tableName: TABLES.DRILL_METERAGE_LOGS, recordId: insertedRow.id, action:'insert', newData: payload }); }catch(e){}
       closeModal();
-      await refreshLogisticsAfterSave('drillMeterage');
+      await refreshLogisticsAfterSave('drillMeterage', { table: TABLES.DRILL_METERAGE_LOGS, row: insertedRow });
       showToast('Delici metraj kaydı üretim bağlantısıyla eklendi');
     }catch(err){ alert(err.message || err); }
   }
@@ -7489,7 +7489,7 @@
         await syncNextShiftProductionStartMeters(equipment_id, payload.shift_name, payload.shift_date, endVal, beforeLatest);
       }
       closeModal();
-      await refreshLogisticsAfterSave('meter');
+      await refreshLogisticsAfterSave('meter', { table: TABLES.METER_LOGS, row: insertedRow });
       showToast(payload.production_id ? 'Sayaç kaydı üretim bağlantısıyla eklendi' : 'Sayaç düzeltme kaydı eklendi');
     }catch(err){ alert(err.message || err); }
   }
@@ -10158,7 +10158,7 @@
     state.recordsLoading = true;
     const body = document.getElementById('recordsBody');
     if(body) body.innerHTML = `<div class="card"><div class="muted">Kayıtlar yükleniyor...</div></div>`;
-    const tables = ['productions','breakdowns','rentals','fuel_logs','drill_meterage_logs'];
+    const tables = ['productions','breakdowns','rentals','truck_trips','fuel_logs','meter_logs','drill_meterage_logs'];
     try{
       await Promise.all(tables.map(t=>fetchRecordPageData(t)));
     }catch(err){
@@ -11214,7 +11214,9 @@ function applyRecordFilters(rows){
     const prodRows = (state.recordsServer?.productions?.rows || []);
     const brRows = (state.recordsServer?.breakdowns?.rows || []);
     const rentRows = (state.recordsServer?.rentals?.rows || []);
+    const tripRows = (state.recordsServer?.truck_trips?.rows || []);
     const fuelRows = (state.recordsServer?.fuel_logs?.rows || []);
+    const meterRows = (state.recordsServer?.meter_logs?.rows || []);
     const drillRows = (state.recordsServer?.drill_meterage_logs?.rows || []);
     body.innerHTML = `
       ${renderRecordQualityControlPanel(prodRows, { title:'Kayıtlar Genel Kalite Kontrol Paneli', subtitle:'Bu panel Kayıtlar sayfasındaki filtrelenmiş üretim kayıtlarını ve bunlara bağlı sayaç, sefer, yakıt, delici metraj bağlantılarını kontrol eder. Kayıtlar sayfası geçmiş denetim ekranıdır; eksik girişler Lojistik > Kontrol Paneli üzerinden tamamlanır.' })}
@@ -11255,8 +11257,26 @@ function applyRecordFilters(rows){
           {label:'Süre (dk)', render:r=>String(r.duration_min ?? durationMin(r.start_at||r.start_time, r.end_at||r.end_time))},
           {label:'İşlem', render:r=>actionButtons('rentals', r, false, 'records')}
         ], 7)}
+        ${renderGroupedRecordSection('Sefer', 'truck_trips', tripRows, [
+          {label:'Kamyon', render:r=>escapeHtml(r.equipment_name || r.equipment_name_snapshot || findEquipmentById(r.equipment_id)?.name || '')},
+          {label:'Paket', render:r=>escapeHtml(r.package_name || packageNameById(r.package_id) || '')},
+          {label:'Rota', render:r=>escapeHtml((r.from_location || '') + (r.to_location ? ' → ' + r.to_location : ''))},
+          {label:'Sefer', render:r=>String(r.trip_count || 0)},
+          {label:'Vardiya', render:r=>escapeHtml(getShiftNameForRow(r) || '')},
+          {label:'Tarih', render:r=>fmtDate(r.recorded_at || r.created_at)},
+          {label:'İşlem', render:r=>actionButtons('truck_trips', r, false, 'records')}
+        ], 7)}
+        ${renderGroupedRecordSection('Sayaç', 'meter_logs', meterRows, [
+          {label:'Ekipman', render:r=>escapeHtml(r.equipment_name || r.equipment_name_snapshot || findEquipmentById(r.equipment_id)?.name || '')},
+          {label:'Başlangıç', render:r=>escapeHtml(formatMeterValueWithUnit(r.start_meter_value ?? '', r.meter_type || autoMeterTypeForEquipment(r.equipment_id)))},
+          {label:'Bitiş', render:r=>escapeHtml(formatMeterValueWithUnit(r.end_meter_value ?? r.meter_value ?? r.value ?? '', r.meter_type || autoMeterTypeForEquipment(r.equipment_id)))},
+          {label:'Fark', render:r=>escapeHtml(formatMeterValueWithUnit((Number((r.end_meter_value ?? r.meter_value ?? r.value) || 0) - Number(r.start_meter_value || 0)), r.meter_type || autoMeterTypeForEquipment(r.equipment_id)))},
+          {label:'Vardiya', render:r=>escapeHtml(getShiftNameForRow(r) || '')},
+          {label:'Tarih', render:r=>fmtDate(r.recorded_at || r.created_at)},
+          {label:'İşlem', render:r=>actionButtons('meter_logs', r, false, 'records')}
+        ], 7)}
         ${renderGroupedRecordSection('Yakıt', 'fuel_logs', fuelRows, [
-          {label:'Ekipman', render:r=>escapeHtml(r.equipment_name)},
+          {label:'Ekipman', render:r=>escapeHtml(r.equipment_name || r.equipment_name_snapshot || findEquipmentById(r.equipment_id)?.name || '')},
           {label:'Litre', render:r=>escapeHtml(r.liters)},
           {label:'Sayaç', render:r=>escapeHtml(formatMeterValueWithUnit(r.meter_value??'', r.meter_type||autoMeterTypeForEquipment(r.equipment_id)))},
           {label:'Çalışma Yeri', render:r=>escapeHtml(recordLocationValue(r))},
@@ -12940,24 +12960,36 @@ function renderUsers(){
     }catch(e){}
   }
 
-  async function refreshLogisticsAfterSave(targetPage){
-    // Saha modu stabilizasyon:
-    // Lojistik Kontrol Paneli veya Kayıtlar üzerinden Smart Entry ile giriş yapıldığında
-    // kullanıcı aynı denetim ekranında kalır; görev listesi anında yeniden hesaplanır.
-    // Alt liste sayfalarında manuel giriş yapılırsa o sayfa korunur.
-    // Veri modeli, Supabase kolonları ve diğer modüller değiştirilmez.
+  async function refreshLogisticsAfterSave(targetPage, savedRecord){
+    // v10.6.4: Kontrol Paneli girişleri anında hem alt lojistik sayfalarına hem Kayıtlar ekranına yansır.
     const currentPageBeforeSave = state.currentPage || '';
     const pageToKeep = (currentPageBeforeSave === 'logisticsControl' || currentPageBeforeSave === 'records')
       ? currentPageBeforeSave
       : (targetPage || currentPageBeforeSave || 'dashboard');
+    const savedTable = savedRecord?.table || '';
+    const savedRow = savedRecord?.row || null;
+    const savedListName = savedTable ? stateListNameForRecordTable(savedTable) : '';
+    function applyImmediateSavedRow(){
+      try{
+        if(savedListName && savedRow && Array.isArray(state[savedListName]) && !state[savedListName].some(r=>String(r.id||'')===String(savedRow.id||''))){
+          state[savedListName] = [savedRow, ...state[savedListName]];
+        }
+        if(savedTable && state.recordsServer){
+          delete state.recordsServer[savedTable];
+          delete state.recordsServer[savedListName];
+        }
+      }catch(e){}
+    }
     try{ localStorage.setItem('maden_last_stabilized_save', JSON.stringify({ at:Date.now(), kind:targetPage || '', page:pageToKeep })); }catch(e){}
     try{
+      applyImmediateSavedRow();
       await loadAllSafe();
+      applyImmediateSavedRow();
       renderAll();
       showPage(pageToKeep);
       try{ markQualityPanelStabilizedDone(pageToKeep); }catch(e){}
       if(pageToKeep === 'records'){
-        try{ await loadRecordsPageData(); }catch(e){ console.error('records refresh after logistics save', e); }
+        try{ await loadRecordsPageData(); renderRecordsBody(); }catch(e){ console.error('records refresh after logistics save', e); }
       }
       if(pageToKeep === 'dashboardPro'){
         try{ await renderDashboardProData(); }catch(e){ console.error('dashboard pro refresh after logistics save', e); }
@@ -12966,8 +12998,7 @@ function renderUsers(){
       try{ applyLanguage(); }catch(e){}
     }catch(err){
       console.error('refreshLogisticsAfterSave error', err);
-      // Son çare: mevcut state ile yine de ekranı yenile, kullanıcı kaydı görsün.
-      try{ renderAll(); showPage(pageToKeep); }catch(e){}
+      try{ applyImmediateSavedRow(); renderAll(); showPage(pageToKeep); }catch(e){}
       throw err;
     }
   }
