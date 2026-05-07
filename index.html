@@ -6788,16 +6788,69 @@
 
 
   async function finalizeExpiredOpenProductionsBeforeStart(equipmentId){
-    // v10.6.2 FIX: Yeni vardiyaya geçildiğinde önceki vardiyadan açık kalan üretimler otomatik vardiya sonu saatine kapatılır.
-    // Böylece özellikle deliciler yeni vardiyada "önceki vardiyadan açık üretim" hatasına takılmaz; eksik sayaç/yakıt/metraj işleri Kontrol Paneli'ne düşer.
+    // v10.6.5 FIX: Önceki vardiyadan açık kalan üretim kaydı, özellikle DELİCİLERDE,
+    // yeni vardiya başlangıcını kilitlememeli. Vardiyası bitmiş açık kayıt otomatik kapanır;
+    // eksik sayaç/yakıt/delici metraj işleri Lojistik > Kontrol Paneli'ne düşer.
     try{
-      const before = (state.productions || []).filter(r=>!r?.deleted_at && isOpenRow(r) && (!equipmentId || String(r.equipment_id || '') === String(equipmentId || '')) && isShiftExpiredOpenRow(r));
-      if(!before.length) return false;
-      const changed = await autoClosePreviousShiftOpenProductions();
-      if(changed){
-        await refreshData(false);
+      const currentBucket = getCurrentShiftBucketInfo();
+      const openRows = (state.productions || []).filter(r=>{
+        if(!r || r.deleted_at) return false;
+        if(!isOpenRow(r)) return false;
+        if(equipmentId && String(r.equipment_id || '') !== String(equipmentId || '')) return false;
+        return true;
+      });
+      if(!openRows.length) return false;
+
+      let changed = false;
+      const nowMs = Date.now();
+
+      for(const row of openRows){
+        const rowBucket = resolveShiftBucketForRow(row);
+        const rowKey = String(rowBucket?.shift_key || getRowShiftBucketKey(row) || '');
+        const currentKey = String(currentBucket?.shift_key || '');
+
+        // Hâlâ aktif vardiyaya ait olan kayıt kapatılmaz.
+        if(currentKey && rowKey && rowKey === currentKey) continue;
+
+        // Vardiya bitiş saati hesaplanabiliyorsa vardiya sonuna kapat.
+        // Hesaplanamıyorsa ve kayıt bugünkü aktif vardiyaya ait değilse güvenli şekilde şimdiye kapat.
+        let endedAt = '';
+        if(rowBucket?.shift_name && rowBucket?.shift_date){
+          const shiftEndMs = getShiftBucketEndMs(rowBucket.shift_name, rowBucket.shift_date);
+          if(Number.isFinite(shiftEndMs) && shiftEndMs > 0 && shiftEndMs <= nowMs){
+            endedAt = getShiftEndIsoByBucket(rowBucket);
+          }
+        }
+
+        if(!endedAt){
+          const rowShiftName = String(getShiftNameForRow(row) || '').trim();
+          const curShiftName = String(currentBucket?.name || '').trim();
+          const rowShiftDate = String(row.shift_date || rowBucket?.shift_date || '').slice(0,10);
+          const curShiftDate = String(currentBucket?.shift_date || todayStr()).slice(0,10);
+          const clearlyPrevious = (rowShiftDate && rowShiftDate < curShiftDate) || (rowShiftDate && curShiftDate && rowShiftDate !== curShiftDate) || (rowShiftName && curShiftName && rowShiftName !== curShiftName);
+          if(!clearlyPrevious) continue;
+          endedAt = nowIso();
+        }
+
+        const startRaw = row.start_at || row.start_time || row.created_at || '';
+        const startMs = new Date(startRaw).getTime();
+        const endMs = new Date(endedAt).getTime();
+        if(Number.isFinite(startMs) && Number.isFinite(endMs) && endMs < startMs) endedAt = nowIso();
+
+        const payload = { end_at: endedAt, end_time: endedAt, updated_at: nowIso() };
+        const res = await updateWithOptionalColumns(TABLES.PRODUCTIONS, payload, ['end_at','end_time','updated_at'], row.id);
+        if(res?.error){
+          console.error('finalize previous open production error', { id: row.id, equipment_id: row.equipment_id, error: res.error });
+          continue;
+        }
+        row.end_at = endedAt;
+        row.end_time = endedAt;
+        row.updated_at = payload.updated_at;
+        changed = true;
       }
-      return !!changed;
+
+      if(changed) await refreshData(false);
+      return changed;
     }catch(e){
       console.error('finalizeExpiredOpenProductionsBeforeStart', e);
       return false;
