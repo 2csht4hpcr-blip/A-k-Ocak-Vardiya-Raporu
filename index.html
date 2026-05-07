@@ -508,7 +508,7 @@
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <script>
 (function(){
-  const DEVELOPMENT_BUILD_NAME = 'index_maden_takip_sistemi_gpssiz_v9_phase1_i18n_stabilizasyon_2026-05-06';
+  const DEVELOPMENT_BUILD_NAME = 'index_maden_takip_sistemi_gpssiz_v10_6_3_local_time_fuel_edit_refresh_2026-05-07';
   // v8 stabilizasyon: mevcut çalışan akış korunur; yeni loader/arıza/vardiya mantığı fallback ile eklenir.
   function loadShiftConfig(){
     try{
@@ -587,7 +587,7 @@
     try{
       const sb = state.sb || await initClient();
       if(!sb || !state.user) throw new Error('Supabase hazır değil');
-      const payload = { key:'package_tonnage_factors', value: cleaned, updated_at: new Date().toISOString(), updated_by: state.user.id };
+      const payload = { key:'package_tonnage_factors', value: cleaned, updated_at: localNowForDb(), updated_by: state.user.id };
       const res = await sb.from('app_settings').upsert(payload, { onConflict:'key' });
       if(res.error) throw res.error;
       state.packageTonnageSource = 'supabase';
@@ -637,7 +637,7 @@
   async function saveAppSettingValue(key, value){
     const sb = state.sb || await initClient();
     if(!sb || !state.user) throw new Error('Supabase hazır değil');
-    const payload = { key, value, updated_at: new Date().toISOString(), updated_by: state.user.id };
+    const payload = { key, value, updated_at: localNowForDb(), updated_by: state.user.id };
     const res = await sb.from('app_settings').upsert(payload, { onConflict:'key' });
     if(res.error) throw res.error;
     return true;
@@ -781,7 +781,7 @@
     try{
       const sb = state.sb || await initClient();
       if(!sb || !state.user) throw new Error('Supabase hazır değil');
-      const payload = { key:'alert_rules', value: cleaned, updated_at: new Date().toISOString(), updated_by: state.user.id };
+      const payload = { key:'alert_rules', value: cleaned, updated_at: localNowForDb(), updated_by: state.user.id };
       const res = await sb.from('app_settings').upsert(payload, { onConflict:'key' });
       if(res.error) throw res.error;
       state.alertRulesSource = 'supabase';
@@ -4627,6 +4627,14 @@
   }
   function todayStr(){ return asLocalIsoString(new Date()).slice(0,10); }
   function nowIso(){ return asLocalIsoString(new Date()); }
+  function localDateOnlyFromValue(value){
+    try{
+      const d = value ? new Date(value) : new Date();
+      if(Number.isNaN(d.getTime())) return todayStr();
+      return `${d.getFullYear()}-${padLocal(d.getMonth()+1)}-${padLocal(d.getDate())}`;
+    }catch(e){ return todayStr(); }
+  }
+  function localNowForDb(){ return nowIso(); }
   function num(v){ const n = Number(v); return Number.isFinite(n) ? n : 0; }
   function isTruckEquipment(eq){ return /kamyon/i.test(String(eq?.type || '')); }
   function isDrillEquipment(eq){ return /delgi|delici|drill/i.test(String(eq?.type || '') + ' ' + String(eq?.name || '')); }
@@ -4937,6 +4945,34 @@
     }catch(e){}
   }
 
+  function isModalOpen(){
+    try{ return !document.getElementById('modalOverlay')?.classList.contains('hidden'); }catch(e){ return false; }
+  }
+  function isUserEditingForm(){
+    try{
+      const el = document.activeElement;
+      if(isModalOpen()) return true;
+      if(!el) return false;
+      const tag = String(el.tagName || '').toLowerCase();
+      return ['input','select','textarea','button'].includes(tag) || !!el.isContentEditable;
+    }catch(e){ return false; }
+  }
+  function scheduleBackgroundRefresh(reason){
+    try{
+      if(window.__madenBackgroundRefreshTimer) clearTimeout(window.__madenBackgroundRefreshTimer);
+      const delay = isUserEditingForm() ? 120000 : 45000;
+      window.__madenBackgroundRefreshTimer = setTimeout(async ()=>{
+        try{
+          if(document.getElementById('appView')?.classList.contains('hidden')) return;
+          if(!state.user) return;
+          if(isUserEditingForm()){ scheduleBackgroundRefresh(reason); return; }
+          await refreshData();
+          try{ renderAll(); }catch(_e){}
+        }catch(e){ console.error('background refresh error', reason, e); }
+      }, delay);
+    }catch(e){ console.error('scheduleBackgroundRefresh error', e); }
+  }
+
   async function setupRealtimeSubscriptions(){
     try{
       const sb = await initClient();
@@ -4946,9 +4982,9 @@
         const channel = sb.channel(`rt-${tableName}-${Date.now()}-${Math.random().toString(36).slice(2,7)}`)
           .on('postgres_changes', { event: '*', schema: 'public', table: tableName }, async ()=>{
             try{
-              await refreshData();
+              scheduleBackgroundRefresh(tableName);
             }catch(err){
-              console.error('realtime refresh error', tableName, err);
+              console.error('realtime refresh schedule error', tableName, err);
             }
           })
           .subscribe();
@@ -6554,6 +6590,7 @@
             <div class="form-field"><label>Başlangıç Sayaç</label><input id="m_edit_start_meter_value" type="number" step="0.01" value="${escapeHtml(getEffectiveProductionStartMeter(row) ?? row.start_meter_value ?? '')}"></div>
             <div class="form-field"><label>Bitiş Sayaç</label><input id="m_edit_end_meter_value" type="number" step="0.01" value="${escapeHtml(getEffectiveProductionEndMeter(row) ?? row.end_meter_value ?? '')}"></div>
             <div class="form-field"><label>Sefer Toplamı</label><input id="m_edit_trip_count" type="number" step="1" value="${escapeHtml(row.trip_count ?? 0)}"></div>
+            <div class="form-field"><label>Verilen Yakıt (L)</label><input id="m_edit_fuel_liters" type="number" step="0.01" value="${escapeHtml(productionFuelTotal(row) || '')}" placeholder="0 yazılırsa yakıt kaydı tamamlandı sayılır"></div>
             <div class="form-field"><label>Durum</label><select id="m_edit_status"><option value="active" ${String(row.status || '')==='active'?'selected':''}>Aktif</option><option value="finished" ${String(row.status || '')==='finished'?'selected':''}>Bitti</option><option value="" ${!row.status?'selected':''}>Boş</option></select></div>
             <div class="form-field"><label>Kayıt Zamanı</label><input id="m_edit_created_at" type="datetime-local" value="${escapeHtml(createdAt)}"></div>
           </div>
@@ -7511,6 +7548,45 @@
     }catch(err){ alert(err.message || err); }
   }
 
+  async function upsertProductionFuelFromEdit(row, productionPayload){
+    try{
+      const input = document.getElementById('m_edit_fuel_liters');
+      if(!input) return;
+      const raw = String(input.value ?? '').trim();
+      if(raw === '') return;
+      const liters = num(raw);
+      if(!Number.isFinite(liters) || liters < 0) throw new Error('Yakıt litre değeri geçersiz');
+      const productionId = row.id;
+      const equipmentId = productionPayload.equipment_id || row.equipment_id;
+      const endMeterValue = productionPayload.end_meter_value ?? row.end_meter_value ?? row.meter_value ?? null;
+      const recordedAt = productionPayload.end_at || row.end_at || row.end_time || productionPayload.start_at || row.start_at || nowIso();
+      const fuelPayload = {
+        equipment_id: equipmentId,
+        equipment_name_snapshot: findEquipmentById(equipmentId)?.name || row.equipment_name || row.equipment_name_snapshot || '',
+        liters,
+        meter_type: autoMeterTypeForEquipment(equipmentId),
+        meter_value: endMeterValue,
+        production_id: productionId,
+        shift_name: productionPayload.shift_name || getShiftNameForRow(row) || '',
+        shift_date: productionPayload.shift_date || row.shift_date || localDateOnlyFromValue(recordedAt),
+        logistics_shift_date: productionPayload.shift_date || row.shift_date || localDateOnlyFromValue(recordedAt),
+        recorded_at: recordedAt,
+        updated_by: state.user?.id || null,
+        source: 'production_edit'
+      };
+      const existing = (state.fuel_logs || []).filter(f=>!f.deleted_at && String(f.production_id || '') === String(productionId));
+      if(existing.length){
+        const upd = await updateWhereWithOptionalColumns(TABLES.FUEL_LOGS, fuelPayload, ['equipment_name_snapshot','production_id','shift_name','shift_date','logistics_shift_date','recorded_at','updated_by','source'], 'production_id', productionId);
+        if(upd.error) throw upd.error;
+      }else{
+        fuelPayload.created_at = recordedAt || nowIso();
+        fuelPayload.created_by = state.user?.id || null;
+        const ins = await insertWithOptionalColumns(TABLES.FUEL_LOGS, fuelPayload, ['equipment_name_snapshot','production_id','shift_name','shift_date','logistics_shift_date','recorded_at','created_by','updated_by','source']);
+        if(ins.error) throw ins.error;
+      }
+    }catch(e){ throw e; }
+  }
+
   async function saveEditRecord(){
     try{
       const { table, row } = state.modal.data;
@@ -7749,6 +7825,7 @@
         if(fuelLinkRes.error) throw fuelLinkRes.error;
         const meterLinkRes = await updateWhereWithOptionalColumns(TABLES.METER_LOGS, relatedFuelMeterPayload, ['production_id','shift_name','shift_date','logistics_shift_date'], 'production_id', row.id);
         if(meterLinkRes.error) throw meterLinkRes.error;
+        await upsertProductionFuelFromEdit(row, payload);
         const updatedEq = findEquipmentById(payload.equipment_id);
         const isExcavator = String(updatedEq?.type || '').toLocaleLowerCase('tr-TR').includes('eksk');
         if(isExcavator){
@@ -10284,7 +10361,7 @@ function applyRecordFilters(rows){
     if(!confirmed) return;
     const ids = rows.map(r=>r.id).filter(Boolean);
     if(!ids.length) return;
-    const { error } = await state.sb.from(resolveDbTableName(tableName)).update({ deleted_at:new Date().toISOString(), deleted_by: state.user?.id || null }).in('id', ids);
+    const { error } = await state.sb.from(resolveDbTableName(tableName)).update({ deleted_at:localNowForDb(), deleted_by: state.user?.id || null }).in('id', ids);
     if(error) throw error;
     await refreshAfterRecordDelete(tableName, ids, 'soft');
     renderRecords();
@@ -11253,7 +11330,7 @@ function renderDeleted(){
         role,
         assigned_shift_names: assigned,
         can_view_past_shifts: canViewPast,
-        updated_at: new Date().toISOString()
+        updated_at: localNowForDb()
       };
       if(isSuperAdmin()){
         const companyId = String(document.getElementById(`u_company_${userId}`)?.value || '').trim();
@@ -11286,7 +11363,7 @@ function renderDeleted(){
         ? `${row.full_name || row.email || 'Kullanıcı'} tekrar aktif yapılsın mı?`
         : `${row.full_name || row.email || 'Kullanıcı'} pasif yapılsın mı? Bu kullanıcı sisteme giriş yapamaz.`;
       if(!confirm(msg)) return;
-      const payload = { is_active: !!makeActive, updated_at: new Date().toISOString() };
+      const payload = { is_active: !!makeActive, updated_at: localNowForDb() };
       const sb = await initClient();
       const res = await sb.from('profiles').update(payload).eq('id', userId);
       if(res.error) throw res.error;
@@ -11342,20 +11419,20 @@ function renderDeleted(){
     try{
       const d = v ? new Date(v) : new Date();
       if(Number.isNaN(d.getTime())) return todayStr();
-      return d.toISOString().slice(0,10);
+      return localDateOnlyFromValue(d);
     }catch(e){ return todayStr(); }
   }
   function addDaysToDateStr(dateStr, days){
     const d = new Date(dateStr + 'T00:00:00');
     d.setDate(d.getDate() + days);
-    return d.toISOString().slice(0,10);
+    return localDateOnlyFromValue(d);
   }
   function mondayOfWeek(dateStr){
     const d = new Date((dateStr || todayStr()) + 'T00:00:00');
     const day = d.getDay(); // 0 Sun
     const diff = day === 0 ? -6 : 1 - day;
     d.setDate(d.getDate() + diff);
-    return d.toISOString().slice(0,10);
+    return localDateOnlyFromValue(d);
   }
   async function fetchSummaryRange(startDate, endDate){
     const sb = state.sb || await initClient();
@@ -13028,11 +13105,13 @@ function renderUsers(){
     try{
       if(document.getElementById('appView')?.classList.contains('hidden')) return;
       if(!state.user) return;
+      if(isUserEditingForm()) return;
       await refreshData();
+      try{ renderAll(); }catch(_e){}
     }catch(e){
       console.error('auto refresh error', e);
     }
-  }, 60000);
+  }, 300000);
   document.getElementById('logoutBtn').addEventListener('click', logout);
   try{ applyLanguage(); }catch(e){}
 
