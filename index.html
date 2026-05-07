@@ -566,7 +566,7 @@
     try{
       const sb = state.sb || await initClient();
       if(!sb || !state.user) return false;
-      const res = await sb.from('app_settings').select('value').eq('key', 'package_tonnage_factors').maybeSingle();
+      const res = await sb.from('app_settings').select('value').eq('key', scopedAppSettingKey('package_tonnage_factors')).maybeSingle();
       if(res.error) throw res.error;
       const cleaned = normalizePackageTonnageFactors(res.data?.value || {});
       if(Object.keys(cleaned).length){
@@ -587,7 +587,7 @@
     try{
       const sb = state.sb || await initClient();
       if(!sb || !state.user) throw new Error('Supabase hazır değil');
-      const payload = { key:'package_tonnage_factors', value: cleaned, updated_at: localNowForDb(), updated_by: state.user.id };
+      const payload = { key:scopedAppSettingKey('package_tonnage_factors'), value: cleaned, updated_at: localNowForDb(), updated_by: state.user.id };
       const res = await sb.from('app_settings').upsert(payload, { onConflict:'key' });
       if(res.error) throw res.error;
       state.packageTonnageSource = 'supabase';
@@ -670,7 +670,7 @@
     }
   }
   async function loadTruckModelsRemote(){
-    const remote = await loadAppSettingValue('truck_models');
+    const remote = await loadAppSettingValue(scopedAppSettingKey('truck_models'));
     if(remote){
       const cleaned = normalizeTruckModels(remote);
       state.truckModels = cleaned;
@@ -686,7 +686,7 @@
     state.truckModels = cleaned;
     saveTruckModels(cleaned);
     try{
-      await saveAppSettingValue('truck_models', cleaned);
+      await saveAppSettingValue(scopedAppSettingKey('truck_models'), cleaned);
       state.truckModelsSource = 'supabase';
       if(showSavedToast) showToast('Kamyon modelleri Supabase kaydedildi');
       return true;
@@ -697,7 +697,7 @@
     }
   }
   async function loadEquipmentModelMapRemote(){
-    const remote = await loadAppSettingValue('equipment_model_map');
+    const remote = await loadAppSettingValue(scopedAppSettingKey('equipment_model_map'));
     if(remote){
       const cleaned = normalizeEquipmentModelMap(remote);
       state.equipmentModelMap = cleaned;
@@ -713,7 +713,7 @@
     state.equipmentModelMap = cleaned;
     saveEquipmentModelMap(cleaned);
     try{
-      await saveAppSettingValue('equipment_model_map', cleaned);
+      await saveAppSettingValue(scopedAppSettingKey('equipment_model_map'), cleaned);
       state.equipmentModelMapSource = 'supabase';
       if(showSavedToast) showToast('Ekipman model eşleşmeleri Supabase kaydedildi');
       return true;
@@ -1963,6 +1963,7 @@
   async function changeSuperScopeCompany(companyId){
     state.saasSelectedCompanyId = String(companyId || '');
     state.saasSelectedSiteId = '';
+    await loadScopedDefinitionSettings();
     await loadAllSafe();
     renderAll();
     applyRolePermissions();
@@ -1971,6 +1972,7 @@
   }
   async function changeSuperScopeSite(siteId){
     state.saasSelectedSiteId = String(siteId || '');
+    await loadScopedDefinitionSettings();
     await loadAllSafe();
     renderAll();
     applyRolePermissions();
@@ -1980,6 +1982,7 @@
   async function clearSuperScope(){
     state.saasSelectedCompanyId = '';
     state.saasSelectedSiteId = '';
+    await loadScopedDefinitionSettings();
     await loadAllSafe();
     renderAll();
     applyRolePermissions();
@@ -5260,6 +5263,33 @@
   function selectedSiteIdForScope(){
     return isSuperAdmin() ? String(state.saasSelectedSiteId || '') : String(state.profile?.site_id || '');
   }
+
+  function currentDefinitionScopeIds(){
+    // v10.6.6: Tanımlar her firma/saha için ayrı çalışır.
+    // Super Admin seçtiği şirket/saha kapsamını; normal kullanıcı kendi atanmış şirket/sahasını kullanır.
+    const companyId = selectedCompanyIdForScope() || String(state.profile?.company_id || '');
+    const siteId = selectedSiteIdForScope() || String(state.profile?.site_id || '');
+    return { companyId:String(companyId || ''), siteId:String(siteId || '') };
+  }
+  function rowMatchesCurrentDefinitionScope(row){
+    if(!row) return false;
+    const { companyId, siteId } = currentDefinitionScopeIds();
+    const rowCompany = String(row.company_id || '');
+    const rowSite = String(row.site_id || '');
+    if(companyId && rowCompany && rowCompany !== companyId) return false;
+    if(siteId && rowSite && rowSite !== siteId) return false;
+    if(companyId && rowCompany && rowCompany === companyId && !siteId) return true;
+    if(siteId && rowSite && rowSite === siteId) return true;
+    // Eski kayıtlarda company_id/site_id yoksa mevcut kapsamda göster; yeni kayıtlarda kapsam yazılır.
+    return !rowCompany && !rowSite;
+  }
+  function scopedAppSettingKey(key){
+    const { companyId, siteId } = currentDefinitionScopeIds();
+    if(['truck_models','equipment_model_map','package_tonnage_factors'].includes(String(key || ''))){
+      return [key, companyId || 'global_company', siteId || 'global_site'].join('__');
+    }
+    return key;
+  }
   function tableSupportsCompanyScope(table){
     return [TABLES.EQUIPMENTS, TABLES.PACKAGES, TABLES.PRODUCTIONS, TABLES.BREAKDOWNS, TABLES.RENTALS, TABLES.FUEL_LOGS, TABLES.METER_LOGS, TABLES.TRUCK_TRIPS, TABLES.DRILL_METERAGE_LOGS, TABLES.DASHBOARD_PRO_FINAL, TABLES.PROFILES].includes(table);
   }
@@ -5491,6 +5521,13 @@
       console.error('autoClosePreviousShiftOpenBreakdowns', err);
       return false;
     }
+  }
+
+  async function loadScopedDefinitionSettings(){
+    // Firma/saha değişince kamyon modelleri, ekipman-model eşleştirmesi ve paket faktörleri yeni kapsama göre yüklenir.
+    await loadTruckModelsRemote();
+    await loadEquipmentModelMapRemote();
+    await loadPackageTonnageFactorsRemote();
   }
 
   async function loadAllSafe(){
@@ -7912,21 +7949,30 @@
       const type = state.modal.type;
       if(type === 'definitionEquipment'){
         const row = state.modal.data?.row || {};
+        const { companyId, siteId } = currentDefinitionScopeIds();
         const payload = {
           name: document.getElementById('m_def_name').value.trim(),
-          type: document.getElementById('m_def_type').value.trim()
+          type: document.getElementById('m_def_type').value.trim(),
+          company_id: companyId || null,
+          site_id: siteId || null
         };
         const truckModelId = document.getElementById('m_def_truck_model_id')?.value || '';
         if(!payload.name) throw new Error('Ekipman adı gerekli');
         if(!payload.type) throw new Error('Ekipman tipi gerekli');
         let res;
         const payloadWithModel = { ...payload, truck_model_id: truckModelId || null };
+        const payloadNoScope = { name: payload.name, type: payload.type };
+        const payloadNoScopeWithModel = { ...payloadNoScope, truck_model_id: truckModelId || null };
         if(row.id){
           res = await state.sb.from('equipments').update(payloadWithModel).eq('id', row.id);
           if(res.error && optionalColumnError(res.error, ['truck_model_id'])) res = await state.sb.from('equipments').update(payload).eq('id', row.id);
+          if(res.error && optionalColumnError(res.error, ['company_id','site_id'])) res = await state.sb.from('equipments').update(payloadNoScopeWithModel).eq('id', row.id);
+          if(res.error && optionalColumnError(res.error, ['truck_model_id'])) res = await state.sb.from('equipments').update(payloadNoScope).eq('id', row.id);
         } else {
           res = await state.sb.from('equipments').insert(payloadWithModel).select('*').single();
           if(res.error && optionalColumnError(res.error, ['truck_model_id'])) res = await state.sb.from('equipments').insert(payload).select('*').single();
+          if(res.error && optionalColumnError(res.error, ['company_id','site_id'])) res = await state.sb.from('equipments').insert(payloadNoScopeWithModel).select('*').single();
+          if(res.error && optionalColumnError(res.error, ['truck_model_id'])) res = await state.sb.from('equipments').insert(payloadNoScope).select('*').single();
         }
         if(res.error) throw res.error;
         const equipmentTargetId = row.id || res.data?.id;
@@ -7948,20 +7994,46 @@
         if(!name) throw new Error('Paket adı gerekli');
         if(!Number.isFinite(tonnageFactor) || tonnageFactor <= 0) throw new Error('Paket faktörü 0’dan büyük olmalı');
 
+        const { companyId, siteId } = currentDefinitionScopeIds();
+        const scopedPackagePayload = { name, material_type: materialType, tonnage_factor: tonnageFactor, company_id: companyId || null, site_id: siteId || null };
+        const scopedPackageNoFactor = { name, material_type: materialType, company_id: companyId || null, site_id: siteId || null };
+        const scopedPackageMaterialFallback = { name, material: materialType, company_id: companyId || null, site_id: siteId || null };
+        const packageNoScope = { name, material_type: materialType, tonnage_factor: tonnageFactor };
+        const packageNoScopeNoFactor = { name, material_type: materialType };
+        const packageNoScopeMaterialFallback = { name, material: materialType };
+
         let res = row.id
-          ? await state.sb.from('packages').update({ name, material_type: materialType, tonnage_factor: tonnageFactor }).eq('id', row.id).select('*').single()
-          : await state.sb.from('packages').insert({ name, material_type: materialType, tonnage_factor: tonnageFactor }).select('*').single();
+          ? await state.sb.from('packages').update(scopedPackagePayload).eq('id', row.id).select('*').single()
+          : await state.sb.from('packages').insert(scopedPackagePayload).select('*').single();
+
+        if(res.error && optionalColumnError(res.error, ['company_id','site_id'])){
+          res = row.id
+            ? await state.sb.from('packages').update(packageNoScope).eq('id', row.id).select('*').single()
+            : await state.sb.from('packages').insert(packageNoScope).select('*').single();
+        }
 
         if(res.error && optionalColumnError(res.error, ['tonnage_factor'])){
           res = row.id
-            ? await state.sb.from('packages').update({ name, material_type: materialType }).eq('id', row.id).select('*').single()
-            : await state.sb.from('packages').insert({ name, material_type: materialType }).select('*').single();
+            ? await state.sb.from('packages').update(scopedPackageNoFactor).eq('id', row.id).select('*').single()
+            : await state.sb.from('packages').insert(scopedPackageNoFactor).select('*').single();
+        }
+
+        if(res.error && optionalColumnError(res.error, ['company_id','site_id'])){
+          res = row.id
+            ? await state.sb.from('packages').update(packageNoScopeNoFactor).eq('id', row.id).select('*').single()
+            : await state.sb.from('packages').insert(packageNoScopeNoFactor).select('*').single();
         }
 
         if(res.error && optionalColumnError(res.error, ['material_type'])){
           res = row.id
-            ? await state.sb.from('packages').update({ name, material: materialType }).eq('id', row.id).select('*').single()
-            : await state.sb.from('packages').insert({ name, material: materialType }).select('*').single();
+            ? await state.sb.from('packages').update(scopedPackageMaterialFallback).eq('id', row.id).select('*').single()
+            : await state.sb.from('packages').insert(scopedPackageMaterialFallback).select('*').single();
+        }
+
+        if(res.error && optionalColumnError(res.error, ['company_id','site_id'])){
+          res = row.id
+            ? await state.sb.from('packages').update(packageNoScopeMaterialFallback).eq('id', row.id).select('*').single()
+            : await state.sb.from('packages').insert(packageNoScopeMaterialFallback).select('*').single();
         }
 
         if(res.error && optionalColumnError(res.error, ['material'])){
@@ -9914,8 +9986,11 @@
   }
 
   function renderDefinitions(){
-    const activeEquipments = state.equipments.filter(e=>!e.deleted_at);
-    const activePackages = state.packages.filter(p=>!p.deleted_at);
+    const activeEquipments = state.equipments.filter(e=>!e.deleted_at && rowMatchesCurrentDefinitionScope(e));
+    const activePackages = state.packages.filter(p=>!p.deleted_at && rowMatchesCurrentDefinitionScope(p));
+    const { companyId: defCompanyId, siteId: defSiteId } = currentDefinitionScopeIds();
+    const defCompanyName = (state.companies || []).find(c=>String(c.id)===String(defCompanyId))?.name || (defCompanyId ? defCompanyId : 'Genel');
+    const defSiteName = (state.sites || []).find(st=>String(st.id)===String(defSiteId))?.name || (defSiteId ? defSiteId : 'Genel');
     const equipmentTypeCounts = {};
     activeEquipments.forEach(e=>{
       const key = String(e.type || 'Belirsiz').trim() || 'Belirsiz';
@@ -9953,6 +10028,7 @@
       <div class="card" style="margin-bottom:16px">
         <div style="font-weight:800;font-size:18px;margin-bottom:6px">Yetki Ayrımı</div>
         <div class="muted">${definitionsNotice}</div>
+        <div class="notice" style="margin-top:10px"><b>Aktif Tanım Kapsamı:</b> ${escapeHtml(defCompanyName)} / ${escapeHtml(defSiteName)} — Ekipman, paket, kamyon modeli ve model eşleştirme bu şirket/saha için ayrı kaydedilir.</div>
       </div>
 
       ${canShift ? renderShiftConfigCard() : `
@@ -10029,7 +10105,7 @@
             <button data-open-modal="definitionTruckModel">Yeni Kamyon Modeli</button>
           </div>
           <h3>Operasyon Tanımları / Kamyon Modelleri <span class="muted" style="font-size:13px">(${(state.truckModels||[]).length})</span></h3>
-          <div class="subtle" style="margin-bottom:12px">Tonaj hesabında kullanılan nominal kapasite burada tutulur.</div>
+          <div class="subtle" style="margin-bottom:12px">Tonaj hesabında kullanılan nominal kapasite burada tutulur. Bu liste aktif şirket/sahaya özeldir.</div>
           <div class="table-wrap">
             <table>
               <thead><tr><th>Model</th><th>Nominal Tonaj</th><th>İşlem</th></tr></thead>
@@ -12418,6 +12494,7 @@ async function exportWeeklyExcel(){
   async function saasSelectCompany(companyId){
     state.saasSelectedCompanyId = String(companyId || '');
     state.saasSelectedSiteId = '';
+    await loadScopedDefinitionSettings();
     await loadAllSafe();
     renderAll();
     applyRolePermissions();
@@ -12427,6 +12504,7 @@ async function exportWeeklyExcel(){
   async function saasClearCompanySelection(){
     state.saasSelectedCompanyId = '';
     state.saasSelectedSiteId = '';
+    await loadScopedDefinitionSettings();
     await loadAllSafe();
     renderAll();
     applyRolePermissions();
@@ -13211,7 +13289,7 @@ function renderUsers(){
   document.getElementById('newPassword')?.addEventListener('keydown', e=>{ if(e.key==='Enter') saveNewPasswordFromLink(); });
   document.getElementById('newPasswordConfirm')?.addEventListener('keydown', e=>{ if(e.key==='Enter') saveNewPasswordFromLink(); });
 
-  Object.assign(window, { openModal, closeModal, existingLogisticsRowForProduction, assertNoDuplicateProductionLog, assertProductionStartAllowedFinal, markQualityPanelStabilizedDone, fillTruckRouteFromExcavator, updateAutoMeterLabels, updateProductionStartMeterHints, updateTripProductionContext, updateFuelProductionContext, updateMeterCorrectionContext, toggleProductionEditLinkedField, refreshLogisticsEquipmentSelect, markShiftSelectManual, continueBreakdownToCurrentShift, finishBreakdownFromWarning, saveStartProductionExcavator, saveStartProductionTruck, saveStartProductionDrill, saveStartProductionOther, saveEndProduction, saveStartBreakdown, saveEndBreakdown, saveStartRental, saveEndRental, saveNewTrip, saveNewFuel, saveNewMeter, saveNewDrillMeterage, updateDrillMeterageProductionContext, confirmSoftDelete, restoreDeleted, deleteAllDeletedRecordsNow, deleteDeletedOlderThan30Days, saveEditRecord, saveDefinition, deleteTruckModel, toggleDefinitionTruckModelField, renderShiftConfigInputs, saveShiftConfigFromForm, renderShiftConfigCardRefresh, applyRecordFiltersFromUI, resetRecordFilters, bulkDeleteRecordTable, exportRecordsToExcel, saveUserRoleSettings, toggleUserActive, inviteUserFromPanel, syncInviteSiteOptions, syncUserSiteOptions, renderSaasAdmin, syncSaasAdminSiteOptions, createSaasCompany, createSaasSite, toggleSaasCompany, toggleSaasSite, deleteSaasCompanyIfEmpty, deleteSaasSiteIfEmpty, saasSelectCompany, saasClearCompanySelection, inviteCompanyAdminFromSaasPanel, sendPasswordResetEmail, saveNewPasswordFromLink, refreshData, exportDailyPdf, exportWeeklyExcel, exportShiftReport });
+  Object.assign(window, { openModal, closeModal, existingLogisticsRowForProduction, assertNoDuplicateProductionLog, assertProductionStartAllowedFinal, markQualityPanelStabilizedDone, fillTruckRouteFromExcavator, updateAutoMeterLabels, updateProductionStartMeterHints, updateTripProductionContext, updateFuelProductionContext, updateMeterCorrectionContext, toggleProductionEditLinkedField, refreshLogisticsEquipmentSelect, markShiftSelectManual, continueBreakdownToCurrentShift, finishBreakdownFromWarning, saveStartProductionExcavator, saveStartProductionTruck, saveStartProductionDrill, saveStartProductionOther, saveEndProduction, saveStartBreakdown, saveEndBreakdown, saveStartRental, saveEndRental, saveNewTrip, saveNewFuel, saveNewMeter, saveNewDrillMeterage, updateDrillMeterageProductionContext, confirmSoftDelete, restoreDeleted, deleteAllDeletedRecordsNow, deleteDeletedOlderThan30Days, saveEditRecord, saveDefinition, deleteTruckModel, loadScopedDefinitionSettings, toggleDefinitionTruckModelField, renderShiftConfigInputs, saveShiftConfigFromForm, renderShiftConfigCardRefresh, applyRecordFiltersFromUI, resetRecordFilters, bulkDeleteRecordTable, exportRecordsToExcel, saveUserRoleSettings, toggleUserActive, inviteUserFromPanel, syncInviteSiteOptions, syncUserSiteOptions, renderSaasAdmin, syncSaasAdminSiteOptions, createSaasCompany, createSaasSite, toggleSaasCompany, toggleSaasSite, deleteSaasCompanyIfEmpty, deleteSaasSiteIfEmpty, saasSelectCompany, saasClearCompanySelection, inviteCompanyAdminFromSaasPanel, sendPasswordResetEmail, saveNewPasswordFromLink, refreshData, exportDailyPdf, exportWeeklyExcel, exportShiftReport });
 
   (async function autoSession(){
     try{
