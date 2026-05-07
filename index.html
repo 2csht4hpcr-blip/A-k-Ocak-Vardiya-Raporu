@@ -508,11 +508,36 @@
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <script>
 (function(){
-  const DEVELOPMENT_BUILD_NAME = 'index_maden_takip_sistemi_gpssiz_v10_6_3_local_time_fuel_edit_refresh_2026-05-07';
+  const DEVELOPMENT_BUILD_NAME = 'index_maden_takip_sistemi_gpssiz_v10_6_12_saas_scope_isolation_2026-05-07';
   // v8 stabilizasyon: mevcut çalışan akış korunur; yeni loader/arıza/vardiya mantığı fallback ile eklenir.
+  // v10.6.12: SaaS izolasyon katmanı. Local fallback ayarları da şirket+saha bazlı ayrılır.
+  function scopeLocalStorageKey(baseKey){
+    try{
+      const companyId = (typeof selectedCompanyIdForScope === 'function' ? selectedCompanyIdForScope() : '') || '';
+      const siteId = (typeof selectedSiteIdForScope === 'function' ? selectedSiteIdForScope() : '') || '';
+      if(companyId && siteId) return `${baseKey}__${companyId}__${siteId}`;
+    }catch(e){}
+    return baseKey;
+  }
+  function clearScopedRuntimeCaches(){
+    ['equipments','packages','productions','breakdowns','rentals','fuel_logs','meter_logs','truck_trips','drill_meterage_logs','dashboard_pro_final'].forEach(k=>{ state[k] = []; });
+    state.recordsServer = {};
+    state.recordPages = {};
+    state.recordsLoading = false;
+  }
+  function requireActiveCompanySiteScope(actionLabel){
+    const companyId = selectedCompanyIdForScope();
+    const siteId = selectedSiteIdForScope();
+    if(!companyId || !siteId){
+      const msg = `${actionLabel || 'Bu işlem'} için şirket ve saha seçimi zorunlu.`;
+      try{ showToast(msg); }catch(e){}
+      throw new Error(msg);
+    }
+    return { companyId, siteId };
+  }
   function loadShiftConfig(){
     try{
-      const raw = localStorage.getItem("maden_shift_config");
+      const raw = localStorage.getItem(scopeLocalStorageKey("maden_shift_config"));
       const parsed = raw ? JSON.parse(raw) : null;
       return parsed && typeof parsed === "object" ? parsed : { count: 0, shifts: [] };
     }catch(e){
@@ -520,38 +545,38 @@
     }
   }
   function saveShiftConfig(config){
-    try{ localStorage.setItem("maden_shift_config", JSON.stringify(config || { count: 0, shifts: [] })); }catch(e){}
+    try{ localStorage.setItem(scopeLocalStorageKey("maden_shift_config"), JSON.stringify(config || { count: 0, shifts: [] })); }catch(e){}
   }
 
   function loadTruckModels(){
     try{
-      const raw = localStorage.getItem('maden_truck_models');
+      const raw = localStorage.getItem(scopeLocalStorageKey('maden_truck_models'));
       const parsed = raw ? JSON.parse(raw) : [];
       return Array.isArray(parsed) ? parsed : [];
     }catch(e){ return []; }
   }
   function saveTruckModels(models){
-    try{ localStorage.setItem('maden_truck_models', JSON.stringify(Array.isArray(models) ? models : [])); }catch(e){}
+    try{ localStorage.setItem(scopeLocalStorageKey('maden_truck_models'), JSON.stringify(Array.isArray(models) ? models : [])); }catch(e){}
   }
   function loadEquipmentModelMap(){
     try{
-      const raw = localStorage.getItem('maden_equipment_model_map');
+      const raw = localStorage.getItem(scopeLocalStorageKey('maden_equipment_model_map'));
       const parsed = raw ? JSON.parse(raw) : {};
       return parsed && typeof parsed === 'object' ? parsed : {};
     }catch(e){ return {}; }
   }
   function saveEquipmentModelMap(map){
-    try{ localStorage.setItem('maden_equipment_model_map', JSON.stringify(map && typeof map === 'object' ? map : {})); }catch(e){}
+    try{ localStorage.setItem(scopeLocalStorageKey('maden_equipment_model_map'), JSON.stringify(map && typeof map === 'object' ? map : {})); }catch(e){}
   }
   function loadPackageTonnageFactors(){
     try{
-      const raw = localStorage.getItem('maden_package_tonnage_factors');
+      const raw = localStorage.getItem(scopeLocalStorageKey('maden_package_tonnage_factors'));
       const parsed = raw ? JSON.parse(raw) : {};
       return parsed && typeof parsed === 'object' ? parsed : {};
     }catch(e){ return {}; }
   }
   function savePackageTonnageFactors(map){
-    try{ localStorage.setItem('maden_package_tonnage_factors', JSON.stringify(map && typeof map === 'object' ? map : {})); }catch(e){}
+    try{ localStorage.setItem(scopeLocalStorageKey('maden_package_tonnage_factors'), JSON.stringify(map && typeof map === 'object' ? map : {})); }catch(e){}
   }
   function normalizePackageTonnageFactors(map){
     const cleaned = {};
@@ -643,7 +668,7 @@
     return true;
   }
   async function loadShiftConfigRemote(){
-    const remote = await loadAppSettingValue('shift_config');
+    const remote = await loadAppSettingValue(scopedAppSettingKey('shift_config'));
     if(remote){
       const cleaned = normalizeShiftConfig(remote);
       state.shiftConfig = cleaned;
@@ -659,7 +684,7 @@
     state.shiftConfig = cleaned;
     saveShiftConfig(cleaned);
     try{
-      await saveAppSettingValue('shift_config', cleaned);
+      await saveAppSettingValue(scopedAppSettingKey('shift_config'), cleaned);
       state.shiftConfigSource = 'supabase';
       if(showSavedToast) showToast('Vardiya ayarları Supabase kaydedildi');
       return true;
@@ -2010,9 +2035,10 @@
       localStorage.setItem('maden_super_scope_site_id', state.saasSelectedSiteId);
     }catch(e){}
 
+    clearScopedRuntimeCaches();
     renderSuperScopeBar();
-    await loadAllSafe();
     await loadScopedDefinitionSettingsSafe();
+    await loadAllSafe();
     applyRolePermissions();
     renderAll();
     showPage(state.currentPage || 'dashboard');
@@ -5312,12 +5338,14 @@
     if(siteId && rowSite && rowSite !== siteId) return false;
     if(companyId && rowCompany && rowCompany === companyId && !siteId) return true;
     if(siteId && rowSite && rowSite === siteId) return true;
-    // Eski kayıtlarda company_id/site_id yoksa mevcut kapsamda göster; yeni kayıtlarda kapsam yazılır.
+    // v10.6.12: SaaS izolasyonda kapsam seçiliyken sahipsiz/global tanım gösterilmez.
+    // Eski kayıtlara tek seferlik migration ile company_id/site_id verilmelidir.
+    if(companyId || siteId) return false;
     return !rowCompany && !rowSite;
   }
   function scopedAppSettingKey(key){
     const { companyId, siteId } = currentDefinitionScopeIds();
-    if(['truck_models','equipment_model_map','package_tonnage_factors'].includes(String(key || ''))){
+    if(['shift_config','truck_models','equipment_model_map','package_tonnage_factors','alert_rules'].includes(String(key || ''))){
       return [key, companyId || 'global_company', siteId || 'global_site'].join('__');
     }
     return key;
@@ -5562,10 +5590,15 @@
   }
 
   async function loadScopedDefinitionSettings(){
-    // Firma/saha değişince kamyon modelleri, ekipman-model eşleştirmesi ve paket faktörleri yeni kapsama göre yüklenir.
+    // v10.6.12: Firma/saha değişince tüm tanım ayarları ve saha ayarlı vardiya konfigürasyonu yeni kapsama göre yüklenir.
+    await loadShiftConfigRemote();
     await loadTruckModelsRemote();
     await loadEquipmentModelMapRemote();
     await loadPackageTonnageFactorsRemote();
+  }
+  async function loadScopedDefinitionSettingsSafe(){
+    try{ return await loadScopedDefinitionSettings(); }
+    catch(err){ console.error('loadScopedDefinitionSettingsSafe', err); return false; }
   }
 
   async function loadAllSafe(){
@@ -5745,13 +5778,11 @@
   function applyCurrentScopeToPayload(table, payload){
     const dbTable = resolveDbTableName(table);
     const p = { ...(payload || {}) };
-    if(tableSupportsCompanyScope(dbTable) && !Object.prototype.hasOwnProperty.call(p, 'company_id')){
-      const companyId = selectedCompanyIdForScope() || String(state.profile?.company_id || '');
-      if(companyId) p.company_id = companyId;
-    }
-    if(tableSupportsSiteScope(dbTable) && !Object.prototype.hasOwnProperty.call(p, 'site_id')){
-      const siteId = selectedSiteIdForScope() || String(state.profile?.site_id || '');
-      if(siteId) p.site_id = siteId;
+    if(tableSupportsCompanyScope(dbTable) || tableSupportsSiteScope(dbTable)){
+      const { companyId, siteId } = requireActiveCompanySiteScope('Kayıt işlemi');
+      if(tableSupportsCompanyScope(dbTable) && !Object.prototype.hasOwnProperty.call(p, 'company_id')) p.company_id = companyId;
+      if(tableSupportsSiteScope(dbTable) && !Object.prototype.hasOwnProperty.call(p, 'site_id')) p.site_id = siteId;
+      if(!p.created_by && state.user?.id) p.created_by = state.user.id;
     }
     return p;
   }
@@ -12547,20 +12578,20 @@ async function exportWeeklyExcel(){
     return { users: saasUsersForSite(id).length, records };
   }
   async function saasSelectCompany(companyId){
-    state.saasSelectedCompanyId = String(companyId || '');
-    state.saasSelectedSiteId = '';
-    await loadScopedDefinitionSettings();
-    await loadAllSafe();
+    state.saasDraftCompanyId = String(companyId || '');
+    state.saasDraftSiteId = '';
+    renderSuperScopeBar();
     renderAll();
     applyRolePermissions();
-    showPage('dashboard');
-    showToast('Firma görünüm modu açıldı. Dashboard, Kayıtlar ve tüm analizler seçili firmaya göre çalışıyor.');
+    showPage('saasAdmin');
+    showToast('Firma seçildi. Veri görüntülemek için üst çubuktan saha seçip “Seçilen Sahayı Göster” butonuna bas.');
   }
   async function saasClearCompanySelection(){
     state.saasSelectedCompanyId = '';
     state.saasSelectedSiteId = '';
-    await loadScopedDefinitionSettings();
-    await loadAllSafe();
+    state.saasDraftCompanyId = '';
+    state.saasDraftSiteId = '';
+    clearScopedRuntimeCaches();
     renderAll();
     applyRolePermissions();
     showPage('saasAdmin');
