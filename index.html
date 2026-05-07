@@ -508,9 +508,10 @@
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <script>
 (function(){
-  const DEVELOPMENT_BUILD_NAME = 'index_maden_takip_sistemi_gpssiz_v10_6_12_saas_scope_isolation_2026-05-07';
+  const DEVELOPMENT_BUILD_NAME = 'index_maden_takip_sistemi_gpssiz_v10_6_13_record_engine_stabilization_2026-05-07';
   // v8 stabilizasyon: mevcut çalışan akış korunur; yeni loader/arıza/vardiya mantığı fallback ile eklenir.
   // v10.6.12: SaaS izolasyon katmanı. Local fallback ayarları da şirket+saha bazlı ayrılır.
+  // v10.6.13: Kayıt motoru stabilizasyonu. Duplicate üretim/logistik engeli ve scoped update güvenliği eklenir.
   function scopeLocalStorageKey(baseKey){
     try{
       const companyId = (typeof selectedCompanyIdForScope === 'function' ? selectedCompanyIdForScope() : '') || '';
@@ -534,6 +535,62 @@
       throw new Error(msg);
     }
     return { companyId, siteId };
+  }
+
+  const recordEngineWriteLocks = new Set();
+  function recordEngineScopeKey(){
+    try{
+      const companyId = selectedCompanyIdForScope() || 'no_company';
+      const siteId = selectedSiteIdForScope() || 'no_site';
+      return `${companyId}::${siteId}`;
+    }catch(e){ return 'scope_unknown'; }
+  }
+  function recordEngineOperationKey(table, payload){
+    const dbTable = resolveDbTableName(table);
+    const p = payload || {};
+    if(dbTable === 'production_logs'){
+      const equipmentId = String(p.equipment_id || 'no_equipment');
+      const shiftName = String(p.shift_name || resolveShiftNameForDateTime(p.start_at || nowIso()) || 'no_shift');
+      const shiftDate = String(p.shift_date || String(p.start_at || nowIso()).slice(0,10) || todayStr());
+      return `${recordEngineScopeKey()}::${dbTable}::open::${equipmentId}::${shiftDate}::${shiftName}`;
+    }
+    if(p.production_id && ['meter_logs','fuel_logs','truck_trips','drill_meterage_logs'].includes(dbTable)){
+      return `${recordEngineScopeKey()}::${dbTable}::production::${p.production_id}`;
+    }
+    return `${recordEngineScopeKey()}::${dbTable}::${Date.now()}::${Math.random().toString(36).slice(2)}`;
+  }
+  function assertNoOpenProductionDuplicateLocal(payload){
+    const equipmentId = String(payload?.equipment_id || '');
+    if(!equipmentId) return;
+    const shiftName = String(payload?.shift_name || resolveShiftNameForDateTime(payload?.start_at || nowIso()) || '');
+    const shiftDate = String(payload?.shift_date || String(payload?.start_at || nowIso()).slice(0,10) || todayStr());
+    const duplicate = (state.productions || []).find(r=>{
+      if(!r || r.deleted_at || String(r.equipment_id || '') !== equipmentId) return false;
+      if(r.end_at || r.end_time) return false;
+      const rShiftName = String(getShiftNameForRow(r) || r.shift_name || '');
+      const rShiftDate = String(r.shift_date || String(r.start_at || r.created_at || '').slice(0,10));
+      return (!shiftName || !rShiftName || rShiftName === shiftName) && (!shiftDate || !rShiftDate || rShiftDate === shiftDate);
+    });
+    if(duplicate) throw new Error('Bu ekipman için aynı vardiyada açık üretim kaydı zaten var. Önce mevcut kaydı kapatın veya yenileyin.');
+  }
+  function assertNoProductionLogDuplicateLocal(table, payload){
+    const dbTable = resolveDbTableName(table);
+    const productionId = String(payload?.production_id || '');
+    if(!productionId) return;
+    const map = { meter_logs: state.meter_logs, fuel_logs: state.fuel_logs, truck_trips: state.truck_trips, drill_meterage_logs: state.drill_meterage_logs };
+    const rows = map[dbTable] || [];
+    const duplicate = rows.find(r=>!r?.deleted_at && String(r.production_id || '') === productionId);
+    if(duplicate) throw new Error('Bu üretim için aynı lojistik kayıt daha önce girilmiş. Duplicate kayıt engellendi.');
+  }
+  function applyScopeToMutationQuery(table, query){
+    try{
+      const dbTable = resolveDbTableName(table);
+      const companyId = selectedCompanyIdForScope();
+      const siteId = selectedSiteIdForScope();
+      if(companyId && tableSupportsCompanyScope(dbTable)) query = query.eq('company_id', companyId);
+      if(siteId && tableSupportsSiteScope(dbTable)) query = query.eq('site_id', siteId);
+    }catch(e){}
+    return query;
   }
   function loadShiftConfig(){
     try{
@@ -5838,7 +5895,18 @@
     optionalCols = Array.from(new Set([...(Array.isArray(optionalCols) ? optionalCols : []), 'company_id', 'site_id']));
     async function tryInsert(body){
       const normalizedBody = normalizePayloadForTable(table, body);
-      let res = await state.sb.from(resolveDbTableName(table)).insert([normalizedBody]).select();
+      const dbTable = resolveDbTableName(table);
+      if(dbTable === 'production_logs') assertNoOpenProductionDuplicateLocal(normalizedBody);
+      assertNoProductionLogDuplicateLocal(dbTable, normalizedBody);
+      const opKey = recordEngineOperationKey(dbTable, normalizedBody);
+      if(recordEngineWriteLocks.has(opKey)) throw new Error('Aynı kayıt işlemi devam ediyor. Duplicate kayıt engellendi.');
+      recordEngineWriteLocks.add(opKey);
+      let res;
+      try{
+        res = await state.sb.from(dbTable).insert([normalizedBody]).select();
+      }finally{
+        recordEngineWriteLocks.delete(opKey);
+      }
       body = normalizedBody;
       if(!res.error) return { ...res, inserted: body };
       const msg = String(res.error?.message || '').toLowerCase();
@@ -5872,7 +5940,7 @@
   async function updateWithOptionalColumns(table, payload, optionalCols, id){
     optionalCols = Array.from(new Set([...(Array.isArray(optionalCols) ? optionalCols : []), 'company_id', 'site_id']));
     payload = normalizePayloadForTable(table, payload);
-    let res = await state.sb.from(resolveDbTableName(table)).update(payload).eq('id', id);
+    let res = await applyScopeToMutationQuery(table, state.sb.from(resolveDbTableName(table)).update(payload).eq('id', id));
     if(!res.error) return res;
     if(optionalColumnError(res.error, optionalCols)){
       let cloned = {...payload};
@@ -5880,7 +5948,7 @@
       for(let i=0;i<cols.length && res.error;i++){
         const missing = missingOptionalColumnFromError(res.error, cols) || cols[i];
         delete cloned[missing];
-        res = await state.sb.from(resolveDbTableName(table)).update(cloned).eq('id', id);
+        res = await applyScopeToMutationQuery(table, state.sb.from(resolveDbTableName(table)).update(cloned).eq('id', id));
         if(!res.error) return res;
       }
     }
@@ -5889,7 +5957,7 @@
   async function updateWhereWithOptionalColumns(table, payload, optionalCols, filterCol, filterVal){
     optionalCols = Array.from(new Set([...(Array.isArray(optionalCols) ? optionalCols : []), 'company_id', 'site_id']));
     payload = normalizePayloadForTable(table, payload);
-    let res = await state.sb.from(resolveDbTableName(table)).update(payload).eq(filterCol, filterVal);
+    let res = await applyScopeToMutationQuery(table, state.sb.from(resolveDbTableName(table)).update(payload).eq(filterCol, filterVal));
     if(!res.error) return res;
     if(optionalColumnError(res.error, optionalCols)){
       let cloned = {...payload};
@@ -5897,7 +5965,7 @@
       for(let i=0;i<cols.length && res.error;i++){
         const missing = missingOptionalColumnFromError(res.error, cols) || cols[i];
         delete cloned[missing];
-        res = await state.sb.from(resolveDbTableName(table)).update(cloned).eq(filterCol, filterVal);
+        res = await applyScopeToMutationQuery(table, state.sb.from(resolveDbTableName(table)).update(cloned).eq(filterCol, filterVal));
         if(!res.error) return res;
       }
     }
@@ -7345,11 +7413,11 @@
         end_meter_type: unit,
         end_meter_value: num(document.getElementById('m_break_end_value').value)
       };
-      let res = await state.sb.from(TABLES.BREAKDOWNS).update(basePayload).eq('id', row.id);
+      let res = await updateWithOptionalColumns(TABLES.BREAKDOWNS, basePayload, ['end_at','end_meter_type','end_meter_value'], row.id);
       if(res.error) throw res.error;
       const note = document.getElementById('m_solution_note').value.trim();
       if(note){
-        const noteRes = await state.sb.from(TABLES.BREAKDOWNS).update({ solution_note: note }).eq('id', row.id);
+        const noteRes = await updateWithOptionalColumns(TABLES.BREAKDOWNS, { solution_note: note }, ['solution_note'], row.id);
         if(noteRes.error && !String(noteRes.error.message||'').toLowerCase().includes('solution_note')) throw noteRes.error;
       }
       closeModal();
