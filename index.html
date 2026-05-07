@@ -361,13 +361,13 @@
     .saas-kpi-label{font-size:11px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.35px}
     .saas-kpi-value{font-size:26px;font-weight:900;color:#0f172a;margin-top:5px}
 
-    .super-scope-bar{display:none;align-items:center;gap:8px;flex-wrap:wrap;width:100%;margin-top:10px;padding:10px 12px;border-radius:16px;background:linear-gradient(135deg,#eef2ff 0%,#f8fbff 100%);border:1px solid #c7d2fe;box-shadow:0 8px 18px rgba(79,70,229,.08)}
+    .super-scope-bar{display:none;align-items:center;gap:8px;flex-wrap:wrap;width:100%;margin-top:10px;padding:12px 14px;border-radius:18px;background:linear-gradient(135deg,#7c2d12 0%,#ea580c 48%,#f97316 100%);border:2px solid #fdba74;box-shadow:0 14px 30px rgba(234,88,12,.24), inset 0 1px 0 rgba(255,255,255,.22)}
     .super-scope-bar.active{display:flex}
-    .super-scope-label{font-size:12px;font-weight:900;color:#3730a3;text-transform:uppercase;letter-spacing:.35px}
-    .super-scope-bar select{width:auto;min-width:210px;padding:9px 10px}
-    .super-scope-bar button{width:auto;padding:9px 12px;border-radius:10px}
-     .super-scope-note{font-size:12px;color:#475569;font-weight:700}
-    .super-scope-card{display:flex;align-items:center;gap:10px;flex-wrap:wrap;width:100%;margin-top:8px;padding:12px 14px;border-radius:18px;background:linear-gradient(135deg,#0f172a 0%,#1d4ed8 100%);color:#fff;box-shadow:0 14px 30px rgba(29,78,216,.20)}
+    .super-scope-label{font-size:12px;font-weight:900;color:#fff7ed;text-transform:uppercase;letter-spacing:.35px}
+    .super-scope-bar select{width:auto;min-width:210px;padding:9px 10px;border:1px solid #fed7aa;background:#fff7ed;color:#7c2d12;font-weight:800}
+    .super-scope-bar button{width:auto;padding:9px 12px;border-radius:10px}.super-scope-bar button.secondary{background:#fff7ed;color:#9a3412;border:1px solid #fed7aa}.super-scope-bar button.success{background:#14532d;color:#fff;border:1px solid #86efac}
+     .super-scope-note{font-size:12px;color:#ffedd5;font-weight:800}
+    .super-scope-card{display:flex;align-items:center;gap:10px;flex-wrap:wrap;width:100%;margin-top:8px;padding:12px 14px;border-radius:18px;background:linear-gradient(135deg,#431407 0%,#9a3412 100%);color:#fff;box-shadow:0 14px 30px rgba(124,45,18,.25);border:1px solid rgba(255,237,213,.28)}
     .super-scope-card .scope-kicker{font-size:11px;font-weight:900;letter-spacing:.6px;text-transform:uppercase;opacity:.82}
     .super-scope-card .scope-main{font-size:16px;font-weight:900}
     .super-scope-card .scope-sub{font-size:12px;opacity:.86}
@@ -1928,6 +1928,12 @@
     const id = String(companyId || '');
     return (state.sites || []).filter(site=>!id || String(site.company_id || '') === id);
   }
+  function getDraftSuperCompanyId(){
+    return String(state.saasDraftCompanyId ?? state.saasSelectedCompanyId ?? '');
+  }
+  function getDraftSuperSiteId(){
+    return String(state.saasDraftSiteId ?? state.saasSelectedSiteId ?? '');
+  }
   function renderSuperScopeBar(){
     const bar = document.getElementById('superScopeBar');
     if(!bar) return;
@@ -1935,22 +1941,29 @@
     const companies = state.companies || [];
     const selectedCompany = String(state.saasSelectedCompanyId || '');
     const selectedSite = String(state.saasSelectedSiteId || '');
-    const companyOptions = `<option value="">Tüm firmalar</option>` + companies.map(c=>`<option value="${escapeHtml(c.id)}" ${String(c.id)===selectedCompany?'selected':''}>${escapeHtml(c.name || c.code || c.id)}</option>`).join('');
-    const siteOptions = `<option value="">Tüm sahalar</option>` + allSitesForCompanyOptions(selectedCompany).map(site=>`<option value="${escapeHtml(site.id)}" ${String(site.id)===selectedSite?'selected':''}>${escapeHtml(site.name || site.code || site.id)}</option>`).join('');
+    const draftCompany = getDraftSuperCompanyId();
+    const draftSite = getDraftSuperSiteId();
+    const companyOptions = `<option value="">Firma seç</option>` + companies.map(c=>`<option value="${escapeHtml(c.id)}" ${String(c.id)===draftCompany?'selected':''}>${escapeHtml(c.name || c.code || c.id)}</option>`).join('');
+    const siteSelectHtml = draftCompany ? `<select id="super_scope_site" onchange="changeSuperScopeSite(this.value)"><option value="">Tüm sahalar</option>${allSitesForCompanyOptions(draftCompany).map(site=>`<option value="${escapeHtml(site.id)}" ${String(site.id)===draftSite?'selected':''}>${escapeHtml(site.name || site.code || site.id)}</option>`).join('')}</select>` : '';
     const companyName = companyNameById(selectedCompany) || 'Tüm firmalar';
     const siteName = (state.sites || []).find(s=>String(s.id)===selectedSite)?.name || (selectedSite ? 'Seçili saha' : 'Tüm sahalar');
+    const draftCompanyName = companyNameById(draftCompany) || 'Firma seçilmedi';
+    const draftSiteName = (state.sites || []).find(s=>String(s.id)===draftSite)?.name || (draftSite ? 'Seçili saha' : (draftCompany ? 'Tüm sahalar' : 'Saha seçimi kapalı'));
     const scopeMain = `${companyName} / ${siteName}`;
+    const draftMain = `${draftCompanyName} / ${draftSiteName}`;
     bar.classList.add('active');
     bar.innerHTML = `
       <span class="super-scope-label">Super Admin Görünüm Modu</span>
       <select id="super_scope_company" onchange="changeSuperScopeCompany(this.value)">${companyOptions}</select>
-      <select id="super_scope_site" onchange="changeSuperScopeSite(this.value)">${siteOptions}</select>
+      ${siteSelectHtml}
+      <button class="success" onclick="applySuperScopeSelection()">Seçilen Sahayı Göster</button>
       <button class="secondary" onclick="clearSuperScope()">Tümünü Göster</button>
+      <span class="super-scope-note">Taslak seçim: ${escapeHtml(draftMain)}</span>
       <div class="super-scope-card">
         <div>
           <div class="scope-kicker">Şu an görüntülenen kapsam</div>
           <div class="scope-main">${escapeHtml(scopeMain)}</div>
-          <div class="scope-sub">Dashboard, Dashboard Pro, Kayıtlar, Lojistik ve raporlar bu kapsamla yüklenir.</div>
+          <div class="scope-sub">Şirket/saha seçimi veri yüklemez; “Seçilen Sahayı Göster” tuşu ile görünüm hemen uygulanır.</div>
         </div>
       </div>
     `;
@@ -1960,34 +1973,47 @@
       side.innerHTML = `<div class="badge-top">SUPER ADMIN VIEW</div><div class="badge-main">${escapeHtml(companyName)}</div><div class="badge-sub">${escapeHtml(siteName)}</div>`;
     }
   }
-  async function changeSuperScopeCompany(companyId){
-    state.saasSelectedCompanyId = String(companyId || '');
-    state.saasSelectedSiteId = '';
-    await loadScopedDefinitionSettings();
-    await loadAllSafe();
-    renderAll();
-    applyRolePermissions();
-    showPage(state.currentPage || 'dashboard');
-    showToast(state.saasSelectedCompanyId ? 'Firma görünüm modu aktif' : 'Tüm firmalar görünümü aktif');
+  function changeSuperScopeCompany(companyId){
+    state.saasDraftCompanyId = String(companyId || '');
+    state.saasDraftSiteId = '';
+    renderSuperScopeBar();
   }
-  async function changeSuperScopeSite(siteId){
-    state.saasSelectedSiteId = String(siteId || '');
+  function changeSuperScopeSite(siteId){
+    state.saasDraftSiteId = String(siteId || '');
+    renderSuperScopeBar();
+  }
+  async function applySuperScopeSelection(){
+    const nextCompanyId = getDraftSuperCompanyId();
+    const nextSiteId = getDraftSuperSiteId();
+    if(nextSiteId){
+      const site = (state.sites || []).find(s=>String(s.id)===nextSiteId);
+      if(site && nextCompanyId && String(site.company_id || '') !== nextCompanyId){
+        showToast('Seçilen saha bu firmaya bağlı değil');
+        return;
+      }
+    }
+    state.saasSelectedCompanyId = nextCompanyId;
+    state.saasSelectedSiteId = nextCompanyId ? nextSiteId : '';
+    state.saasDraftCompanyId = state.saasSelectedCompanyId;
+    state.saasDraftSiteId = state.saasSelectedSiteId;
     await loadScopedDefinitionSettings();
     await loadAllSafe();
     renderAll();
     applyRolePermissions();
     showPage(state.currentPage || 'dashboard');
-    showToast(state.saasSelectedSiteId ? 'Saha görünüm modu aktif' : 'Tüm sahalar görünümü aktif');
+    showToast(state.saasSelectedSiteId ? 'Seçilen saha görünümü aktif' : (state.saasSelectedCompanyId ? 'Seçilen firma görünümü aktif' : 'Tüm firmalar görünümü aktif'));
   }
   async function clearSuperScope(){
     state.saasSelectedCompanyId = '';
     state.saasSelectedSiteId = '';
+    state.saasDraftCompanyId = '';
+    state.saasDraftSiteId = '';
     await loadScopedDefinitionSettings();
     await loadAllSafe();
     renderAll();
     applyRolePermissions();
-    showPage('saasAdmin');
-    showToast('Super Admin kapsam filtresi temizlendi');
+    showPage(state.currentPage || 'saasAdmin');
+    showToast('Tüm firmalar ve tüm sahalar gösteriliyor');
   }
 
   function applyRolePermissions(){
@@ -2023,6 +2049,8 @@
     userProfiles: [],
     saasSelectedCompanyId: '',
     saasSelectedSiteId: '',
+    saasDraftCompanyId: '',
+    saasDraftSiteId: '',
     currentPage: 'dashboard',
     recordTab: 'operations',
     modal: { type:null, data:null },
