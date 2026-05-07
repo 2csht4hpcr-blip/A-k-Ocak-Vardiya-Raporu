@@ -5303,8 +5303,11 @@
       let q = sb.from(dbTable).select('*');
       const companyId = selectedCompanyIdForScope();
       const siteId = selectedSiteIdForScope();
-      if(isSuperAdmin() && companyId && tableSupportsCompanyScope(dbTable)) q = q.eq('company_id', companyId);
-      if(isSuperAdmin() && siteId && tableSupportsSiteScope(dbTable)) q = q.eq('site_id', siteId);
+      // v10.6.7: Sistem kapsamı sadece Tanımlar için değil; üretim, arıza, kiralık,
+      // kayıtlar ve lojistik tabloları için de uygulanır. Super Admin seçim yaptıysa seçilen
+      // firma/saha; normal kullanıcıda kendi profil firma/sahası kullanılır.
+      if(companyId && tableSupportsCompanyScope(dbTable)) q = q.eq('company_id', companyId);
+      if(siteId && tableSupportsSiteScope(dbTable)) q = q.eq('site_id', siteId);
       const res = await withTimeout(q, 10000, table);
       return { data: res.data || [], error: res.error || null };
     }catch(err){
@@ -5704,9 +5707,23 @@
     if(!Array.isArray(cols)) return '';
     return cols.find(c=>msg.includes(String(c).toLowerCase())) || '';
   }
-  function normalizePayloadForTable(table, payload){
+  function applyCurrentScopeToPayload(table, payload){
     const dbTable = resolveDbTableName(table);
     const p = { ...(payload || {}) };
+    if(tableSupportsCompanyScope(dbTable) && !Object.prototype.hasOwnProperty.call(p, 'company_id')){
+      const companyId = selectedCompanyIdForScope() || String(state.profile?.company_id || '');
+      if(companyId) p.company_id = companyId;
+    }
+    if(tableSupportsSiteScope(dbTable) && !Object.prototype.hasOwnProperty.call(p, 'site_id')){
+      const siteId = selectedSiteIdForScope() || String(state.profile?.site_id || '');
+      if(siteId) p.site_id = siteId;
+    }
+    return p;
+  }
+
+  function normalizePayloadForTable(table, payload){
+    const dbTable = resolveDbTableName(table);
+    const p = applyCurrentScopeToPayload(table, payload || {});
     if(dbTable === 'production_logs'){
       if(Object.prototype.hasOwnProperty.call(p, 'equipment_name') && !Object.prototype.hasOwnProperty.call(p, 'equipment_name_snapshot')){
         p.equipment_name_snapshot = p.equipment_name;
@@ -5752,6 +5769,7 @@
     return p;
   }
   async function insertWithOptionalColumns(table, payload, optionalCols){
+    optionalCols = Array.from(new Set([...(Array.isArray(optionalCols) ? optionalCols : []), 'company_id', 'site_id']));
     async function tryInsert(body){
       const normalizedBody = normalizePayloadForTable(table, body);
       let res = await state.sb.from(resolveDbTableName(table)).insert([normalizedBody]).select();
@@ -5786,6 +5804,7 @@
     return res;
   }
   async function updateWithOptionalColumns(table, payload, optionalCols, id){
+    optionalCols = Array.from(new Set([...(Array.isArray(optionalCols) ? optionalCols : []), 'company_id', 'site_id']));
     payload = normalizePayloadForTable(table, payload);
     let res = await state.sb.from(resolveDbTableName(table)).update(payload).eq('id', id);
     if(!res.error) return res;
@@ -5802,6 +5821,7 @@
     return res;
   }
   async function updateWhereWithOptionalColumns(table, payload, optionalCols, filterCol, filterVal){
+    optionalCols = Array.from(new Set([...(Array.isArray(optionalCols) ? optionalCols : []), 'company_id', 'site_id']));
     payload = normalizePayloadForTable(table, payload);
     let res = await state.sb.from(resolveDbTableName(table)).update(payload).eq(filterCol, filterVal);
     if(!res.error) return res;
