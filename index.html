@@ -6318,13 +6318,19 @@
 
     if(type === 'endProduction'){
       const prod = data;
-      const isTruck = isTruckEquipment(findEquipmentById(prod.equipment_id));
+      const eq = findEquipmentById(prod.equipment_id);
+      const isTruck = isTruckEquipment(eq);
+      const isDrill = isDrillEquipment(eq) || String(prod.production_mode || prod.work_mode || '').toLowerCase() === 'drill';
+      const meterUnit = isTruck ? 'KM' : 'Motor Saati';
       el.innerHTML = modalShell(`${escapeHtml(prod.equipment_name || '-')} Üretim Bitir`, `
         <div class="subtle">${escapeHtml(prod.package_name || '-')} | ${escapeHtml(prod.from_location || '-')} → ${escapeHtml(prod.to_location || '-')}</div>
         <div class="form-grid" style="margin-top:12px">
-          <div class="form-field"><label>${isTruck ? 'Bitiş KM' : 'Bitiş Motor Saati'}</label><input id="m_end_meter" type="number" step="0.01" placeholder="0"></div>
+          <div class="form-field"><label>Bitiş ${meterUnit}</label><input id="m_end_meter" type="number" step="0.01" placeholder="0"></div>
+          <div class="form-field"><label>Verilen Yakıt (L)</label><input id="m_end_fuel_liters" type="number" step="0.01" placeholder="Boş bırakılabilir"></div>
           ${isTruck ? `<div class="form-field"><label>Sefer Sayısı</label><input id="m_trip_count" type="number" step="1" placeholder="0"></div>` : ``}
+          ${isDrill ? `<div class="form-field"><label>Delici Metraj (m)</label><input id="m_end_drilled_meter" type="number" step="0.01" placeholder="Boş bırakılırsa Kontrol Paneli'ne düşer"></div>` : ``}
         </div>
+        <div class="notice" style="margin-top:10px">Sayaç/yakıt/sefer/metraj boş bırakılırsa üretim kapanır ve eksik giriş Kontrol Paneli'ne görev olarak düşer. Girilen bilgiler ilgili kayıt sayfasına otomatik işlenir.</div>
         <div class="actions"><button class="secondary" data-close-modal="1">İptal</button><button type="button" data-action="saveEndProduction">Bitir</button></div>
       `);
       return;
@@ -6744,6 +6750,23 @@
   }
 
 
+  async function finalizeExpiredOpenProductionsBeforeStart(equipmentId){
+    // v10.6.2 FIX: Yeni vardiyaya geçildiğinde önceki vardiyadan açık kalan üretimler otomatik vardiya sonu saatine kapatılır.
+    // Böylece özellikle deliciler yeni vardiyada "önceki vardiyadan açık üretim" hatasına takılmaz; eksik sayaç/yakıt/metraj işleri Kontrol Paneli'ne düşer.
+    try{
+      const before = (state.productions || []).filter(r=>!r?.deleted_at && isOpenRow(r) && (!equipmentId || String(r.equipment_id || '') === String(equipmentId || '')) && isShiftExpiredOpenRow(r));
+      if(!before.length) return false;
+      const changed = await autoClosePreviousShiftOpenProductions();
+      if(changed){
+        await refreshData(false);
+      }
+      return !!changed;
+    }catch(e){
+      console.error('finalizeExpiredOpenProductionsBeforeStart', e);
+      return false;
+    }
+  }
+
   function assertProductionStartAllowedFinal(equipmentId){
     // FINAL SAHA PATCH: Vardiya kilidi + aynı ekipman açık kayıt kilidi.
     // Amaç: kapanmış vardiyaya yeni üretim açılmasını ve aynı ekipmanın iki açık production kaydı üretmesini engellemek.
@@ -6771,6 +6794,7 @@
       const equipment_id = document.getElementById('m_equipment_id').value;
       const eq = findEquipmentById(equipment_id);
       if(!equipment_id) throw new Error('Ekipman seçiniz');
+      await finalizeExpiredOpenProductionsBeforeStart(equipment_id);
       assertProductionStartAllowedFinal(equipment_id);
       if(currentOpenBreakdownForEquipment(equipment_id)) throw new Error('Arızadaki ekipman üretime alınamaz');
       const isLoderOnly = isLoaderEquipment(eq) && !isExcavatorEquipment(eq);
@@ -6811,6 +6835,7 @@
       const equipment_id = document.getElementById('m_equipment_id').value;
       const eq = findEquipmentById(equipment_id);
       if(!equipment_id) throw new Error('Kamyon seçiniz');
+      await finalizeExpiredOpenProductionsBeforeStart(equipment_id);
       assertProductionStartAllowedFinal(equipment_id);
       if(currentOpenBreakdownForEquipment(equipment_id)) throw new Error('Arızadaki ekipman üretime alınamaz');
       const linkedProductionId = document.getElementById('m_linked_production_id').value || null;
@@ -6856,6 +6881,7 @@
       const equipment_id = document.getElementById('m_equipment_id').value;
       const eq = findEquipmentById(equipment_id);
       if(!equipment_id) throw new Error('Delici seçiniz');
+      await finalizeExpiredOpenProductionsBeforeStart(equipment_id);
       assertProductionStartAllowedFinal(equipment_id);
       if(!isDrillEquipment(eq)) throw new Error('Seçilen ekipman delici değil');
       if(currentOpenBreakdownForEquipment(equipment_id)) throw new Error('Arızadaki ekipman üretime alınamaz');
@@ -6897,6 +6923,7 @@
       const equipment_id = document.getElementById('m_equipment_id').value;
       const eq = findEquipmentById(equipment_id);
       if(!equipment_id) throw new Error('Ekipman seçiniz');
+      await finalizeExpiredOpenProductionsBeforeStart(equipment_id);
       assertProductionStartAllowedFinal(equipment_id);
       if(currentOpenBreakdownForEquipment(equipment_id)) throw new Error('Arızadaki ekipman üretime alınamaz');
       const unit = autoMeterTypeForEquipment(equipment_id);
@@ -6935,19 +6962,69 @@
       const prod = state.modal.data;
       const eq = findEquipmentById(prod.equipment_id);
       const isTruck = isTruckEquipment(eq);
+      const isDrill = isDrillEquipment(eq) || String(prod.production_mode || prod.work_mode || '').toLowerCase() === 'drill';
       const endAtIso = nowIso();
       const beforeLatest = latestKnownMeterValueForEquipment(prod.equipment_id);
+      const startVal = Number(getEffectiveProductionStartMeter(prod) ?? prod.start_meter_value ?? 0);
+      const endVal = num(document.getElementById('m_end_meter').value);
+      const endMeterType = isTruck ? 'km' : 'saat';
       const payload = {
         end_at: endAtIso,
-        end_meter_type: isTruck ? 'km' : 'saat',
-        end_meter_value: num(document.getElementById('m_end_meter').value)
+        end_time: endAtIso,
+        end_meter_type: endMeterType,
+        end_meter_value: endVal,
+        updated_at: endAtIso
       };
       let updateRes = await updateWithOptionalColumns(TABLES.PRODUCTIONS, payload, ['end_at','end_time','end_meter_type','end_meter_value','updated_at'], prod.id);
       let { error } = updateRes;
       if(error) throw error;
+
+      const shiftName = getShiftNameForRow(prod) || resolveShiftNameForDateTime(endAtIso) || '';
+      const shiftDate = prod.shift_date || String(prod.start_at || prod.created_at || endAtIso).slice(0,10) || todayStr();
+
+      if(Number.isFinite(Number(endVal)) && !existingLogisticsRowForProduction('meter', prod.id)){
+        const meterPayload = {
+          equipment_id: prod.equipment_id,
+          meter_type: endMeterType,
+          meter_value: endVal,
+          start_meter_value: Number.isFinite(startVal) ? startVal : 0,
+          end_meter_value: endVal,
+          production_id: prod.id,
+          shift_name: shiftName,
+          shift_date: shiftDate,
+          recorded_at: endAtIso,
+          created_at: endAtIso,
+          created_by: state.user?.id || null,
+          updated_by: state.user?.id || null,
+          source: 'production_end'
+        };
+        const meterRes = await insertWithOptionalColumns(TABLES.METER_LOGS, meterPayload, ['source','start_meter_value','end_meter_value','shift_name','production_id','shift_date','recorded_at']);
+        if(meterRes.error) throw meterRes.error;
+      }
+
+      const fuelLiters = num(document.getElementById('m_end_fuel_liters')?.value || 0);
+      if(fuelLiters > 0 && !existingLogisticsRowForProduction('fuel', prod.id)){
+        const fuelPayload = {
+          equipment_id: prod.equipment_id,
+          liters: fuelLiters,
+          meter_type: endMeterType,
+          meter_value: endVal,
+          production_id: prod.id,
+          shift_name: shiftName,
+          shift_date: shiftDate,
+          recorded_at: endAtIso,
+          created_at: endAtIso,
+          created_by: state.user?.id || null,
+          updated_by: state.user?.id || null,
+          source: 'production_end'
+        };
+        const fuelRes = await insertWithOptionalColumns(TABLES.FUEL_LOGS, fuelPayload, ['production_id','shift_name','shift_date','recorded_at','source']);
+        if(fuelRes.error) throw fuelRes.error;
+      }
+
       if(isTruck){
-        const enteredTrips = num(document.getElementById('m_trip_count').value);
-        if(enteredTrips > 0){
+        const enteredTrips = num(document.getElementById('m_trip_count')?.value || 0);
+        if(enteredTrips > 0 && !existingLogisticsRowForProduction('trip', prod.id)){
           const tripPayload = {
             equipment_id: prod.equipment_id,
             trip_count: enteredTrips,
@@ -6959,26 +7036,52 @@
             loader_type: prod.loader_type || (prod.linked_excavator_id ? 'excavator' : null),
             loader_id: getProductionLoaderId(prod) || null,
             production_id: prod.id,
-            shift_name: getShiftNameForRow(prod) || resolveShiftNameForDateTime(nowIso()) || '',
-            shift_date: prod.shift_date || String(prod.start_at || prod.created_at || nowIso()).slice(0,10) || todayStr(),
-            logistics_shift_date: prod.shift_date || String(prod.start_at || prod.created_at || nowIso()).slice(0,10) || todayStr(),
-            created_at: nowIso()
+            shift_name: shiftName,
+            shift_date: shiftDate,
+            logistics_shift_date: shiftDate,
+            recorded_at: endAtIso,
+            created_at: endAtIso,
+            created_by: state.user?.id || null,
+            updated_by: state.user?.id || null,
+            source: 'production_end'
           };
-          delete tripPayload.equipment_name_snapshot;
-          delete tripPayload.package_name_snapshot;
-          delete tripPayload.linked_excavator_name_snapshot;
-          const tripRes = await insertWithOptionalColumns(TABLES.TRUCK_TRIPS, tripPayload, ['production_id','shift_name','shift_date','logistics_shift_date','material_type','loader_type','loader_id']);
+          const tripRes = await insertWithOptionalColumns(TABLES.TRUCK_TRIPS, tripPayload, ['production_id','shift_name','shift_date','logistics_shift_date','material_type','loader_type','loader_id','recorded_at','source']);
           if(tripRes.error) throw tripRes.error;
           await updateWithOptionalColumns(TABLES.PRODUCTIONS, { trip_count: productionTripTotal(prod) + enteredTrips }, ['trip_count'], prod.id);
         }
       }
+
+      if(isDrill){
+        const drilled = num(document.getElementById('m_end_drilled_meter')?.value || 0);
+        if(drilled > 0 && !existingLogisticsRowForProduction('drillMeterage', prod.id)){
+          const drillPayload = {
+            production_id: prod.id,
+            equipment_id: prod.equipment_id,
+            equipment_name: eq?.name || prod.equipment_name || '',
+            equipment_name_snapshot: eq?.name || prod.equipment_name || '',
+            shift_name: shiftName,
+            shift_date: shiftDate,
+            drilled_meter: drilled,
+            note: 'Üretim bitiş ekranından girildi',
+            recorded_at: endAtIso,
+            created_at: endAtIso,
+            created_by: state.user?.id || null,
+            updated_by: state.user?.id || null,
+            source: 'production_end'
+          };
+          const drillRes = await insertWithOptionalColumns(TABLES.DRILL_METERAGE_LOGS, drillPayload, ['production_id','equipment_name_snapshot','shift_name','shift_date','recorded_at','updated_by','source']);
+          if(drillRes.error) throw drillRes.error;
+          await updateWithOptionalColumns(TABLES.PRODUCTIONS, { drilled_meter: drilled, updated_at: nowIso() }, ['drilled_meter','updated_at'], prod.id);
+        }
+      }
+
       const prodShift = resolveShiftBucketForRow({ ...prod, end_at: endAtIso, end_time: endAtIso, updated_at: endAtIso }) || resolveShiftBucketForRow(prod);
-      if(prodShift && Number.isFinite(Number(payload.end_meter_value))){
-        await syncNextShiftProductionStartMeters(prod.equipment_id, prodShift.shift_name, prodShift.shift_date, payload.end_meter_value, beforeLatest);
+      if(prodShift && Number.isFinite(Number(endVal))){
+        await syncNextShiftProductionStartMeters(prod.equipment_id, prodShift.shift_name, prodShift.shift_date, endVal, beforeLatest);
       }
       closeModal();
       await refreshData();
-      showToast(isTruck ? 'Üretim kapatıldı ve sefer kaydı işlendi' : 'Üretim kapatıldı');
+      showToast('Üretim kapatıldı; girilen sayaç/yakıt/sefer/metraj kayıtları işlendi');
     }catch(err){ alert(err.message || err); }
   }
 
@@ -10115,11 +10218,13 @@ function applyRecordFilters(rows){
     const pageData = state.recordsServer?.[tableName] || { rows: rows || [], totalCount: (rows || []).length };
     const filtered = pageData.rows || [];
     const page = getRecordPageState(tableName, Number(pageData.totalCount || filtered.length || 0));
-    const groups = { 'Ekskavatör': [], 'Kamyon': [], 'Yardımcı Makina': [] };
+    const groups = { 'Ekskavatör': [], 'Kamyon': [], 'Deliciler': [], 'Yardımcı Makina': [] };
     filtered.forEach(r=>{
       const t = equipmentTypeLabelForRow(r);
+      const eq = findEquipmentById(r.equipment_id);
       if(t === 'Ekskavatör') groups['Ekskavatör'].push(r);
       else if(t === 'Kamyon') groups['Kamyon'].push(r);
+      else if(t === 'Delici' || isDrillEquipment(eq) || String(r.production_mode || r.work_mode || '').toLowerCase() === 'drill') groups['Deliciler'].push(r);
       else groups['Yardımcı Makina'].push(r);
     });
     const totalCount = Number(pageData.totalCount || filtered.length || 0);
@@ -10162,7 +10267,8 @@ function applyRecordFilters(rows){
       rentals: state.rentals,
       truck_trips: state.truck_trips,
       fuel_logs: state.fuel_logs,
-      meter_logs: state.meter_logs
+      meter_logs: state.meter_logs,
+      drill_meterage_logs: state.drill_meterage_logs
     };
     return (map[tableName] || []).filter(r=>!r.deleted_at);
   }
@@ -10998,17 +11104,29 @@ function applyRecordFilters(rows){
     `;
   }
 
+  function logisticsControlTaskRows(){
+    try{
+      return (state.productions || [])
+        .filter(r=>!r?.deleted_at)
+        .filter(r=>{
+          const b = productionLogisticsBundle(r);
+          return !b.open && (b.status === 'missing' || b.status === 'error');
+        })
+        .sort((a,b)=>new Date(b.end_at || b.end_time || b.start_at || b.created_at || 0)-new Date(a.end_at || a.end_time || a.start_at || a.created_at || 0));
+    }catch(e){ return []; }
+  }
+
   function renderLogisticsControl(){
     const container = document.getElementById('logisticsControl');
     if(!container) return;
-    const prodRows = filterRowsForActiveAndPreviousShiftOrRecent(state.productions || []);
+    const prodRows = logisticsControlTaskRows();
     container.innerHTML = `
       <h2 class="section-title">Lojistik Kontrol Paneli</h2>
       <div class="card" style="margin-bottom:16px">
         <div class="records-section-title" style="color:#0f172a">Vardiya Sonu Eksik Giriş Merkezi</div>
         <div class="muted" style="margin-top:6px">Sayaç, sefer, yakıt ve delici metraj eksikleri production_id üzerinden kontrol edilir. Eksik girişler buradan tamamlanır; alt sayfalar geçmiş kayıt/düzenleme için kullanılır.</div>
       </div>
-      ${renderRecordQualityControlPanel(prodRows, { title:'Lojistik Kayıt Kalite Kontrol Paneli', subtitle:'Vardiya sonu eksik giriş merkezi: Sayaç, sefer, yakıt ve delici metraj production_id üzerinden kontrol edilir. Açık üretimler eksik sayılmaz; kapanmış üretimler tamamlanması gereken iş olarak değerlendirilir.' })}
+      ${renderRecordQualityControlPanel(prodRows, { title:'Lojistik Kayıt Kalite Kontrol Paneli', subtitle:'Vardiya sonu eksik giriş merkezi: Sayaç, sefer, yakıt ve delici metraj production_id üzerinden kontrol edilir. Sadece vardiyası bitmiş/kapanmış ve eksik bilgisi olan üretimler listelenir. Giriş tamamlanınca kart bu panelden otomatik kaybolur.' })}
       ${renderUnifiedProductionRecords(prodRows)}
     `;
   }
