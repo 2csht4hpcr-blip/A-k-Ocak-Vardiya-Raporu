@@ -1944,12 +1944,12 @@
     const draftCompany = getDraftSuperCompanyId();
     const draftSite = getDraftSuperSiteId();
     const companyOptions = `<option value="">Firma seç</option>` + companies.map(c=>`<option value="${escapeHtml(c.id)}" ${String(c.id)===draftCompany?'selected':''}>${escapeHtml(c.name || c.code || c.id)}</option>`).join('');
-    const siteSelectHtml = draftCompany ? `<select id="super_scope_site" onchange="changeSuperScopeSite(this.value)"><option value="">Tüm sahalar</option>${allSitesForCompanyOptions(draftCompany).map(site=>`<option value="${escapeHtml(site.id)}" ${String(site.id)===draftSite?'selected':''}>${escapeHtml(site.name || site.code || site.id)}</option>`).join('')}</select>` : '';
-    const companyName = companyNameById(selectedCompany) || 'Tüm firmalar';
-    const siteName = (state.sites || []).find(s=>String(s.id)===selectedSite)?.name || (selectedSite ? 'Seçili saha' : 'Tüm sahalar');
+    const siteSelectHtml = draftCompany ? `<select id="super_scope_site" onchange="changeSuperScopeSite(this.value)"><option value="">Saha seç</option>${allSitesForCompanyOptions(draftCompany).map(site=>`<option value="${escapeHtml(site.id)}" ${String(site.id)===draftSite?'selected':''}>${escapeHtml(site.name || site.code || site.id)}</option>`).join('')}</select>` : '';
+    const companyName = companyNameById(selectedCompany) || 'Şirket seçilmedi';
+    const siteName = (state.sites || []).find(s=>String(s.id)===selectedSite)?.name || (selectedSite ? 'Seçili saha' : 'Saha seçilmedi');
     const draftCompanyName = companyNameById(draftCompany) || 'Firma seçilmedi';
-    const draftSiteName = (state.sites || []).find(s=>String(s.id)===draftSite)?.name || (draftSite ? 'Seçili saha' : (draftCompany ? 'Tüm sahalar' : 'Saha seçimi kapalı'));
-    const scopeMain = `${companyName} / ${siteName}`;
+    const draftSiteName = (state.sites || []).find(s=>String(s.id)===draftSite)?.name || (draftSite ? 'Seçili saha' : (draftCompany ? 'Saha seçilmedi' : 'Önce firma seç'));
+    const scopeMain = (selectedCompany && selectedSite) ? `${companyName} / ${siteName}` : 'Şirket ve saha seçimi zorunlu';
     const draftMain = `${draftCompanyName} / ${draftSiteName}`;
     bar.classList.add('active');
     bar.innerHTML = `
@@ -1957,13 +1957,12 @@
       <select id="super_scope_company" onchange="changeSuperScopeCompany(this.value)">${companyOptions}</select>
       ${siteSelectHtml}
       <button class="success" onclick="applySuperScopeSelection()">Seçilen Sahayı Göster</button>
-      <button class="secondary" onclick="clearSuperScope()">Tümünü Göster</button>
-      <span class="super-scope-note">Taslak seçim: ${escapeHtml(draftMain)}</span>
+      <span class="super-scope-note">Zorunlu seçim: ${escapeHtml(draftMain)}</span>
       <div class="super-scope-card">
         <div>
           <div class="scope-kicker">Şu an görüntülenen kapsam</div>
           <div class="scope-main">${escapeHtml(scopeMain)}</div>
-          <div class="scope-sub">Şirket/saha seçimi veri yüklemez; “Seçilen Sahayı Göster” tuşu ile görünüm hemen uygulanır.</div>
+          <div class="scope-sub">Tüm sistem sadece seçilen şirket ve seçilen saha için çalışır.</div>
         </div>
       </div>
     `;
@@ -1985,15 +1984,21 @@
   async function applySuperScopeSelection(){
     const nextCompanyId = getDraftSuperCompanyId();
     const nextSiteId = getDraftSuperSiteId();
-    if(nextSiteId){
-      const site = (state.sites || []).find(s=>String(s.id)===nextSiteId);
-      if(site && nextCompanyId && String(site.company_id || '') !== nextCompanyId){
-        showToast('Seçilen saha bu firmaya bağlı değil');
-        return;
-      }
+    if(!nextCompanyId){
+      showToast('Önce şirket seçmelisin');
+      return;
+    }
+    if(!nextSiteId){
+      showToast('Önce saha seçmelisin');
+      return;
+    }
+    const site = (state.sites || []).find(s=>String(s.id)===nextSiteId);
+    if(site && String(site.company_id || '') !== nextCompanyId){
+      showToast('Seçilen saha bu firmaya bağlı değil');
+      return;
     }
     state.saasSelectedCompanyId = nextCompanyId;
-    state.saasSelectedSiteId = nextCompanyId ? nextSiteId : '';
+    state.saasSelectedSiteId = nextSiteId;
     state.saasDraftCompanyId = state.saasSelectedCompanyId;
     state.saasDraftSiteId = state.saasSelectedSiteId;
     await loadScopedDefinitionSettings();
@@ -2001,19 +2006,7 @@
     renderAll();
     applyRolePermissions();
     showPage(state.currentPage || 'dashboard');
-    showToast(state.saasSelectedSiteId ? 'Seçilen saha görünümü aktif' : (state.saasSelectedCompanyId ? 'Seçilen firma görünümü aktif' : 'Tüm firmalar görünümü aktif'));
-  }
-  async function clearSuperScope(){
-    state.saasSelectedCompanyId = '';
-    state.saasSelectedSiteId = '';
-    state.saasDraftCompanyId = '';
-    state.saasDraftSiteId = '';
-    await loadScopedDefinitionSettings();
-    await loadAllSafe();
-    renderAll();
-    applyRolePermissions();
-    showPage(state.currentPage || 'saasAdmin');
-    showToast('Tüm firmalar ve tüm sahalar gösteriliyor');
+    showToast('Seçilen şirket/saha görünümü aktif');
   }
 
   function applyRolePermissions(){
@@ -5334,6 +5327,9 @@
       // v10.6.7: Sistem kapsamı sadece Tanımlar için değil; üretim, arıza, kiralık,
       // kayıtlar ve lojistik tabloları için de uygulanır. Super Admin seçim yaptıysa seçilen
       // firma/saha; normal kullanıcıda kendi profil firma/sahası kullanılır.
+      if(isSuperAdmin() && (tableSupportsCompanyScope(dbTable) || tableSupportsSiteScope(dbTable)) && (!companyId || !siteId)){
+        return { data: [], error: null };
+      }
       if(companyId && tableSupportsCompanyScope(dbTable)) q = q.eq('company_id', companyId);
       if(siteId && tableSupportsSiteScope(dbTable)) q = q.eq('site_id', siteId);
       const res = await withTimeout(q, 10000, table);
