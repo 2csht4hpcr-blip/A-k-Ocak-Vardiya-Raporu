@@ -175,6 +175,28 @@
     .pro-stat-chip{font-size:11px;font-weight:900;padding:5px 8px;border-radius:999px;background:#eff6ff;color:#2563eb;border:1px solid #bfdbfe}
     .pro-stat-value{font-size:31px;font-weight:900;color:#0f172a;margin-top:10px;line-height:1}
     .pro-stat-sub{margin-top:10px;font-size:12px;color:#475569;line-height:1.45}
+
+    .executive-panel{border:1px solid #bfdbfe;border-radius:24px;padding:18px;background:linear-gradient(145deg,#ffffff 0%,#f8fbff 45%,#eef6ff 100%);box-shadow:0 18px 40px rgba(15,23,42,.12),inset 0 1px 0 rgba(255,255,255,.92);overflow:hidden;position:relative}
+    .executive-panel::before{content:'';position:absolute;right:-42px;top:-42px;width:150px;height:150px;border-radius:999px;background:rgba(37,99,235,.10)}
+    .executive-panel>*{position:relative;z-index:1}
+    .executive-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+    .executive-title{font-size:22px;font-weight:900;color:#0f172a;margin:0}
+    .executive-sub{font-size:12px;color:#64748b;margin-top:5px;line-height:1.45}
+    .executive-score{min-width:135px;text-align:center;padding:12px 14px;border-radius:20px;background:#0f172a;color:#fff;box-shadow:0 12px 26px rgba(15,23,42,.22)}
+    .executive-score-label{font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.45px;color:#cbd5e1}
+    .executive-score-value{font-size:34px;font-weight:900;line-height:1;margin-top:5px}
+    .executive-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}
+    .executive-card{padding:13px 14px;border-radius:18px;background:rgba(255,255,255,.92);border:1px solid #e2e8f0;box-shadow:0 8px 18px rgba(15,23,42,.06)}
+    .executive-card.good{border-color:#bbf7d0;background:linear-gradient(180deg,#ffffff 0%,#ecfdf5 100%)}
+    .executive-card.warn{border-color:#fed7aa;background:linear-gradient(180deg,#ffffff 0%,#fff7ed 100%)}
+    .executive-card.bad{border-color:#fecaca;background:linear-gradient(180deg,#ffffff 0%,#fef2f2 100%)}
+    .executive-card-label{font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.35px;color:#64748b}
+    .executive-card-value{font-size:22px;font-weight:900;color:#0f172a;margin-top:6px;line-height:1.1}
+    .executive-card-sub{font-size:11px;color:#64748b;margin-top:6px;line-height:1.35}
+    .executive-insight-list{display:grid;gap:8px;margin-top:12px}
+    .executive-insight{display:flex;gap:8px;align-items:flex-start;padding:10px 12px;border-radius:16px;background:#fff;border:1px solid #e2e8f0;font-size:12px;color:#334155;line-height:1.45}
+    .executive-dot{width:10px;height:10px;border-radius:999px;background:#2563eb;margin-top:4px;flex:0 0 auto}
+    .executive-dot.red{background:#dc2626}.executive-dot.orange{background:#d97706}.executive-dot.green{background:#15803d}
     .pro-alert-card{padding:14px 15px;border-radius:18px;border:1px solid #e2e8f0;background:linear-gradient(180deg,#fff 0%,#f8fafc 100%);box-shadow:0 8px 18px rgba(15,23,42,.05);margin-bottom:10px}
     .pro-alert-card.red{border-color:#fecaca;background:linear-gradient(180deg,#fff 0%,#fef2f2 100%)}
     .pro-alert-card.orange{border-color:#fed7aa;background:linear-gradient(180deg,#fff 0%,#fff7ed 100%)}
@@ -377,6 +399,37 @@
     .super-scope-sidebar-badge .badge-main{font-size:13px;font-weight:900;margin-top:5px;line-height:1.25}
     .super-scope-sidebar-badge .badge-sub{font-size:11px;color:#e0e7ff;margin-top:4px;line-height:1.3}
 
+
+    /* v10.6.15 Mobil Saha Modu */
+    .mobile-field-shell{display:grid;gap:14px}
+    .mobile-hero{border-radius:24px;padding:18px;background:linear-gradient(135deg,#0f172a 0%,#1d4ed8 55%,#0891b2 100%);color:#fff;box-shadow:0 18px 42px rgba(15,23,42,.18);border:1px solid rgba(255,255,255,.16)}
+    .mobile-hero h2{margin:0;font-size:26px;line-height:1.15}.mobile-hero .muted{color:rgba(255,255,255,.82)}
+    .mobile-scope-chip{display:inline-flex;align-items:center;gap:8px;margin-top:10px;padding:8px 11px;border-radius:999px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.24);font-weight:900;font-size:12px;color:#fff}
+    .mobile-action-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+    .mobile-action-btn{min-height:86px;border-radius:22px;padding:14px 12px;font-size:15px;font-weight:900;text-align:left;display:flex;flex-direction:column;justify-content:center;gap:6px;box-shadow:0 12px 26px rgba(37,99,235,.14)}
+    .mobile-action-btn span{display:block;font-size:11px;font-weight:800;opacity:.86;line-height:1.25}
+    .mobile-action-btn.secondary{background:#fff;color:#1d4ed8;border:1px solid #bfdbfe}.mobile-action-btn.success{background:#15803d}.mobile-action-btn.warning{background:#d97706}.mobile-action-btn.danger{background:#dc2626}
+    .mobile-kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}.mobile-kpi{padding:13px 14px;border-radius:20px;background:#fff;border:1px solid #e2e8f0;box-shadow:0 10px 22px rgba(15,23,42,.06)}
+    .mobile-kpi-label{font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.35px;color:#64748b}.mobile-kpi-value{font-size:26px;font-weight:900;color:#0f172a;margin-top:4px}.mobile-kpi-sub{font-size:12px;color:#64748b;margin-top:4px;line-height:1.35}
+    .mobile-card{border:1px solid #e2e8f0;border-radius:22px;padding:15px;background:linear-gradient(180deg,#ffffff 0%,#f8fbff 100%);box-shadow:0 12px 26px rgba(15,23,42,.06)}
+    .mobile-card h3{margin:0 0 10px;font-size:18px;color:#0f172a}.mobile-list{display:grid;gap:8px}.mobile-row{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:10px 11px;border-radius:16px;background:#fff;border:1px solid #edf2f7}
+    .mobile-row-name{font-weight:900;color:#0f172a;font-size:13px}.mobile-row-sub{font-size:12px;color:#64748b;margin-top:2px;line-height:1.35}.mobile-row-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}.mobile-row-actions button{width:auto;padding:7px 9px;border-radius:10px;font-size:12px}
+    @media(max-width:700px){.mobile-action-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.mobile-action-btn{min-height:78px;font-size:14px}.mobile-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.mobile-row{align-items:flex-start;flex-direction:column}.mobile-row-actions{justify-content:flex-start}.main{padding:12px}.card{border-radius:14px}}
+
+
+    .smart-ops-hero{background:linear-gradient(135deg,#020617 0%,#1e3a8a 52%,#0891b2 100%);color:#fff;border:none;box-shadow:0 20px 44px rgba(15,23,42,.24);overflow:hidden;position:relative}
+    .smart-ops-hero::after{content:'';position:absolute;right:-50px;top:-50px;width:170px;height:170px;border-radius:999px;background:rgba(255,255,255,.10)}
+    .smart-ops-hero>*{position:relative;z-index:1}.smart-ops-hero .muted{color:rgba(255,255,255,.82)}
+    .smart-score-ring{display:flex;align-items:center;justify-content:center;width:112px;height:112px;border-radius:999px;background:conic-gradient(#22c55e var(--score-deg,0deg),rgba(255,255,255,.22) 0);box-shadow:inset 0 0 0 10px rgba(255,255,255,.14),0 14px 30px rgba(0,0,0,.18)}
+    .smart-score-ring-inner{display:flex;align-items:center;justify-content:center;flex-direction:column;width:82px;height:82px;border-radius:999px;background:rgba(15,23,42,.86);color:#fff}.smart-score-value{font-size:26px;font-weight:900;line-height:1}.smart-score-label{font-size:10px;font-weight:900;letter-spacing:.45px;text-transform:uppercase;opacity:.78}
+    .smart-ops-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}.smart-ops-card{border:1px solid #e2e8f0;border-radius:20px;padding:15px;background:linear-gradient(180deg,#fff 0%,#f8fafc 100%);box-shadow:0 12px 26px rgba(15,23,42,.07)}
+    .smart-ops-card.good{border-color:#bbf7d0;background:linear-gradient(180deg,#fff 0%,#f0fdf4 100%)}.smart-ops-card.warn{border-color:#fed7aa;background:linear-gradient(180deg,#fff 0%,#fff7ed 100%)}.smart-ops-card.bad{border-color:#fecaca;background:linear-gradient(180deg,#fff 0%,#fef2f2 100%)}.smart-ops-card.info{border-color:#bfdbfe;background:linear-gradient(180deg,#fff 0%,#eff6ff 100%)}
+    .smart-ops-label{font-size:11px;font-weight:900;color:#64748b;text-transform:uppercase;letter-spacing:.35px}.smart-ops-value{font-size:29px;font-weight:900;color:#0f172a;margin-top:6px}.smart-ops-sub{font-size:12px;color:#475569;line-height:1.4;margin-top:6px}
+    .smart-task-list{display:grid;gap:9px}.smart-task-row{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:12px 13px;border-radius:16px;background:#fff;border:1px solid #e2e8f0;box-shadow:0 7px 18px rgba(15,23,42,.05)}.smart-task-row.critical{border-color:#fecaca;background:linear-gradient(180deg,#fff 0%,#fef2f2 100%)}.smart-task-row.high{border-color:#fed7aa;background:linear-gradient(180deg,#fff 0%,#fff7ed 100%)}.smart-task-row.normal{border-color:#bfdbfe;background:linear-gradient(180deg,#fff 0%,#eff6ff 100%)}
+    .smart-task-title{font-size:14px;font-weight:900;color:#0f172a}.smart-task-sub{font-size:12px;color:#64748b;line-height:1.35;margin-top:3px}.smart-task-badge{display:inline-flex;align-items:center;padding:5px 8px;border-radius:999px;background:#f8fafc;border:1px solid #e2e8f0;color:#475569;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.25px}.smart-task-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}.smart-task-actions button{width:auto;padding:7px 9px;border-radius:10px;font-size:12px}
+    .timeline-wrap{position:relative;display:grid;gap:10px;margin-top:8px}.timeline-row{position:relative;display:grid;grid-template-columns:150px 1fr;gap:12px;padding:12px 14px;border:1px solid #e2e8f0;border-radius:18px;background:linear-gradient(180deg,#fff 0%,#f8fafc 100%);box-shadow:0 8px 20px rgba(15,23,42,.05)}.timeline-time{font-size:12px;font-weight:900;color:#334155}.timeline-title{font-size:15px;font-weight:900;color:#0f172a}.timeline-sub{font-size:12px;color:#64748b;line-height:1.45;margin-top:4px}.timeline-type{display:inline-flex;margin-top:7px;padding:4px 8px;border-radius:999px;background:#eff6ff;border:1px solid #bfdbfe;color:#1d4ed8;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.35px}
+    @media(max-width:760px){.timeline-row{grid-template-columns:1fr}.smart-task-row{grid-template-columns:1fr}.smart-task-actions{justify-content:flex-start}}
+
   </style>
 </head>
 <body>
@@ -417,6 +470,9 @@
         <div class="menu-title" data-i18n-key="Genel">Genel</div>
         <button class="menu-btn active" data-page="dashboard" data-i18n-key="Dashboard">Dashboard</button>
         <button class="menu-btn" data-page="dashboardPro" data-i18n-key="Dashboard Pro">Dashboard Pro</button>
+        <button class="menu-btn" data-page="mobileField" data-i18n-key="Mobil Saha">Mobil Saha</button>
+        <button class="menu-btn" data-page="operationCenter" data-i18n-key="Akıllı Operasyon">Akıllı Operasyon</button>
+        <button class="menu-btn" data-page="operationTimeline" data-i18n-key="Canlı Timeline">Canlı Timeline</button>
       </div>
 
       <div class="menu-group">
@@ -478,6 +534,9 @@
 
       <section id="dashboard" class="page active"></section>
       <section id="dashboardPro" class="page"></section>
+      <section id="mobileField" class="page"></section>
+      <section id="operationCenter" class="page"></section>
+      <section id="operationTimeline" class="page"></section>
       <section id="production" class="page"></section>
       <section id="breakdown" class="page"></section>
       <section id="rental" class="page"></section>
@@ -508,10 +567,10 @@
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <script>
 (function(){
-  const DEVELOPMENT_BUILD_NAME = 'index_maden_takip_sistemi_gpssiz_v10_6_13_record_engine_stabilization_2026-05-07';
+  const DEVELOPMENT_BUILD_NAME = 'index_maden_takip_sistemi_gpssiz_v10_6_17_smart_operations_timeline_2026-05-07';
   // v8 stabilizasyon: mevcut çalışan akış korunur; yeni loader/arıza/vardiya mantığı fallback ile eklenir.
   // v10.6.12: SaaS izolasyon katmanı. Local fallback ayarları da şirket+saha bazlı ayrılır.
-  // v10.6.13: Kayıt motoru stabilizasyonu. Duplicate üretim/logistik engeli ve scoped update güvenliği eklenir.
+  // v10.6.14: Kayıt motoru stabilizasyonu. Duplicate üretim/logistik engeli ve scoped update güvenliği eklenir.
   function scopeLocalStorageKey(baseKey){
     try{
       const companyId = (typeof selectedCompanyIdForScope === 'function' ? selectedCompanyIdForScope() : '') || '';
@@ -1916,19 +1975,19 @@
   function canAccessPage(pageId){
     const role = currentUserRole();
     const allowedPages = {
-      super_admin: ['dashboard','dashboardPro','production','breakdown','rental','logisticsControl','meter','trip','fuel','drillMeterage','records','deleted','definitions','users','reports','saasAdmin'],
-      admin: ['dashboard','dashboardPro','production','breakdown','rental','logisticsControl','meter','trip','fuel','drillMeterage','records','deleted','definitions','users','reports'],
-      boss: ['dashboard','dashboardPro','reports'],
-      site_manager: ['dashboard','production','breakdown','rental','logisticsControl','meter','trip','fuel','drillMeterage','records'],
-      reporter: ['logisticsControl','meter','trip','fuel','drillMeterage'],
-      maintenance: ['breakdown','records'],
-      finance: ['dashboard','dashboardPro','records','reports'],
-      guest: ['dashboard']
+      super_admin: ['dashboard','dashboardPro','mobileField','operationCenter','operationTimeline','production','breakdown','rental','logisticsControl','meter','trip','fuel','drillMeterage','records','deleted','definitions','users','reports','saasAdmin'],
+      admin: ['dashboard','dashboardPro','mobileField','operationCenter','operationTimeline','production','breakdown','rental','logisticsControl','meter','trip','fuel','drillMeterage','records','deleted','definitions','users','reports'],
+      boss: ['dashboard','dashboardPro','mobileField','operationCenter','operationTimeline','reports'],
+      site_manager: ['dashboard','mobileField','operationCenter','operationTimeline','production','breakdown','rental','logisticsControl','meter','trip','fuel','drillMeterage','records'],
+      reporter: ['mobileField','operationCenter','operationTimeline','logisticsControl','meter','trip','fuel','drillMeterage'],
+      maintenance: ['mobileField','operationCenter','operationTimeline','breakdown','records'],
+      finance: ['dashboard','dashboardPro','mobileField','operationCenter','operationTimeline','records','reports'],
+      guest: ['dashboard','mobileField','operationCenter','operationTimeline']
     };
     return (allowedPages[role] || allowedPages.guest).includes(pageId);
   }
   function firstAllowedPage(){
-    const order = ['dashboard','logisticsControl','breakdown','dashboardPro','records'];
+    const order = ['dashboard','operationCenter','operationTimeline','mobileField','logisticsControl','breakdown','dashboardPro','records'];
     return order.find(canAccessPage) || 'dashboard';
   }
   function canEditOperations(){
@@ -8296,6 +8355,75 @@
     });
   }
 
+
+  function renderMobileField(){
+    const el = document.getElementById('mobileField');
+    if(!el) return;
+    const scopeCompanyId = typeof selectedCompanyIdForScope === 'function' ? selectedCompanyIdForScope() : String(state.profile?.company_id || '');
+    const scopeSiteId = typeof selectedSiteIdForScope === 'function' ? selectedSiteIdForScope() : String(state.profile?.site_id || '');
+    const scopeOk = currentUserRole() === 'super_admin' ? Boolean(scopeCompanyId && scopeSiteId) : true;
+    const companyName = (typeof companyNameById === 'function' ? companyNameById(scopeCompanyId) : '') || state.profile?.company_name || scopeCompanyId || '-';
+    const siteName = ((state.sites || []).find(s=>String(s.id || '') === String(scopeSiteId))?.name) || state.profile?.site_name || scopeSiteId || '-';
+    const shift = getCurrentShiftInfo ? getCurrentShiftInfo() : null;
+    const activeProductions = (state.productions || []).filter(r=>!r.deleted_at && !r.end_at && !r.end_time);
+    const activeBreakdowns = (state.breakdowns || []).filter(r=>!r.deleted_at && !r.end_at && !r.end_time);
+    const activeRentals = (state.rentals || []).filter(r=>!r.deleted_at && !r.end_at && !r.end_time);
+    const activeTrucks = activeProductions.filter(r=>isTruckEquipment(findEquipmentById(r.equipment_id)));
+    const activeDrills = activeProductions.filter(r=>isDrillEquipment(findEquipmentById(r.equipment_id)));
+    const pendingRows = (state.productions || []).filter(r=>!r.deleted_at && !isOpenRow(r)).map(row=>{ const b = productionLogisticsBundle(row); return { row, status:b.status, missingTrip:b.isTruck && !b.hasTripLog, missingFuel:!b.hasFuelLog, missingMeter:(!b.hasMeterLog && !b.hasEndMeter), missingDrillMeterage:b.isDrill && !b.hasDrillLog }; }).filter(x=>x.missingTrip || x.missingFuel || x.missingMeter || x.missingDrillMeterage).slice(0,8);
+    const canProd = canManageProduction();
+    const canLog = canEnterLogistics();
+    const canBreak = canManageBreakdowns();
+    const firstExc = (state.equipments || []).find(e=>isLoadingEquipment(e) && !e.deleted_at);
+    const firstTruck = (state.equipments || []).find(e=>isTruckEquipment(e) && !e.deleted_at);
+    const firstDrill = (state.equipments || []).find(e=>isDrillEquipment(e) && !e.deleted_at);
+    const mobileStartPayload = eq=>encodeModalData({ row: eq || null });
+    const quickButtons = [
+      canProd && firstExc ? `<button class="mobile-action-btn success" data-open-modal="startProductionExcavator" data-modal-data="${mobileStartPayload(firstExc)}">⛏️ Yükleyici Başlat<span>Ekskavatör / loder üretime al</span></button>` : '',
+      canProd && firstTruck ? `<button class="mobile-action-btn" data-open-modal="startProductionTruck" data-modal-data="${mobileStartPayload(firstTruck)}">🚚 Kamyon Başlat<span>Bağlı yükleyici ile üretime al</span></button>` : '',
+      canProd && firstDrill ? `<button class="mobile-action-btn secondary" data-open-modal="startProductionDrill" data-modal-data="${mobileStartPayload(firstDrill)}">🛠️ Delici Başlat<span>Delici üretim akışı</span></button>` : '',
+      canBreak ? `<button class="mobile-action-btn danger" data-open-modal="startBreakdown">⚠️ Arıza Aç<span>Makineyi arızaya al</span></button>` : '',
+      canLog ? `<button class="mobile-action-btn warning" data-open-modal="newTrip">🔁 Sefer Gir<span>Kamyon sefer kaydı</span></button>` : '',
+      canLog ? `<button class="mobile-action-btn secondary" data-open-modal="newFuel">⛽ Yakıt Gir<span>Litre ve sayaç kaydı</span></button>` : '',
+      canLog ? `<button class="mobile-action-btn secondary" data-open-modal="newMeter">⏱️ Sayaç Gir<span>Vardiya sonu sayaç</span></button>` : '',
+      canLog ? `<button class="mobile-action-btn secondary" data-open-modal="newDrillMeterage">📏 Delici Metraj<span>Delinen metre girişi</span></button>` : ''
+    ].filter(Boolean).join('');
+    const activeList = activeProductions.slice(0,10).map(r=>`
+      <div class="mobile-row">
+        <div><div class="mobile-row-name">${escapeHtml(r.equipment_name || r.equipment_id || '-')}</div><div class="mobile-row-sub">${escapeHtml(r.package_name || '-')} • ${escapeHtml(getShiftNameForRow(r) || '-')}</div></div>
+        <div class="mobile-row-actions">${canProd ? `<button class="success" data-open-modal="endProduction" data-modal-data="${encodeModalData(r)}">Bitir</button>` : ''}</div>
+      </div>`).join('') || '<div class="empty">Aktif üretim yok.</div>';
+    const pendingList = pendingRows.map(x=>{
+      const row = x.row || x.production || x;
+      const actions = [];
+      if(row && x.missingTrip) actions.push(`<button class="secondary" data-open-modal="newTrip" data-modal-data="${encodeModalData({prefill:{production_id:row.id||'',equipment_id:row.equipment_id||'',package_id:row.package_id||'',package_name:row.package_name||'',from_location:row.from_location||'',to_location:row.to_location||'',shift_name:getShiftNameForRow(row)||'',date:String(resolveShiftBucketForRow(row)?.shift_date || row.start_at || row.created_at || todayStr()).slice(0,10)}})}">Sefer</button>`);
+      if(row && x.missingFuel) actions.push(`<button class="secondary" data-open-modal="newFuel" data-modal-data="${encodeModalData({prefill:{production_id:row.id||'',equipment_id:row.equipment_id||'',equipment_type:detectEquipmentTypeKeyById(row.equipment_id||''),shift_name:getShiftNameForRow(row)||'',date:String(resolveShiftBucketForRow(row)?.shift_date || row.start_at || row.created_at || todayStr()).slice(0,10)}})}">Yakıt</button>`);
+      if(row && x.missingMeter) actions.push(`<button class="secondary" data-open-modal="newMeter" data-modal-data="${encodeModalData({prefill:{production_id:row.id||'',equipment_id:row.equipment_id||'',equipment_type:detectEquipmentTypeKeyById(row.equipment_id||''),shift_name:getShiftNameForRow(row)||'',date:String(resolveShiftBucketForRow(row)?.shift_date || row.start_at || row.created_at || todayStr()).slice(0,10)}})}">Sayaç</button>`);
+      if(row && x.missingDrillMeterage) actions.push(`<button class="secondary" data-open-modal="newDrillMeterage" data-modal-data="${encodeModalData({prefill:{production_id:row.id||'',equipment_id:row.equipment_id||'',shift_name:getShiftNameForRow(row)||'',date:String(resolveShiftBucketForRow(row)?.shift_date || row.start_at || row.created_at || todayStr()).slice(0,10)}})}">Metraj</button>`);
+      return `<div class="mobile-row"><div><div class="mobile-row-name">${escapeHtml(row?.equipment_name || '-')}</div><div class="mobile-row-sub">Eksik: ${[x.missingTrip?'Sefer':'',x.missingFuel?'Yakıt':'',x.missingMeter?'Sayaç':'',x.missingDrillMeterage?'Delici metraj':''].filter(Boolean).join(' / ')}</div></div><div class="mobile-row-actions">${actions.join('')}</div></div>`;
+    }).join('') || '<div class="empty">Eksik lojistik görevi görünmüyor.</div>';
+    el.innerHTML = `
+      <div class="mobile-field-shell">
+        <div class="mobile-hero">
+          <h2>📱 Mobil Saha Modu</h2>
+          <div class="muted">Saha kullanımı için sade, büyük butonlu hızlı işlem ekranı.</div>
+          <div class="mobile-scope-chip">${scopeOk ? '✅' : '⚠️'} ${escapeHtml(companyName || '-')} / ${escapeHtml(siteName || '-')} • ${escapeHtml(shift?.name || 'Vardiya yok')}</div>
+        </div>
+        ${!scopeOk ? `<div class="notice">Devam etmek için Super Admin olarak şirket ve saha seçmelisin.</div>` : ''}
+        <div class="mobile-kpi-grid">
+          <div class="mobile-kpi"><div class="mobile-kpi-label">Aktif Üretim</div><div class="mobile-kpi-value">${activeProductions.length}</div><div class="mobile-kpi-sub">Kamyon: ${activeTrucks.length} • Delici: ${activeDrills.length}</div></div>
+          <div class="mobile-kpi"><div class="mobile-kpi-label">Arıza</div><div class="mobile-kpi-value">${activeBreakdowns.length}</div><div class="mobile-kpi-sub">Aktif arıza kaydı</div></div>
+          <div class="mobile-kpi"><div class="mobile-kpi-label">Kiralık</div><div class="mobile-kpi-value">${activeRentals.length}</div><div class="mobile-kpi-sub">Aktif kiralık çalışma</div></div>
+          <div class="mobile-kpi"><div class="mobile-kpi-label">Eksik Görev</div><div class="mobile-kpi-value">${pendingRows.length}</div><div class="mobile-kpi-sub">Sefer / Yakıt / Sayaç / Metraj</div></div>
+        </div>
+        <div class="mobile-card"><h3>Hızlı İşlemler</h3><div class="mobile-action-grid">${quickButtons || '<div class="empty">Bu rol için hızlı işlem yetkisi yok.</div>'}</div></div>
+        <div class="grid g2">
+          <div class="mobile-card"><h3>Aktif Üretimler</h3><div class="mobile-list">${activeList}</div></div>
+          <div class="mobile-card"><h3>Eksik Lojistik Görevleri</h3><div class="mobile-list">${pendingList}</div></div>
+        </div>
+      </div>`;
+  }
+
   function renderDashboard(){
     const snapshot = getCurrentShiftSnapshot();
     const currentShift = snapshot.currentShift;
@@ -9019,6 +9147,11 @@
         </div>
       </div>
       <div class="grid g1" style="margin-top:16px">
+        <div class="executive-panel">
+          <div id="dashboardProExecutiveBody"><div class="empty">Yönetici özeti hesaplanıyor...</div></div>
+        </div>
+      </div>
+      <div class="grid g1" style="margin-top:16px">
         <div class="dashboard-block">
           <h3>Akıllı Uyarılar</h3>
           <div id="dashboardProAlertsBody" class="dashboard-scroll"></div>
@@ -9464,6 +9597,77 @@
   }
 
 
+  function dashboardProExecutiveScore(ctx){
+    const tonnage = Number(ctx?.tonnage || 0);
+    const trips = Number(ctx?.trips || 0);
+    const fuelPerTon = Number(ctx?.fuelPerTon || 0);
+    const critical = Number(ctx?.criticalAlerts || 0);
+    const warning = Number(ctx?.warningAlerts || 0);
+    const missingTotal = Number(ctx?.missingTotal || 0);
+    const invalidFuel = Number(ctx?.invalidFuel || 0);
+    const breakdownMinutes = Number(ctx?.breakdownMinutes || 0);
+    let score = 100;
+    score -= Math.min(32, critical * 8);
+    score -= Math.min(18, warning * 3);
+    score -= Math.min(18, missingTotal * 4);
+    score -= Math.min(12, invalidFuel * 4);
+    if(tonnage <= 0 && trips > 0) score -= 18;
+    if(fuelPerTon > 0.20) score -= 8;
+    if(breakdownMinutes >= 120) score -= Math.min(12, Math.floor(breakdownMinutes / 60));
+    return Math.max(0, Math.min(100, Math.round(score)));
+  }
+  function dashboardProExecutiveScoreClass(score){
+    const n = Number(score || 0);
+    if(n >= 80) return 'good';
+    if(n >= 60) return 'warn';
+    return 'bad';
+  }
+  function renderDashboardProExecutivePanel(ctx){
+    const score = dashboardProExecutiveScore(ctx);
+    const scoreClass = dashboardProExecutiveScoreClass(score);
+    const critical = Number(ctx?.criticalAlerts || 0);
+    const warning = Number(ctx?.warningAlerts || 0);
+    const missingTotal = Number(ctx?.missingTotal || 0);
+    const fuelPerTon = Number(ctx?.fuelPerTon || 0);
+    const tonPerHour = Number(ctx?.tonPerHour || 0);
+    const drillMeterPerHour = Number(ctx?.drillMeterPerHour || 0);
+    const bestTruck = ctx?.bestTruck || null;
+    const bestLoader = ctx?.bestLoader || null;
+    const bestDrill = ctx?.bestDrill || null;
+    const insightRows = [];
+    if(critical > 0) insightRows.push({level:'red', text:`${critical} kritik uyarı var. Önce eksik lojistik, tonaj ve yakıt tüketimi hesaplarını kapatmak gerekir.`});
+    else if(warning > 0) insightRows.push({level:'orange', text:`Kritik hata yok; ${warning} dikkat uyarısı takip edilmeli.`});
+    else insightRows.push({level:'green', text:'Seçilen aralıkta kritik uyarı görünmüyor. Analiz verisi yönetici karar ekranı için temiz.'});
+    if(missingTotal > 0) insightRows.push({level:'orange', text:`Eksik giriş toplamı ${missingTotal}. Dashboard Pro doğruluğu için bu görevler kapatılmalı.`});
+    if(bestTruck) insightRows.push({level:'green', text:`En yüksek kamyon katkısı: ${bestTruck.name || '-'} • ${Number(bestTruck.tonnage || 0).toFixed(0)} ton • ${Number(bestTruck.tripCount || 0)} sefer.`});
+    if(bestLoader) insightRows.push({level:'green', text:`En verimli yükleyici: ${bestLoader.name || '-'} • ${Number(bestLoader.tonPerHour || 0).toFixed(1)} ton/saat.`});
+    if(bestDrill) insightRows.push({level:'green', text:`En verimli delici: ${bestDrill.name || '-'} • ${Number(bestDrill.meterPerHour || 0).toFixed(1)} m/saat.`});
+    return `
+      <div class="executive-head">
+        <div>
+          <h3 class="executive-title">Yönetici Özeti</h3>
+          <div class="executive-sub">${escapeHtml(ctx?.label || '-')} • Şirket/saha kapsamına göre hesaplanan karar özeti</div>
+        </div>
+        <div class="executive-score ${scoreClass}">
+          <div class="executive-score-label">Operasyon Skoru</div>
+          <div class="executive-score-value">${score}</div>
+        </div>
+      </div>
+      <div class="executive-grid">
+        <div class="executive-card ${scoreClass}"><div class="executive-card-label">Veri Güveni</div><div class="executive-card-value">${score >= 80 ? 'Güçlü' : (score >= 60 ? 'Kontrol Gerekli' : 'Riskli')}</div><div class="executive-card-sub">Eksik giriş, kritik uyarı ve yakıt hesap kontrolüne göre.</div></div>
+        <div class="executive-card"><div class="executive-card-label">Ton / Saat</div><div class="executive-card-value">${tonPerHour > 0 ? tonPerHour.toFixed(1) : '-'}</div><div class="executive-card-sub">Toplam tonaj / kapalı üretim süresi.</div></div>
+        <div class="executive-card"><div class="executive-card-label">L / Ton</div><div class="executive-card-value">${fuelPerTon > 0 ? fuelPerTon.toFixed(3) : '-'}</div><div class="executive-card-sub">Sayaç farkından hesaplanan yakıt tüketimi / tonaj.</div></div>
+        <div class="executive-card"><div class="executive-card-label">Delici m / Saat</div><div class="executive-card-value">${drillMeterPerHour > 0 ? drillMeterPerHour.toFixed(1) : '-'}</div><div class="executive-card-sub">Delici metraj / delici çalışma saati.</div></div>
+        <div class="executive-card ${critical ? 'bad' : (warning ? 'warn' : 'good')}"><div class="executive-card-label">Uyarı Durumu</div><div class="executive-card-value">${critical} / ${warning}</div><div class="executive-card-sub">Kritik / dikkat uyarısı.</div></div>
+        <div class="executive-card ${missingTotal ? 'warn' : 'good'}"><div class="executive-card-label">Eksik Lojistik</div><div class="executive-card-value">${missingTotal}</div><div class="executive-card-sub">Sayaç + sefer + yakıt + delici metraj.</div></div>
+      </div>
+      <div class="executive-insight-list">
+        ${insightRows.slice(0,6).map(row=>`<div class="executive-insight"><span class="executive-dot ${row.level}"></span><div>${escapeHtml(row.text)}</div></div>`).join('')}
+      </div>
+    `;
+  }
+
+
   async function renderDashboardProData(){
 
     const buckets = getCompletedShiftBuckets();
@@ -9471,6 +9675,7 @@
     const selected = selectedBuckets[0] || null;
     if(!selectedBuckets.length){
       document.getElementById('dashboardProAlertsBody').innerHTML = '<div class="empty">Seçilen tarih/vardiya filtresi için tamamlanmış veri bulunamadı.</div>';
+      const executiveBody = document.getElementById('dashboardProExecutiveBody'); if(executiveBody) executiveBody.innerHTML = '<div class="empty">Yönetici özeti için veri yok.</div>';
       document.getElementById('dashboardProTruckBody').innerHTML = '<div class="empty">Kamyon analizi yok.</div>';
       document.getElementById('dashboardProExcBody').innerHTML = '<div class="empty">Ekskavatör analizi yok.</div>';
       const drillBody = document.getElementById('dashboardProDrillBody'); if(drillBody) drillBody.innerHTML = '<div class="empty">Delici analizi yok.</div>';
@@ -9702,6 +9907,41 @@
     const maxDrillMeters = Math.max(1, ...drillItems.map(x=>Number(x.drilledMeters || 0) || 0));
     const maxDrillMeterPerHour = Math.max(1, ...drillItems.map(x=>Number(x.meterPerHour || 0) || 0));
 
+    const criticalAlertCount = alerts.filter(a=>a.level === 'red').length;
+    const warningAlertCount = alerts.filter(a=>a.level === 'orange').length;
+    const missingLogisticsTotal = (logisticsMissing.meter.length || 0) + (logisticsMissing.fuel.length || 0) + (logisticsMissing.trip.length || 0) + (logisticsMissing.drill.length || 0);
+    const executiveBestTruck = truckItems.slice().sort((a,b)=>(Number(b.tonnage || 0) - Number(a.tonnage || 0)) || (Number(b.tripCount || 0) - Number(a.tripCount || 0)))[0] || null;
+    const executiveBestLoader = excItems.slice().sort((a,b)=>(Number(b.tonPerHour || 0) - Number(a.tonPerHour || 0)) || (Number(b.tripCount || 0) - Number(a.tripCount || 0)))[0] || null;
+    const executiveBestDrill = drillItems.slice().sort((a,b)=>(Number(b.meterPerHour || 0) - Number(a.meterPerHour || 0)) || (Number(b.drilledMeters || 0) - Number(a.drilledMeters || 0)))[0] || null;
+    const executiveScore = dashboardProExecutiveScore({
+      label: summary.label,
+      trips: filteredTripCount,
+      tonnage: filteredTonnage,
+      fuelPerTon,
+      criticalAlerts: criticalAlertCount,
+      warningAlerts: warningAlertCount,
+      missingTotal: missingLogisticsTotal,
+      invalidFuel: fuelConsumptionInvalidCount,
+      breakdownMinutes: filteredBreakdownMinutes
+    });
+    const executiveBody = document.getElementById('dashboardProExecutiveBody');
+    if(executiveBody) executiveBody.innerHTML = renderDashboardProExecutivePanel({
+      label: summary.label,
+      trips: filteredTripCount,
+      tonnage: filteredTonnage,
+      fuelPerTon,
+      tonPerHour: filteredWorkHours > 0 ? (filteredTonnage / filteredWorkHours) : 0,
+      drillMeterPerHour: filteredDrillMeterPerHour,
+      criticalAlerts: criticalAlertCount,
+      warningAlerts: warningAlertCount,
+      missingTotal: missingLogisticsTotal,
+      invalidFuel: fuelConsumptionInvalidCount,
+      breakdownMinutes: filteredBreakdownMinutes,
+      bestTruck: executiveBestTruck,
+      bestLoader: executiveBestLoader,
+      bestDrill: executiveBestDrill
+    });
+
     document.getElementById('dashboardProAlertsBody').innerHTML = renderDashboardProSmartAlerts(alerts);
 
 
@@ -9826,6 +10066,10 @@
       },
       summaryRows: [
         { 'Kalem': 'Seçilen Vardiya', 'Değer': summary.label },
+        { 'Kalem': 'Operasyon Skoru', 'Değer': executiveScore },
+        { 'Kalem': 'Kritik Uyarı', 'Değer': criticalAlertCount },
+        { 'Kalem': 'Dikkat Uyarısı', 'Değer': warningAlertCount },
+        { 'Kalem': 'Eksik Lojistik Görevi', 'Değer': missingLogisticsTotal },
         { 'Kalem': 'Toplam Sefer', 'Değer': filteredTripCount },
         { 'Kalem': 'Toplam Verilen Yakıt (L)', 'Değer': Number(filteredFuelLiters.toFixed(1)) },
         { 'Kalem': 'Toplam Yakıt Tüketimi (L)', 'Değer': Number(totalConsumedFuelLiters.toFixed(1)) },
@@ -13045,6 +13289,124 @@ function renderUsers(){
     `;
   }
 
+
+
+  function smartOpsClosedProductions(){
+    return (state.productions || []).filter(r=>!r?.deleted_at && !isOpenRow(r));
+  }
+  function smartOpsActiveProductions(){
+    return (state.productions || []).filter(r=>!r?.deleted_at && isOpenRow(r));
+  }
+  function smartOpsPendingEntries(){
+    return smartOpsClosedProductions().map(row=>({row,b:productionLogisticsBundle(row)})).filter(x=>x.b.status === 'missing' || x.b.status === 'error');
+  }
+  function smartOpsBuildTasks(){
+    const tasks = [];
+    const pushTask = (priority,title,sub,row,actionsHtml,type)=>tasks.push({priority,title,sub,row,actionsHtml:actionsHtml||'',type:type||'Görev'});
+    smartOpsActiveProductions().forEach(row=>{
+      const b = productionLogisticsBundle(row);
+      if(b.isTruck && !getProductionLoaderId(row)) pushTask('critical','Yükleyici bağı olmayan aktif kamyon',`${row.equipment_name || '-'} üretimde ama bağlı yükleyici seçilmemiş.`,row,`<button class="secondary" data-open-modal="editRecord" data-modal-data="${encodeModalData({table:'productions', row})}">İncele</button>`,'Bağlantı');
+      if(!b.hasStartMeter) pushTask('high','Başlangıç sayacı eksik aktif üretim',`${row.equipment_name || '-'} için başlangıç sayaç değeri kontrol edilmeli.`,row,`<button class="secondary" data-open-modal="editRecord" data-modal-data="${encodeModalData({table:'productions', row})}">Düzenle</button>`,'Sayaç');
+    });
+    smartOpsPendingEntries().forEach(({row,b})=>{
+      const actions = [];
+      if(!b.hasEndMeter || !b.hasMeterLog) actions.push(smartEntryButton('meter', row, 'Sayaç gir', 'newMeter'));
+      if(!b.hasFuelLog) actions.push(smartEntryButton('fuel', row, 'Yakıt gir', 'newFuel'));
+      if(b.isTruck && !b.hasTripLog) actions.push(smartEntryButton('trip', row, 'Sefer gir', 'newTrip'));
+      if(b.isDrill && !b.hasDrillLog) actions.push(smartEntryButton('drillMeterage', row, 'Metraj gir', 'newDrillMeterage'));
+      const priority = b.status === 'error' ? 'critical' : (b.issues.length >= 2 ? 'high' : 'normal');
+      pushTask(priority, `${row.equipment_name || '-'} lojistik tamamlanmalı`, b.issues.join(' / ') || 'Eksik lojistik girişi var.', row, actions.join(''), 'Lojistik');
+    });
+    (state.breakdowns || []).filter(r=>!r?.deleted_at && isOpenRow(r)).forEach(row=>{
+      pushTask('high','Aktif arıza devam ediyor',`${row.equipment_name || '-'} arızada. Başlangıç: ${fmtDate(row.start_at || row.start_time)}`,row,`<button class="secondary" data-open-modal="editRecord" data-modal-data="${encodeModalData({table:'breakdowns', row})}">Arızayı incele</button>`,'Arıza');
+    });
+    return tasks.sort((a,b)=>(({critical:0,high:1,normal:2}[a.priority] ?? 9) - (({critical:0,high:1,normal:2}[b.priority] ?? 9))));
+  }
+  function smartOpsHealthScore(tasks){
+    const active = smartOpsActiveProductions().length;
+    const closed = smartOpsClosedProductions().length;
+    const missing = tasks.filter(t=>t.type === 'Lojistik').length;
+    const critical = tasks.filter(t=>t.priority === 'critical').length;
+    const high = tasks.filter(t=>t.priority === 'high').length;
+    let score = 100;
+    score -= Math.min(32, critical * 9);
+    score -= Math.min(24, high * 5);
+    score -= Math.min(20, missing * 3);
+    if(active === 0 && closed > 0) score -= 4;
+    if(closed > 0 && missing === 0) score += 3;
+    return Math.max(0, Math.min(100, Math.round(score)));
+  }
+  function renderOperationCenter(){
+    const el = document.getElementById('operationCenter');
+    if(!el) return;
+    const tasks = smartOpsBuildTasks();
+    const score = smartOpsHealthScore(tasks);
+    const activeProd = smartOpsActiveProductions();
+    const activeBreak = (state.breakdowns || []).filter(r=>!r?.deleted_at && isOpenRow(r));
+    const activeRent = (state.rentals || []).filter(r=>!r?.deleted_at && isOpenRow(r));
+    const closed = smartOpsClosedProductions();
+    const pending = smartOpsPendingEntries();
+    const critical = tasks.filter(t=>t.priority === 'critical').length;
+    const high = tasks.filter(t=>t.priority === 'high').length;
+    const scoreDeg = Math.max(0,Math.min(360,score*3.6));
+    const taskHtml = tasks.length ? tasks.slice(0,40).map(t=>`
+      <div class="smart-task-row ${escapeHtml(t.priority)}">
+        <div>
+          <div><span class="smart-task-badge">${escapeHtml(t.priority === 'critical' ? 'Kritik' : t.priority === 'high' ? 'Yüksek' : 'Normal')}</span> <span class="smart-task-badge">${escapeHtml(t.type)}</span></div>
+          <div class="smart-task-title" style="margin-top:7px">${escapeHtml(t.title)}</div>
+          <div class="smart-task-sub">${escapeHtml(t.sub)}</div>
+        </div>
+        <div class="smart-task-actions">${t.actionsHtml || `<button class="secondary" data-open-modal="editRecord" data-modal-data="${encodeModalData({table:'productions', row:t.row})}">İncele</button>`}</div>
+      </div>`).join('') : '<div class="empty">Açık kritik görev yok. Operasyon sağlığı iyi görünüyor.</div>';
+    el.innerHTML = `
+      <div class="card smart-ops-hero">
+        <div class="inline" style="align-items:center;justify-content:space-between">
+          <div style="min-width:260px;flex:2">
+            <h2 class="section-title" style="color:#fff;margin-bottom:6px">Akıllı Operasyon Merkezi</h2>
+            <div class="muted">Seçili şirket+saha kapsamındaki üretim, lojistik, arıza ve veri kalitesi otomatik yorumlanır.</div>
+          </div>
+          <div class="smart-score-ring" style="--score-deg:${scoreDeg}deg"><div class="smart-score-ring-inner"><div class="smart-score-value">${score}</div><div class="smart-score-label">Skor</div></div></div>
+        </div>
+      </div>
+      <div class="smart-ops-grid" style="margin-top:14px">
+        <div class="smart-ops-card info"><div class="smart-ops-label">Aktif Üretim</div><div class="smart-ops-value">${activeProd.length}</div><div class="smart-ops-sub">Canlı üretimde görünen ekipman.</div></div>
+        <div class="smart-ops-card ${activeBreak.length?'bad':'good'}"><div class="smart-ops-label">Aktif Arıza</div><div class="smart-ops-value">${activeBreak.length}</div><div class="smart-ops-sub">Arızada açık bekleyen ekipman.</div></div>
+        <div class="smart-ops-card ${pending.length?'warn':'good'}"><div class="smart-ops-label">Eksik/Hatalı Kayıt</div><div class="smart-ops-value">${pending.length}</div><div class="smart-ops-sub">Kapalı üretimde tamamlanması gereken kayıt.</div></div>
+        <div class="smart-ops-card ${critical?'bad':high?'warn':'good'}"><div class="smart-ops-label">Kritik/Yüksek Görev</div><div class="smart-ops-value">${critical}/${high}</div><div class="smart-ops-sub">Öncelikli saha görevleri.</div></div>
+        <div class="smart-ops-card info"><div class="smart-ops-label">Kiralık Aktif</div><div class="smart-ops-value">${activeRent.length}</div><div class="smart-ops-sub">Açık kiralık çalışma kaydı.</div></div>
+        <div class="smart-ops-card info"><div class="smart-ops-label">Kapalı Üretim</div><div class="smart-ops-value">${closed.length}</div><div class="smart-ops-sub">Analize girecek üretim kayıtları.</div></div>
+      </div>
+      <div class="grid g2" style="margin-top:14px">
+        <div class="card"><h3 class="section-title" style="font-size:20px">Akıllı Görev Merkezi</h3><div class="smart-task-list">${taskHtml}</div></div>
+        <div class="card"><h3 class="section-title" style="font-size:20px">Operasyon Yorumu</h3>
+          <div class="smart-task-list">
+            <div class="smart-task-row ${score>=85?'normal':score>=65?'high':'critical'}"><div><div class="smart-task-title">Saha sağlık skoru ${score}/100</div><div class="smart-task-sub">Skor; eksik lojistik, aktif arıza, kritik veri hatası ve açık üretim durumuna göre hesaplandı.</div></div></div>
+            <div class="smart-task-row ${pending.length?'high':'normal'}"><div><div class="smart-task-title">Dashboard Pro güveni</div><div class="smart-task-sub">${pending.length ? `${pending.length} eksik/hatalı kayıt kapanmadan analiz sonuçları eksik kalabilir.` : 'Eksik lojistik görünmüyor; analiz güveni yüksek.'}</div></div></div>
+            <div class="smart-task-row ${activeBreak.length?'high':'normal'}"><div><div class="smart-task-title">Arıza etkisi</div><div class="smart-task-sub">${activeBreak.length ? `${activeBreak.length} aktif arıza üretim kapasitesini etkiliyor.` : 'Aktif arıza görünmüyor.'}</div></div></div>
+          </div>
+        </div>
+      </div>`;
+  }
+  function smartOpsTimelineEvents(){
+    const events = [];
+    const add = (at,type,title,sub,row)=>{ if(at) events.push({at:new Date(at),type,title,sub,row}); };
+    (state.productions || []).filter(r=>!r?.deleted_at).forEach(r=>{ add(r.start_at||r.start_time||r.created_at,'Üretim Başladı',`${r.equipment_name || '-'} üretime başladı`,`${r.package_name || '-'} • ${(r.from_location||'')}${r.to_location?' → '+r.to_location:''}`,r); add(r.end_at||r.end_time,'Üretim Bitti',`${r.equipment_name || '-'} üretim kapandı`,`${getShiftNameForRow(r) || ''} • ${fmtDate(r.end_at||r.end_time)}`,r); });
+    (state.breakdowns || []).filter(r=>!r?.deleted_at).forEach(r=>{ add(r.start_at||r.start_time||r.created_at,'Arıza',`${r.equipment_name || '-'} arızaya geçti`,r.reason || '',r); add(r.end_at||r.end_time,'Arıza Kapandı',`${r.equipment_name || '-'} arıza kapandı`,r.reason || '',r); });
+    (state.rentals || []).filter(r=>!r?.deleted_at).forEach(r=>{ add(r.start_at||r.start_time||r.created_at,'Kiralık',`${r.equipment_name || '-'} kiralık başladı`,r.location || r.from_location || '',r); add(r.end_at||r.end_time,'Kiralık Bitti',`${r.equipment_name || '-'} kiralık kapandı`,r.location || r.from_location || '',r); });
+    (state.truck_trips || []).filter(r=>!r?.deleted_at).forEach(r=>add(r.created_at,'Sefer',`${r.equipment_name || '-'} sefer girişi`,`${r.trip_count || 0} sefer • ${(r.from_location||'')}${r.to_location?' → '+r.to_location:''}`,r));
+    (state.fuel_logs || []).filter(r=>!r?.deleted_at).forEach(r=>add(r.created_at,'Yakıt',`${r.equipment_name || '-'} yakıt aldı`,`${r.liters || 0} litre`,r));
+    (state.meter_logs || []).filter(r=>!r?.deleted_at).forEach(r=>add(r.created_at,'Sayaç',`${r.equipment_name || '-'} sayaç girişi`,formatMeterValueWithUnit(r.meter_value || r.value || '', r.meter_type || ''),r));
+    (state.drill_meterage_logs || []).filter(r=>!r?.deleted_at).forEach(r=>add(r.created_at,'Delici Metraj',`${r.equipment_name || '-'} metraj girişi`,`${r.drilled_meter || 0} m`,r));
+    return events.filter(e=>e.at && !isNaN(e.at.getTime())).sort((a,b)=>b.at-a.at);
+  }
+  function renderOperationTimeline(){
+    const el = document.getElementById('operationTimeline');
+    if(!el) return;
+    const events = smartOpsTimelineEvents();
+    const rows = events.slice(0,120).map(e=>`<div class="timeline-row"><div class="timeline-time">${fmtDate(e.at.toISOString())}</div><div><div class="timeline-title">${escapeHtml(e.title)}</div><div class="timeline-sub">${escapeHtml(e.sub || '-')}</div><span class="timeline-type">${escapeHtml(e.type)}</span></div></div>`).join('');
+    el.innerHTML = `<div class="card smart-ops-hero"><h2 class="section-title" style="color:#fff;margin-bottom:6px">Canlı Operasyon Timeline</h2><div class="muted">Üretim, arıza, kiralık ve lojistik hareketleri tek zaman çizgisinde izlenir. Son ${Math.min(events.length,120)} hareket gösteriliyor.</div></div><div class="card" style="margin-top:14px"><div class="timeline-wrap">${rows || '<div class="empty">Henüz timeline hareketi yok.</div>'}</div></div>`;
+  }
+
   function renderPageError(id, title, err){
     const el = document.getElementById(id);
     if(el) el.innerHTML = `<div class="card"><h2 class="section-title">${escapeHtml(title)}</h2><div class="notice">Bu sayfa yüklenirken hata oluştu.</div></div>`;
@@ -13055,6 +13417,9 @@ function renderUsers(){
   function renderAll(){
     try{ renderDashboard(); }catch(err){ renderPageError('dashboard', 'Dashboard', err); }
     try{ renderDashboardPro(); }catch(err){ renderPageError('dashboardPro', 'Dashboard Pro', err); }
+    try{ if(canAccessPage('mobileField')) renderMobileField(); else document.getElementById('mobileField').innerHTML = `<div class="card"><h2 class="section-title">Mobil Saha</h2><div class="notice">Bu alan için yetkin yok.</div></div>`; }catch(err){ renderPageError('mobileField', 'Mobil Saha', err); }
+    try{ if(canAccessPage('operationCenter')) renderOperationCenter(); else document.getElementById('operationCenter').innerHTML = `<div class="card"><h2 class="section-title">Akıllı Operasyon</h2><div class="notice">Bu alan için yetkin yok.</div></div>`; }catch(err){ renderPageError('operationCenter', 'Akıllı Operasyon', err); }
+    try{ if(canAccessPage('operationTimeline')) renderOperationTimeline(); else document.getElementById('operationTimeline').innerHTML = `<div class="card"><h2 class="section-title">Canlı Timeline</h2><div class="notice">Bu alan için yetkin yok.</div></div>`; }catch(err){ renderPageError('operationTimeline', 'Canlı Timeline', err); }
     try{ if(canAccessPage('definitions')) renderDefinitions(); else document.getElementById('definitions').innerHTML = `<div class="card"><h2 class="section-title">Tanımlar</h2><div class="notice">Bu alan yalnızca yöneticiye açıktır.</div></div>`; }catch(err){ renderPageError('definitions', 'Tanımlar', err); }
     try{ if(canManageUsers()) renderUsers(); else { const u=document.getElementById('users'); if(u) u.innerHTML = `<div class="card"><h2 class="section-title">Kullanıcılar</h2><div class="notice">Bu alan yalnızca yöneticiye açıktır.</div></div>`; } }catch(err){ renderPageError('users', 'Kullanıcılar', err); }
     try{ if(canManageSaas()) renderSaasAdmin(); else { const s=document.getElementById('saasAdmin'); if(s) s.innerHTML = `<div class="card"><h2 class="section-title">SaaS Yönetimi</h2><div class="notice">Bu alan yalnızca Super Admin için açıktır.</div></div>`; } }catch(err){ renderPageError('saasAdmin', 'SaaS Yönetimi', err); }
